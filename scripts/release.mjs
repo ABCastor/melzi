@@ -37,8 +37,8 @@ const COMPONENTS = {
     buildCmd: 'bun run build:release',
     artifacts: ['dist/universal.zip'],
     postReleaseHint: null,
-    tweetHeader: (v) => `Impeccable v${v} is out.`,
-    tweetCta: 'Install / update: npx impeccable install',
+    tweetHeader: (v) => `Melzi v${v} is out.`,
+    tweetCta: 'Install / update: npx melzi install',
   },
   cli: {
     manifest: 'package.json',
@@ -47,13 +47,13 @@ const COMPONENTS = {
     changelogLabel: 'CLI v',
     // The npm shim resolves the engine binary through the @impeccable/cli-<os>-<arch>
     // platform packages (pinned at ENGINE_VERSION) and the dist channel; publishing
-    // it before those exist strands `npx impeccable`. Enforce release order (D4).
+    // it before those exist strands `npx melzi`. Enforce release order (D4).
     engineGated: true,
     buildCmd: null,
     artifacts: [],
     postReleaseHint: 'Run `npm publish` next to push the package to the npm registry.',
-    tweetHeader: (v) => `Impeccable CLI v${v} is out.`,
-    tweetCta: 'npm i -g impeccable',
+    tweetHeader: (v) => `Melzi CLI v${v} is out.`,
+    tweetCta: 'npm i -g melzi',
   },
   extension: {
     manifest: 'extension/manifest.json',
@@ -67,7 +67,7 @@ const COMPONENTS = {
     artifacts: ['dist/extension.zip', 'dist/extension-firefox.zip'],
     postReleaseHint:
       'Upload `dist/extension.zip` to the Chrome Web Store dashboard, and `dist/extension-firefox.zip` to addons.mozilla.org (AMO), to publish.',
-    tweetHeader: (v) => `Impeccable browser extension v${v} is out.`,
+    tweetHeader: (v) => `Melzi browser extension v${v} is out.`,
     tweetCta: null,
   },
   engine: {
@@ -211,7 +211,21 @@ const changelogCandidates = [
   path.join(repoRoot, 'site/pages/changelog.astro'),
   path.join(repoRoot, '..', 'impeccable-site', 'site/pages/changelog.astro'),
 ];
-const changelogSource = changelogCandidates.find(p => existsSync(p)) || changelogCandidates[0];
+const changelogSource = changelogCandidates.find(p => existsSync(p));
+if (!changelogSource) {
+  // This fork has neither path and never will: upstream v4 moved the site into their
+  // private impeccable-site repo, which is not ours to check out. Without this guard
+  // the readFileSync below throws a raw ENOENT stack, which reads like a broken script
+  // rather than the real answer, that this fork has no changelog to release from.
+  fail(
+    `No changelog source found. Looked in:\n`
+    + changelogCandidates.map(p => `  ${p}`).join('\n')
+    + `\nUpstream's site (and its changelog) lives in the private impeccable-site repo,`
+    + `\nwhich this fork does not have. Releasing from here needs a changelog home first.`
+    + `\nFork publishing is parked behind the trademark and`
+    + `\nApache-2.0 §6 gates regardless.`,
+  );
+}
 const changelogHtml = readFileSync(changelogSource, 'utf8');
 const expectedHeader = `<span class="cf-version">${cfg.changelogLabel}${version}</span>`;
 const headerIdx = changelogHtml.indexOf(expectedHeader);
@@ -306,7 +320,7 @@ try {
 
 console.log(`\n✓ ${cfg.label} ${version} released as ${tag}`);
 
-// npx impeccable update serves from impeccable.style, not from this release:
+// npx melzi update serves from impeccable.style, not from this release:
 // the site must be redeployed (its deploy overlays public main first). Warn
 // loudly when the served version lags so a release never silently strands
 // update users on old content again (the 4.0.0 release did exactly that).
@@ -318,7 +332,7 @@ if (component === 'skill' && !dryRun) {
       console.log(`✓ impeccable.style serves ${served}`);
     } else {
       console.log(`\n⚠ impeccable.style still serves ${served}, not ${version}.`);
-      console.log('  npx impeccable update users get the OLD version until the site redeploys:');
+      console.log('  npx melzi update users get the OLD version until the site redeploys:');
       console.log('  cd ../impeccable-site && bun run deploy');
     }
   } catch {

@@ -16,6 +16,7 @@ const COMMON_INFRA_PATTERNS = [
   /^package\.json$/,
   /^bun\.lock$/,
   /^scripts\/run-tests\.mjs$/,
+  /^scripts\/test-report\.mjs$/,
   /^scripts\/test-suites\.mjs$/,
   /^scripts\/ci-test-plan\.mjs$/,
   /^scripts\/lib\/(live-server-processes|process-group|test-orphan-reaper)\.mjs$/,
@@ -39,6 +40,27 @@ export const SUITES = {
       /^vscode\//,
       /^\.github\/workflows\/release-engine\.yml$/,
       /^cli\/bin\//,
+      // Our hand-written tests/ alternation is GONE on purpose, 2026-08-13:
+      // upstream now generates a per-file trigger from every suite's own
+      // commands.files list (see the loop below the SUITES literal), which
+      // covers our fork-only test files too, and its meta-test pins the
+      // invariant. Re-adding the list would also re-introduce the miswiring
+      // upstream just fixed, where tests/lib/ triggered core while running in
+      // detector. The SOURCE triggers below are still ours and still needed.
+      //
+      // Sources guarded by tests/brand-user-visible.test.mjs. They belong to the live and
+      // detector suites by behaviour, but the brand guard lives here, so core has to run
+      // when their user-facing strings change or the guard never sees the regression.
+      /^skill\/scripts\/live-(browser|server)\./,
+      /^cli\/engine\/browser\/injected\//,
+      // tests/rebrand.test.mjs checks .gitignore against what live-inject.mjs writes, so a
+      // change to either side has to re-run it or they drift apart again.
+      /^\.gitignore$/,
+      /^skill\/scripts\/live-inject\.mjs$/,
+      // Same reason, for the extension: these two carry the guarded prose, and the
+      // extension otherwise triggers only the detector suite (see its triggers below),
+      // which does not run the brand guard.
+      /^extension\/(devtools\/panel|background\/service-worker)\.js$/,
     ],
     commands: [
       {
@@ -72,8 +94,11 @@ export const SUITES = {
         // is safe.
         timeoutMs: 180000,
         files: [
+          'tests/brand-user-visible.test.mjs',
+          'tests/bind-verify.test.mjs',
           'tests/ci-test-plan.test.mjs',
           'tests/cli-shim.test.mjs',
+          'tests/distribution-notices.test.mjs',
           'tests/launcher-download.test.mjs',
           'tests/publish-platform-packages.test.mjs',
           'tests/github-sheriff.test.mjs',
@@ -88,6 +113,66 @@ export const SUITES = {
           'tests/skill-behavior-harness.test.mjs',
           'tests/readme-gitignore.test.mjs',
           'tests/test-suites.test.mjs',
+          // Fork-only. Registered here so `bun run test` runs them; the registry
+          // meta-test asserts every test file belongs to a suite.
+          'tests/command-aliases.test.mjs',
+          'tests/command-registry.test.mjs',
+          'tests/declared-waivers.test.mjs',
+          'tests/derive.test.mjs',
+          'tests/handdrawn-registration.test.mjs',
+          'tests/identity-session.test.mjs',
+          'tests/island-browser.test.mjs',
+          'tests/island.test.mjs',
+          'tests/library-pack.test.mjs',
+          'tests/logo-workflow.test.mjs',
+          'tests/mark-check.test.mjs',
+          'tests/motion-eyes.test.mjs',
+          'tests/rebrand.test.mjs',
+          'tests/recombine.test.mjs',
+          'tests/reference-reachable.test.mjs',
+          'tests/serve-compare.test.mjs',
+          'tests/serve-question-screen.test.mjs',
+          'tests/signature-binding.test.mjs',
+          'tests/signature.test.mjs',
+          'tests/source-bytes.test.mjs',
+          'tests/stopping-rule.test.mjs',
+          'tests/study-registration.test.mjs',
+          'tests/taste-ledger.test.mjs',
+          'tests/taste-model.test.mjs',
+          'tests/taste-store.test.mjs',
+          'tests/test-report.test.mjs',
+          'tests/world-pool.test.mjs',
+        ],
+      },
+      // The Pollux engine: the twin-loop UI-testing core behind /melzi explore.
+      // Listed separately because its tests live beside their source, not under tests/.
+      //
+      // These were in NO suite until 2026-07-16, so `bun run test` never ran them and
+      // reported green over ~107 untested assertions. They passed only because someone
+      // ran `node --test skill/scripts/pollux-uxui/*.test.mjs` by hand as a fourth gate,
+      // which is not a gate: it is a habit, and habits do not survive a handoff. Fast and
+      // hermetic (no browser, no network), so they belong in core rather than opt-in.
+      {
+        runner: 'node',
+        files: [
+          'skill/scripts/pollux-uxui/capabilities.test.mjs',
+          'skill/scripts/pollux-uxui/controller.test.mjs',
+          'skill/scripts/pollux-uxui/coverage-stop.test.mjs',
+          'skill/scripts/pollux-uxui/evidence.test.mjs',
+          'skill/scripts/pollux-uxui/explore-step.test.mjs',
+          'skill/scripts/pollux-uxui/normalize.test.mjs',
+          'skill/scripts/pollux-uxui/orchestrator.test.mjs',
+          'skill/scripts/pollux-uxui/pageerror-listener.test.mjs',
+          'skill/scripts/pollux-uxui/replay.test.mjs',
+          'skill/scripts/pollux-uxui/reporter.test.mjs',
+          'skill/scripts/pollux-uxui/runner.test.mjs',
+          'skill/scripts/pollux-uxui/slice.test.mjs',
+          'skill/scripts/pollux-uxui/state-graph.test.mjs',
+          'skill/scripts/pollux-uxui/verifier-bundle.test.mjs',
+          'skill/scripts/pollux-uxui/verifier-launch.test.mjs',
+          'skill/scripts/pollux-uxui/verifier-mcp.test.mjs',
+          'skill/scripts/pollux-uxui/verifier-stream.test.mjs',
+          'skill/scripts/pollux-uxui/verifier-workspace.test.mjs',
         ],
       },
     ],
@@ -386,9 +471,17 @@ export function suiteFiles(suiteNames) {
   return files;
 }
 
+// Every tree that holds tests. This used to be just `tests/`, which made the
+// "assigns every test file to a suite" guard a guard over one directory: the
+// Pollux engine keeps its 18 test files beside their source, so ~107 assertions
+// sat in no suite at all and `bun run test` never ran them, while the guard
+// reported clean about files it had never read. Add a root here the moment tests
+// start living somewhere new, or the guard silently narrows again.
+export const TEST_ROOTS = ['tests', 'skill/scripts/pollux-uxui'];
+
 export function findTestFiles(root = process.cwd()) {
   const out = [];
-  const stack = [path.join(root, 'tests')];
+  const stack = TEST_ROOTS.map((dir) => path.join(root, dir)).filter((dir) => fs.existsSync(dir));
   while (stack.length) {
     const dir = stack.pop();
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

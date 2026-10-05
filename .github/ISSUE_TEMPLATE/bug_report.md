@@ -12,9 +12,9 @@ assignees: ''
 
 ## Steps to reproduce
 
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ## Expected behavior
 
@@ -23,8 +23,8 @@ assignees: ''
 ## Provider & environment
 
 - **Provider** (Cursor / Claude Code / Gemini CLI / Codex / Copilot / Kiro / OpenCode):
-- **Provider version**: 
-- **OS**: 
+- **Provider version**:
+- **OS**:
 
 ## Additional context
 
@@ -32,4 +32,4 @@ assignees: ''
 
 ## Willing to work on a fix?
 
-<!-- If yes, say so here. Unless you are pbakaus or abdulwahabone, please wait for maintainer approval before opening a PR. -->
+<!-- Say whether you can help investigate or implement this change. -->

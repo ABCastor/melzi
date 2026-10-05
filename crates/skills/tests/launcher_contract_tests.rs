@@ -22,11 +22,11 @@ fn launcher_file(name: &str) -> String {
 fn sh_launcher_asset_naming_matches_engine() {
     let sh = launcher_file("impeccable");
     // The composed URL is <base>/engine-v<version>/impeccable-<os>-<arch>[.exe].
-    assert!(sh.contains(&format!("IMPECCABLE_DOWNLOAD_BASE:-{DEFAULT_DOWNLOAD_BASE}")));
+    assert!(sh.contains(r#"base="$IMPECCABLE_DOWNLOAD_BASE""#));
     assert!(sh.contains(r#"asset="impeccable-$os-$arch""#));
     assert!(sh.contains(r#"url="$base/engine-v$version/$asset""#));
     // Windows-on-ARM fallback, same naming the engine computes.
-    let win_x64 = asset_url(DEFAULT_DOWNLOAD_BASE, "V", "windows", "x64");
+    let win_x64 = asset_url("https://fork.invalid/releases", "V", "windows", "x64");
     assert!(win_x64.ends_with("/engine-vV/impeccable-windows-x64.exe"));
     assert!(sh.contains(r#"url="$base/engine-v$version/impeccable-windows-x64.exe""#));
     // The PATH and unversioned home candidates are probed; trusted paths are not.
@@ -41,7 +41,7 @@ fn sh_launcher_asset_naming_matches_engine() {
 #[test]
 fn cmd_launcher_asset_naming_matches_engine() {
     let cmd = launcher_file("impeccable.cmd");
-    assert!(cmd.contains(DEFAULT_DOWNLOAD_BASE));
+    assert!(cmd.contains("if not defined IMPECCABLE_DOWNLOAD_BASE goto no_download_endpoint"));
     // URL construction: expanded on straight-line statements, no blocks.
     assert!(cmd.contains(r#"set "asset=impeccable-windows-%arch%.exe""#));
     assert!(cmd.contains(r#"set "url=%IMPECCABLE_DOWNLOAD_BASE%/engine-v%version%/%asset%""#));
@@ -95,16 +95,20 @@ fn launchers_fail_closed_on_missing_checksum() {
 }
 
 #[test]
-fn launchers_reference_the_same_release_channel() {
+fn launchers_refuse_without_an_explicit_release_channel() {
     let sh = launcher_file("impeccable");
     let cmd = launcher_file("impeccable.cmd");
     for text in [&sh, &cmd] {
-        assert!(text.contains("https://github.com/pbakaus/impeccable/releases"));
+        assert!(!text.contains("https://github.com/pbakaus/impeccable/releases"));
+        assert!(text.contains("no download endpoint"));
+        assert!(text.contains("cargo build --release -p impeccable"));
+        assert!(text.contains("IMPECCABLE_BIN"));
     }
-    // Spot-check the engine's own URL builder against the launcher template.
+    assert_eq!(DEFAULT_DOWNLOAD_BASE, "");
+    // Spot-check the explicit endpoint URL builder against the launcher template.
     assert_eq!(
-        asset_url(DEFAULT_DOWNLOAD_BASE, "1.2.3", "darwin", "arm64"),
-        format!("{DEFAULT_DOWNLOAD_BASE}/engine-v1.2.3/impeccable-darwin-arm64")
+        asset_url("https://fork.invalid/releases", "1.2.3", "darwin", "arm64"),
+        "https://fork.invalid/releases/engine-v1.2.3/impeccable-darwin-arm64"
     );
 }
 

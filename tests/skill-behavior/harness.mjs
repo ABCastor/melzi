@@ -3,7 +3,7 @@
  *
  * Each scenario:
  *   1. Creates a temp workspace.
- *   2. Builds a neutral .claude/skills/impeccable into the workspace so
+ *   2. Builds a neutral .claude/skills/melzi into the workspace so
  *      the launcher (`scripts/impeccable`) resolves from the canonical path
  *      the skill references, and points it at an engine binary.
  *   3. Optionally writes PRODUCT.md / DESIGN.md fixtures.
@@ -39,7 +39,7 @@ function renderNeutral(content) {
   return stripRuleMarkers(replacePlaceholders(compileProviderBlocks(content, [])
     .replaceAll('{{ask_instruction}}', 'Use the ask_user_question tool.')
     .replaceAll('{{model}}', 'the assistant'), 'dsh'))
-    .replaceAll('{{scripts_path}}', '.claude/skills/impeccable/scripts')
+    .replaceAll('{{scripts_path}}', '.claude/skills/melzi/scripts')
     .replaceAll('{{command_hint}}', 'command');
 }
 
@@ -97,7 +97,7 @@ function loadSkillBody() {
 // loader supplies a base-directory prefix; here it is workspace-relative
 // because the file tools reject absolute paths. Provider rewrite/loader
 // contracts are tested separately, not established by these behavior cases.
-export const SKILL_BODY = `Base directory for this skill (workspace-relative): .claude/skills/impeccable\n\n${loadSkillBody()}`;
+export const SKILL_BODY = `Base directory for this skill (workspace-relative): .claude/skills/melzi\n\n${loadSkillBody()}`;
 
 /**
  * Create a temp workspace and prepopulate it.
@@ -172,7 +172,7 @@ function safeResolve(root, userPath) {
 }
 
 function isContextOnlyCommand(workspace, command) {
-  const match = command.trim().match(/^\.claude\/skills\/impeccable\/scripts\/impeccable context(?: --target(?: |=)(?:"([a-zA-Z0-9_./+ -]+)"|'([a-zA-Z0-9_./+ -]+)'|([a-zA-Z0-9_./+-]+)))?$/);
+  const match = command.trim().match(/^\.claude\/skills\/melzi\/scripts\/impeccable context(?: --target(?: |=)(?:"([a-zA-Z0-9_./+ -]+)"|'([a-zA-Z0-9_./+ -]+)'|([a-zA-Z0-9_./+-]+)))?$/);
   if (!match) return false;
   const target = match[1] ?? match[2] ?? match[3];
   return target === undefined || (!target.startsWith('-') && typeof safeResolve(workspace, target) === 'string');
@@ -250,7 +250,7 @@ function defaultSimulatedAnswer(question) {
 }
 
 export function makeTools(workspace, extraEnv = {}, simulatedUser = {}, { contextOnlyBash = false, denyBash = false } = {}) {
-  const referenceDir = path.join(workspace, '.claude/skills/impeccable/reference');
+  const referenceDir = path.join(workspace, '.claude/skills/melzi/reference');
   const references = fs.readdirSync(referenceDir, { recursive: true })
     .filter((file) => file.endsWith('.md'))
     .map((file) => ({ file: file.split(path.sep).join('/'), content: fs.readFileSync(path.join(referenceDir, file), 'utf8').trim() }));
@@ -277,8 +277,8 @@ export function makeTools(workspace, extraEnv = {}, simulatedUser = {}, { contex
   const tools = {
     bash: tool({
       description: contextOnlyBash
-        ? 'Only `.claude/skills/impeccable/scripts/impeccable context` with an optional `--target <workspace-relative path>` is allowed here. Use read/list for files and references; write remains available for requested edits.'
-        : 'Run a bash command in the workspace root. Use this to invoke skill commands (e.g. `.claude/skills/impeccable/scripts/impeccable context`).',
+        ? 'Only `.claude/skills/melzi/scripts/impeccable context` with an optional `--target <workspace-relative path>` is allowed here. Use read/list for files and references; write remains available for requested edits.'
+        : 'Run a bash command in the workspace root. Use this to invoke skill commands (e.g. `.claude/skills/melzi/scripts/impeccable context`).',
       inputSchema: z.object({
         command: z.string().describe('The bash command to execute.'),
       }),
@@ -295,7 +295,7 @@ export function makeTools(workspace, extraEnv = {}, simulatedUser = {}, { contex
         // Routing tests need the real context loader, not a general-purpose
         // shell on the host. Reject before execution (still record attempts).
         if (contextOnlyBash && !isContextOnlyCommand(workspace, command)) {
-          const out = 'Error: only `.claude/skills/impeccable/scripts/impeccable context` with an optional workspace-relative `--target` is allowed. Use read/list for files; references live at .claude/skills/impeccable/reference/.';
+          const out = 'Error: only `.claude/skills/melzi/scripts/impeccable context` with an optional workspace-relative `--target` is allowed. Use read/list for files; references live at .claude/skills/melzi/reference/.';
           trace.bashOutputs.push(out);
           return out;
         }
@@ -303,7 +303,7 @@ export function makeTools(workspace, extraEnv = {}, simulatedUser = {}, { contex
         const res = await execBash(workspace, command, 20_000, extraEnv);
         call.mutatedPaths = changedPaths(before, snapshotWorkspaceFiles(workspace));
         call.loadedFiles = references.filter(({ content }) => content && res.stdout.includes(content))
-          .map(({ file }) => `.claude/skills/impeccable/reference/${file}`);
+          .map(({ file }) => `.claude/skills/melzi/reference/${file}`);
         const head = `exit=${res.exitCode}`;
         const body = (res.stdout ? `stdout:\n${res.stdout}` : '') + (res.stderr ? `\nstderr:\n${res.stderr}` : '');
         const out = `${head}\n${body}${res.truncated ? '\n[output truncated]' : ''}`;

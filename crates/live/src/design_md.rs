@@ -751,7 +751,7 @@ fn extract_named_rules(lines: &[String]) -> Vec<NamedRule> {
     let mut rules: Vec<NamedRule> = Vec::new();
     let mut seen: Vec<String> = Vec::new();
 
-    // Style A (Impeccable)
+    // Style A (Melzi)
     let joined = lines.join("\n");
     let inline: Vec<(String, usize, usize)> = INLINE_RULE_RE
         .captures_iter(&joined)
@@ -1034,7 +1034,7 @@ fn extract_colors(section: Option<&Section>) -> Value {
 fn parse_color_bullet(bullet: &str) -> Option<ColorEntry> {
     let text = js_trim(bullet);
 
-    // Case 1 (Impeccable)
+    // Case 1 (Melzi)
     if let Some(bold) = COLOR_BOLD_RE.captures(text) {
         let b2 = bold.get(2).unwrap().as_str();
         if b2.starts_with('(') {

@@ -152,6 +152,110 @@ h1 {
   display: none;
 }
 
+.btn {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    transform 180ms var(--ks-ease),
+    background-color 180ms var(--ks-ease),
+    border-color 180ms var(--ks-ease),
+    color 180ms var(--ks-ease),
+    opacity 0.15s;
+}
+
+.btn-primary {
+  background: var(--ks-kinpaku);
+  border-color: var(--ks-kinpaku);
+  color: var(--ks-lacquer-deep);
+}
+
+.btn-primary:hover {
+  background: var(--ks-kinpaku-pale);
+  border-color: var(--ks-kinpaku-pale);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: transparent;
+  border-color: var(--ks-kinpaku);
+  color: var(--ks-kinpaku);
+}
+
+.btn-secondary:hover {
+  background: oklch(77% 0.14 82 / 0.08);
+  transform: translateY(-1px);
+}
+
+.design-lab-card {
+  margin: 0 0 16px;
+  padding: 13px 0 0;
+  border-top: 1px solid var(--ks-rule);
+}
+
+.design-lab-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.design-lab-head h2 {
+  color: var(--ks-text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.design-lab-state {
+  color: var(--ks-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.design-lab-state.is-active {
+  color: var(--ks-patina);
+}
+
+.design-lab-card > p {
+  margin: 0 0 10px;
+  color: var(--ks-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.btn-lab {
+  background: oklch(70% 0.12 188 / 0.12);
+  border-color: var(--ks-patina);
+  color: var(--ks-patina);
+}
+
+.btn-lab:hover,
+.btn-lab[aria-pressed="true"] {
+  background: var(--ks-patina);
+  border-color: var(--ks-patina);
+  color: var(--ks-lacquer-deep);
+  transform: translateY(-1px);
+}
+
+.design-lab-card > .design-lab-error {
+  margin: 8px 0 0;
+  color: oklch(70% 0.13 30);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--ks-patina);
+  outline-offset: 3px;
+}
+
 /* Foot */
 
 footer {

@@ -1,12 +1,11 @@
 {
-  "name": "impeccable",
-  "description": "Design fluency for frontend development. 1 skill with 24 commands (/impeccable polish, /impeccable audit, /impeccable critique, etc.) and curated anti-pattern detection.",
+  "name": "melzi",
+  "description": "Design fluency for frontend development. 1 skill with 21 canonical commands (/melzi polish, /melzi audit, /melzi critique, etc.) and curated anti-pattern detection.",
   "version": "4.4.0",
   "author": {
-    "name": "Paul Bakaus",
-    "email": "paul@paulbakaus.com"
+    "name": "Anneo22"
   },
-  "homepage": "https://impeccable.style",
-  "repository": "https://github.com/pbakaus/impeccable",
+  "homepage": "https://github.com/ABCastor/melzi",
+  "repository": "https://github.com/ABCastor/melzi",
   "skills": "./skills/"
 }

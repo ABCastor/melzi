@@ -201,7 +201,7 @@ export function readFilesRecursive(dir, fileList = []) {
  * and copies that directory verbatim. If `skill/SKILL.md` existed, `npx skills`
  * would install the UNCOMPILED source (unresolved `{{placeholders}}` and
  * `{{scripts_path}}`). Naming it `SKILL.src.md` hides it from discovery so the CLI falls
- * through to a compiled harness dir (`.agents/skills/impeccable`) instead.
+ * through to a compiled harness dir (`.agents/skills/melzi`) instead.
  */
 export function readSourceFiles(rootDir) {
   const skillDir = path.join(rootDir, 'skill');
@@ -272,7 +272,7 @@ export function readSourceFiles(rootDir) {
   }
 
   skills.push({
-    name: frontmatter.name || 'impeccable',
+    name: frontmatter.name || 'melzi',
     description: frontmatter.description || '',
     license: frontmatter.license || '',
     compatibility: frontmatter.compatibility || '',
@@ -597,33 +597,48 @@ function escapeRegex(str) {
 }
 
 const EXCLUDED_FROM_SUGGESTIONS = new Set([
-  'impeccable',               // foundational skill, not a steering command
+  'melzi',              // foundational skill, not a steering command
   'teach-impeccable',         // deprecated shim
   'frontend-design',          // deprecated shim
 ]);
 
-// Sub-commands of /impeccable that should appear in {{available_commands}}.
+// Sub-commands of /melzi that should appear in {{available_commands}}.
 // These are the commands that audit/critique/etc. reference when suggesting next steps.
-const IMPECCABLE_SUB_COMMANDS = [
-  'adapt', 'animate', 'audit', 'bolder', 'clarify', 'colorize',
-  'critique', 'delight', 'distill', 'document', 'harden', 'layout',
-  'onboard', 'optimize', 'overdrive', 'polish', 'quieter', 'shape', 'typeset',
+// This is the canonical command surface and must match SKILL.src.md's table.
+// Compatibility aliases remain accepted by the router and pin.mjs, but keeping
+// them out of suggestions is what makes a fold a real consolidation.
+export const MELZI_SUB_COMMANDS = [
+  'animate', 'audit', 'bolder', 'clarify', 'colorize', 'critique', 'document',
+  'explore', 'generate', 'handdrawn', 'harden', 'identity', 'init', 'layout', 'live', 'polish',
+  'quieter', 'shape', 'study', 'teach', 'typeset',
 ];
+
+export const MELZI_COMMAND_ALIASES = Object.freeze({
+  adapt: ['audit', 'polish', 'adapt.native'],
+  craft: ['new-work'],
+  delight: ['bolder', 'animate'],
+  distill: ['quieter'],
+  extract: ['document'],
+  logo: ['identity'],
+  onboard: ['clarify', 'new-work'],
+  optimize: ['audit'],
+  overdrive: ['bolder', 'animate'],
+});
 
 export function replacePlaceholders(content, provider, commandNames = [], allSkillNames = []) {
   const placeholders = PROVIDER_PLACEHOLDERS[provider] || PROVIDER_PLACEHOLDERS['cursor'];
   const cmdPrefix = placeholders.command_prefix || '/';
 
   // Build the available_commands list.
-  // After the v3.0 consolidation, commands are sub-commands of /impeccable.
+  // After the v3.0 consolidation, commands are sub-commands of /melzi.
   // If there's only one user-invocable skill (impeccable), generate sub-command references.
   // Otherwise fall back to listing skill names (backwards compat for forks).
   const nonExcluded = commandNames.filter(n => !EXCLUDED_FROM_SUGGESTIONS.has(n));
   let commandList;
   if (nonExcluded.length === 0) {
-    // Single-skill architecture: list sub-commands as /impeccable <sub>
-    commandList = IMPECCABLE_SUB_COMMANDS
-      .map(n => `${cmdPrefix}impeccable ${n}`)
+    // Single-skill architecture: list sub-commands as /melzi <sub>
+    commandList = MELZI_SUB_COMMANDS
+      .map(n => `${cmdPrefix}melzi ${n}`)
       .join(', ');
   } else {
     // Multi-skill architecture (backwards compat)
@@ -640,7 +655,7 @@ export function replacePlaceholders(content, provider, commandNames = [], allSki
   // Replace `/skillname` invocations with the correct command prefix for this provider
   // (e.g., `/normalize` → `$normalize` for Codex). Require the slash to be
   // outside a path or URL so `.github/hooks/impeccable.json`,
-  // `.codex/skills/impeccable`, and the launcher invocation
+  // `.codex/skills/melzi`, and the launcher invocation
   // `{{scripts_path}}/impeccable <verb>` (a `}}`-preceded path segment,
   // resolved after this pass) remain untouched.
   if (cmdPrefix !== '/' && allSkillNames.length > 0) {

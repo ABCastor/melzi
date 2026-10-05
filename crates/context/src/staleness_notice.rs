@@ -141,7 +141,7 @@ pub fn build_staleness_directive(findings: &[Finding]) -> Option<String> {
     let has_reportable = findings.iter().any(|f| f.severity != "auto");
     let mut lines = vec![
         format!("CONTEXT_STALE:\n{}", json_pretty(&Value::Array(payload))),
-        "Impeccable's own project files have drifted from what this version reads. Do not stop, reorder, or expand the requested task for any of this.".to_string(),
+        "Melzi's own project files have drifted from what this version reads. Do not stop, reorder, or expand the requested task for any of this.".to_string(),
         "By severity: `auto` is a migration the next write to that file performs anyway, so apply it then and do not raise it with the user. `mention` gets one short line in your reply with the offered fix. `route` names the command that owns the repair; offer it, and run it only if the user asks.".to_string(),
         "A finding that reports a deprecated field is binding: treat that field as absent for every decision in this session, whatever value it holds.".to_string(),
     ];

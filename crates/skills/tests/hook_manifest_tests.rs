@@ -12,8 +12,8 @@ fn claude_bundle_manifest() -> Value {
     json!({
         "description": "fresh claude hook",
         "hooks": {
-            "PostToolUse": [{ "matcher": "Edit", "hooks": [{ "type": "command", "command": "node \".claude/skills/impeccable/scripts/hook.mjs\"" }] }],
-            "Stop": [{ "hooks": [{ "type": "command", "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" ] || \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook", "timeout": 30 }] }]
+            "PostToolUse": [{ "matcher": "Edit", "hooks": [{ "type": "command", "command": "node \".claude/skills/melzi/scripts/hook.mjs\"" }] }],
+            "Stop": [{ "hooks": [{ "type": "command", "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" ] || \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" hook", "timeout": 30 }] }]
         }
     })
 }
@@ -21,7 +21,7 @@ fn claude_bundle_manifest() -> Value {
 /// The launcher path a hook command points at, joined with the host's path
 /// semantics the way `rewrite_hook_commands_for_platform` joins it.
 fn skill_launcher(root: &str, provider: &str) -> String {
-    jsp::join(&[root, provider, "skills", "impeccable", "scripts", "impeccable"])
+    jsp::join(&[root, provider, "skills", "melzi", "scripts", "impeccable"])
 }
 
 fn commands(v: &Value) -> Vec<String> {
@@ -53,7 +53,7 @@ fn project_scope_keeps_claude_project_dir_token_and_guard() {
     for c in &cmds {
         assert_eq!(
             c,
-            "command=[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" ] || \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook"
+            "command=[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" ] || \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" hook"
         );
         assert!(!c.contains("/proj"));
         assert!(!c.contains("|| true"));
@@ -110,17 +110,17 @@ fn windows_form_keeps_double_quoted_absolute_path() {
 #[test]
 fn codex_gets_command_windows_sibling_pointing_at_cmd_shim() {
     let bundle = json!({
-        "hooks": { "PostToolUse": [{ "matcher": "apply_patch", "hooks": [{ "type": "command", "command": "node \".codex/skills/impeccable/scripts/hook.mjs\"", "timeout": 5 }] }] }
+        "hooks": { "PostToolUse": [{ "matcher": "apply_patch", "hooks": [{ "type": "command", "command": "node \".codex/skills/melzi/scripts/hook.mjs\"", "timeout": 5 }] }] }
     });
     let out = rewrite_hook_commands_for_platform(&bundle, ".agents", "/proj", false, false);
     let entry = &out["hooks"]["PostToolUse"][0]["hooks"][0];
     assert_eq!(
         entry["command"],
-        "[ ! -f \".agents/skills/impeccable/scripts/impeccable\" ] || \".agents/skills/impeccable/scripts/impeccable\" hook"
+        "[ ! -f \".agents/skills/melzi/scripts/impeccable\" ] || \".agents/skills/melzi/scripts/impeccable\" hook"
     );
     assert_eq!(
         entry["commandWindows"],
-        "if exist \".agents/skills/impeccable/scripts/impeccable.cmd\" (\".agents/skills/impeccable/scripts/impeccable.cmd\" hook & exit /b)"
+        "if exist \".agents/skills/melzi/scripts/impeccable.cmd\" (\".agents/skills/melzi/scripts/impeccable.cmd\" hook & exit /b)"
     );
     // JS key order: existing keys, then the appended commandWindows.
     let keys: Vec<&String> = entry.as_object().unwrap().keys().collect();
@@ -133,11 +133,11 @@ fn codex_gets_command_windows_sibling_pointing_at_cmd_shim() {
 
 #[test]
 fn cursor_runs_hook_before_edit() {
-    let bundle = json!({ "version": 1, "hooks": { "preToolUse": [{ "command": "node \".cursor/skills/impeccable/scripts/hook-before-edit.mjs\"", "timeout": 5 }] } });
+    let bundle = json!({ "version": 1, "hooks": { "preToolUse": [{ "command": "node \".cursor/skills/melzi/scripts/hook-before-edit.mjs\"", "timeout": 5 }] } });
     let out = rewrite_hook_commands_for_platform(&bundle, ".cursor", "/proj", false, false);
     assert_eq!(
         out["hooks"]["preToolUse"][0]["command"],
-        "[ ! -f \".cursor/skills/impeccable/scripts/impeccable\" ] || \".cursor/skills/impeccable/scripts/impeccable\" hook-before-edit"
+        "[ ! -f \".cursor/skills/melzi/scripts/impeccable\" ] || \".cursor/skills/melzi/scripts/impeccable\" hook-before-edit"
     );
     assert!(out["hooks"]["preToolUse"][0].get("commandWindows").is_none());
 }
@@ -146,17 +146,17 @@ fn cursor_runs_hook_before_edit() {
 fn github_manifests_pass_through_and_grok_is_rewritten() {
     // .github stays untouched: its committed manifest carries a portable
     // `$(git rev-parse ...)` command that must never become machine-local.
-    let bundle = json!({ "version": 1, "hooks": { "postToolUse": [{ "type": "command", "bash": "[ ! -f \"$(git rev-parse --show-toplevel)/.github/skills/impeccable/scripts/impeccable\" ] || \"$(git rev-parse --show-toplevel)/.github/skills/impeccable/scripts/impeccable\" hook" }] } });
+    let bundle = json!({ "version": 1, "hooks": { "postToolUse": [{ "type": "command", "bash": "[ ! -f \"$(git rev-parse --show-toplevel)/.github/skills/melzi/scripts/impeccable\" ] || \"$(git rev-parse --show-toplevel)/.github/skills/melzi/scripts/impeccable\" hook" }] } });
     assert_eq!(rewrite_hook_commands_for_platform(&bundle, ".github", "/proj", true, false), bundle);
     assert!(value_has_impeccable_hook_marker(&bundle));
     // .grok is rewritten like the other command-hook providers (upstream
     // 49571365, #642): a global install must not leave the bundled
     // project-relative path behind.
-    let grok = json!({ "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "node \".grok/skills/impeccable/scripts/hook.mjs\"" }] }] } });
+    let grok = json!({ "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "node \".grok/skills/melzi/scripts/hook.mjs\"" }] }] } });
     let rel = rewrite_hook_commands_for_platform(&grok, ".grok", "/proj", false, false);
     assert_eq!(
         rel["hooks"]["PostToolUse"][0]["hooks"][0]["command"],
-        "[ ! -f \".grok/skills/impeccable/scripts/impeccable\" ] || \".grok/skills/impeccable/scripts/impeccable\" hook"
+        "[ ! -f \".grok/skills/melzi/scripts/impeccable\" ] || \".grok/skills/melzi/scripts/impeccable\" hook"
     );
     let abs = rewrite_hook_commands_for_platform(&grok, ".grok", "/home/u", true, false);
     let p = skill_launcher("/home/u", ".grok");
@@ -176,9 +176,9 @@ fn merge_refreshes_ours_and_preserves_third_party_hooks() {
         "hooks": {
             "PostToolUse": [
                 { "matcher": "Bash", "hooks": [{ "type": "command", "command": "echo hi" }] },
-                { "matcher": "Edit", "hooks": [{ "type": "command", "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\" ] || node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"" }] }
+                { "matcher": "Edit", "hooks": [{ "type": "command", "command": "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/hook.mjs\" ] || node \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/hook.mjs\"" }] }
             ],
-            "Stop": [{ "hooks": [{ "type": "command", "command": "\".claude/skills/impeccable/scripts/impeccable\" hook" }] }]
+            "Stop": [{ "hooks": [{ "type": "command", "command": "\".claude/skills/melzi/scripts/impeccable\" hook" }] }]
         }
     });
     let fresh = rewrite_hook_commands_for_platform(&claude_bundle_manifest(), ".claude", "/proj", false, false);
@@ -203,7 +203,7 @@ fn prune_removes_only_ours_and_drops_empty_scaffolding() {
     let p = path.to_string_lossy().to_string();
     std::fs::write(&path, serde_json::to_string_pretty(&json!({
         "other": 1,
-        "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "\".claude/skills/impeccable/scripts/impeccable\" hook" }] }] }
+        "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "\".claude/skills/melzi/scripts/impeccable\" hook" }] }] }
     })).unwrap()).unwrap();
     assert!(file_has_impeccable_hook_marker(&p));
     assert!(prune_impeccable_hook_from_manifest(&p).unwrap());
@@ -211,7 +211,7 @@ fn prune_removes_only_ours_and_drops_empty_scaffolding() {
     assert_eq!(after, json!({ "other": 1 }));
     assert!(!prune_impeccable_hook_from_manifest(&p).unwrap());
     // A permissions entry naming the hook path is not a hook.
-    std::fs::write(&path, r#"{"permissions":{"allow":["Bash(.claude/skills/impeccable/scripts/impeccable hook)"]}}"#).unwrap();
+    std::fs::write(&path, r#"{"permissions":{"allow":["Bash(.claude/skills/melzi/scripts/impeccable hook)"]}}"#).unwrap();
     assert!(!file_has_impeccable_hook_marker(&p));
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -246,13 +246,13 @@ fn manifest_has_stale_hook_distinguishes_generations() {
     let dir = tmp_dir("stale-detect");
     let stale = dir.join("stale.json");
     std::fs::write(&stale, serde_json::to_string_pretty(&json!({
-        "hooks": { "PostToolUse": [{ "matcher": "Edit", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"" }] }] }
+        "hooks": { "PostToolUse": [{ "matcher": "Edit", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/hook.mjs\"" }] }] }
     })).unwrap()).unwrap();
     assert!(manifest_has_stale_hook(&stale.to_string_lossy()));
 
     let launcher = dir.join("launcher.json");
     std::fs::write(&launcher, serde_json::to_string_pretty(&json!({
-        "hooks": { "PostToolUse": [{ "matcher": "Edit", "hooks": [{ "type": "command", "command": "\".claude/skills/impeccable/scripts/impeccable\" hook" }] }] }
+        "hooks": { "PostToolUse": [{ "matcher": "Edit", "hooks": [{ "type": "command", "command": "\".claude/skills/melzi/scripts/impeccable\" hook" }] }] }
     })).unwrap()).unwrap();
     assert!(!manifest_has_stale_hook(&launcher.to_string_lossy()));
 
@@ -261,8 +261,8 @@ fn manifest_has_stale_hook_distinguishes_generations() {
     let mixed = dir.join("mixed.json");
     std::fs::write(&mixed, serde_json::to_string_pretty(&json!({
         "hooks": {
-            "PostToolUse": [{ "hooks": [{ "type": "command", "command": "\".claude/skills/impeccable/scripts/impeccable\" hook" }] }],
-            "Stop": [{ "hooks": [{ "type": "command", "command": "node .claude/skills/impeccable/scripts/hook.mjs" }] }]
+            "PostToolUse": [{ "hooks": [{ "type": "command", "command": "\".claude/skills/melzi/scripts/impeccable\" hook" }] }],
+            "Stop": [{ "hooks": [{ "type": "command", "command": "node .claude/skills/melzi/scripts/hook.mjs" }] }]
         }
     })).unwrap()).unwrap();
     assert!(!manifest_has_stale_hook(&mixed.to_string_lossy()));
@@ -278,14 +278,14 @@ fn repair_rewrites_stale_mjs_manifest_to_launcher_form() {
     let sys = sys_with_home(&home);
 
     // A v3-era Claude manifest naming the retired `.mjs` script, plus a
-    // non-Impeccable hook that must be preserved untouched.
+    // non-Melzi hook that must be preserved untouched.
     let manifest = format!("{proj}/.claude/settings.local.json");
     write(&manifest, &serde_json::to_string_pretty(&json!({
         "other": true,
         "hooks": {
             "PostToolUse": [
                 { "matcher": "Bash", "hooks": [{ "type": "command", "command": "echo keep-me" }] },
-                { "matcher": "Edit", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"" }] }
+                { "matcher": "Edit", "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/hook.mjs\"" }] }
             ]
         }
     })).unwrap());
@@ -300,7 +300,7 @@ fn repair_rewrites_stale_mjs_manifest_to_launcher_form() {
     let repaired_cmd = post[1]["hooks"][0]["command"].as_str().unwrap();
     assert_eq!(
         repaired_cmd,
-        "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" ] || \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook"
+        "[ ! -f \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" ] || \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" hook"
     );
     assert!(!repaired_cmd.contains("hook.mjs"));
     assert!(!repaired_cmd.contains("node "));
@@ -360,7 +360,7 @@ fn hook_artifacts_map_providers_to_manifest_files() {
 }
 
 fn windows_user_scope_hook_command() -> String {
-    let launcher = r"C:\Users\alice\.claude\skills\impeccable\scripts\impeccable";
+    let launcher = r"C:\Users\alice\.claude\skills\melzi\scripts\impeccable";
     let q = json_string(launcher);
     format!("[ ! -f {q} ] || {q} hook")
 }
@@ -420,15 +420,15 @@ fn gemini_manifest_installs_and_rewrites_both_events() {
     assert_eq!(artifacts[0].src, jsp::join(&["/bundle", ".gemini", "settings.json"]));
     assert_eq!(artifacts[0].dest, jsp::join(&["/project", ".gemini", "settings.json"]));
     let manifest = json!({"hooks": {
-        "BeforeTool": [{"matcher": "^run_shell_command$", "hooks": [{"type": "command", "command": "[ ! -f \"$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable\" ] || \"$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable\" hook", "timeout": 5000}]}],
-        "AfterAgent": [{"hooks": [{"type": "command", "command": "\"$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable\" hook", "timeout": 30000}]}]
+        "BeforeTool": [{"matcher": "^run_shell_command$", "hooks": [{"type": "command", "command": "[ ! -f \"$GEMINI_PROJECT_DIR/.gemini/skills/melzi/scripts/impeccable\" ] || \"$GEMINI_PROJECT_DIR/.gemini/skills/melzi/scripts/impeccable\" hook", "timeout": 5000}]}],
+        "AfterAgent": [{"hooks": [{"type": "command", "command": "\"$GEMINI_PROJECT_DIR/.gemini/skills/melzi/scripts/impeccable\" hook", "timeout": 30000}]}]
     }});
     for absolute in [false, true] {
         let rewritten = rewrite_hook_commands_for_platform(&manifest, ".gemini", "/installed", absolute, false);
         // Gemini substitutes `$GEMINI_PROJECT_DIR` textually with a
         // shell-escaped path before the shell runs, so the token stays bare.
-        let expected = if absolute { format!("'{}'", jsp::join(&["/installed", ".gemini", "skills", "impeccable", "scripts", "impeccable"])) }
-            else { "$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable".to_string() };
+        let expected = if absolute { format!("'{}'", jsp::join(&["/installed", ".gemini", "skills", "melzi", "scripts", "impeccable"])) }
+            else { "$GEMINI_PROJECT_DIR/.gemini/skills/melzi/scripts/impeccable".to_string() };
         for command in commands(&rewritten) { assert_eq!(command, format!("command=[ ! -f {expected} ] || {expected} hook")); }
         assert_eq!(rewritten["hooks"]["AfterAgent"][0]["hooks"][0]["timeout"], 30000);
         assert!(rewritten["hooks"].get("AfterTool").is_none());
@@ -441,14 +441,14 @@ fn gemini_windows_command_is_powershell() {
     // command field, so a Windows install writes a PowerShell guard around
     // the `.cmd` shim, still recognized as ours.
     let manifest = json!({"hooks": {"AfterAgent": [{"hooks": [{"type": "command",
-        "command": "\"$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable\" hook"}]}]}});
+        "command": "\"$GEMINI_PROJECT_DIR/.gemini/skills/melzi/scripts/impeccable\" hook"}]}]}});
     let rel = rewrite_hook_commands_for_platform(&manifest, ".gemini", "C:/p", false, true);
     let cmd = rel["hooks"]["AfterAgent"][0]["hooks"][0]["command"].as_str().unwrap().to_string();
-    assert_eq!(cmd, "if (Test-Path -LiteralPath \"$env:GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable.cmd\") { & \"$env:GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable.cmd\" hook }");
+    assert_eq!(cmd, "if (Test-Path -LiteralPath \"$env:GEMINI_PROJECT_DIR/.gemini/skills/melzi/scripts/impeccable.cmd\") { & \"$env:GEMINI_PROJECT_DIR/.gemini/skills/melzi/scripts/impeccable.cmd\" hook }");
     assert!(value_has_launcher_hook_marker(&Value::String(cmd)));
     let abs = rewrite_hook_commands_for_platform(&manifest, ".gemini", "C:/Users/o'k", true, true);
     let cmd = abs["hooks"]["AfterAgent"][0]["hooks"][0]["command"].as_str().unwrap().to_string();
-    let shim = jsp::join(&["C:/Users/o''k", ".gemini", "skills", "impeccable", "scripts", "impeccable.cmd"]);
+    let shim = jsp::join(&["C:/Users/o''k", ".gemini", "skills", "melzi", "scripts", "impeccable.cmd"]);
     assert_eq!(cmd, format!("if (Test-Path -LiteralPath '{shim}') {{ & '{shim}' hook }}"));
     assert!(value_has_launcher_hook_marker(&Value::String(cmd)));
 }
@@ -460,7 +460,7 @@ fn gemini_install_merges_into_commented_settings_and_force_never_wipes() {
     let bundle = jsp::join(&[&root, "bundle"]);
     let project = jsp::join(&[&root, "project"]);
     write(&jsp::join(&[&bundle, ".gemini", "settings.json"]), &json!({"hooks": {"AfterAgent": [{"hooks": [{"type": "command",
-        "command": "[ ! -f \"$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable\" ] || \"$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable\" hook"}]}]}}).to_string());
+        "command": "[ ! -f \"$GEMINI_PROJECT_DIR/.gemini/skills/melzi/scripts/impeccable\" ] || \"$GEMINI_PROJECT_DIR/.gemini/skills/melzi/scripts/impeccable\" hook"}]}]}}).to_string());
     let settings = jsp::join(&[&project, ".gemini", "settings.json"]);
     let original = "{\n  // pick a model\n  \"model\": {\"name\": \"gemini-3-pro\"},\n  /* MCP */ \"mcpServers\": {\"x\": {\"url\": \"http://a//b\"}}\n}\n";
     write(&settings, original);

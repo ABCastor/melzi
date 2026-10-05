@@ -41,7 +41,7 @@ pub fn build_copy_edit_batch_prompt(batch: &Value, cwd: &str) -> String {
         None => vec![],
     };
     let mut lines: Vec<String> = vec![
-        "You are the Impeccable staged copy-edit batch applier.".into(),
+        "You are the Melzi staged copy-edit batch applier.".into(),
         String::new(),
         "Apply the staged browser copy edits to the real source files in this repository.".into(),
         String::new(),
@@ -1429,9 +1429,9 @@ pub fn describe_no_provider_error(env: &Env, chat_available: bool) -> String {
         lines.push("  • Codex CLI: not installed.".into());
     }
     if chat_available {
-        lines.push("  • Chat: an Impeccable live session is polling but selection chose another provider — unexpected; please report.".into());
+        lines.push("  • Chat: an Melzi live session is polling but selection chose another provider — unexpected; please report.".into());
     } else {
-        lines.push("  • Chat: no Impeccable live session is currently polling on this server. Start Impeccable live in your chat to route Apply through the chat agent.".into());
+        lines.push("  • Chat: no Melzi live session is currently polling on this server. Start Melzi live in your chat to route Apply through the chat agent.".into());
     }
     lines.push("Fix one of the above, or set IMPECCABLE_LIVE_COPY_AGENT=mock for tests.".into());
     lines.join("\n")

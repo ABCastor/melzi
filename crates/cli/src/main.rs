@@ -97,7 +97,7 @@ fn run(args: &[String], io: &mut Io) -> i32 {
         "hook-before-edit" => impeccable_hook::run_hook_before_edit(rest, io, engines().html),
         "hooks" | "hook-admin" => impeccable_hook::run_hook_admin(rest, io),
         v if v.starts_with("live") => impeccable_live::run(v, rest, io),
-        // `npx impeccable src/` shorthand: a path-shaped, flag, URL, or existing
+        // `npx melzi src/` shorthand: a path-shaped, flag, URL, or existing
         // first arg is a detect target (cli.js looksLikeDetectTarget).
         v if impeccable_detect::looks_like_detect_target(v, &io.cwd.to_string_lossy()) => {
             impeccable_detect::run_detect(args, io, &engines())

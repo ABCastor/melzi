@@ -86,6 +86,25 @@ export async function allCases() {
   return out;
 }
 
+// Fixture storage uses public names; real harness directories exist only in
+// the test-owned temporary workspace that the engine receives.
+export function materializeFixtureHarnesses(root) {
+  const entries = fs.readdirSync(root);
+  const mappings = [['_fixture-claude', '.claude'], ['_fixture-cursor', '.cursor']]
+    .filter(([source]) => entries.includes(source));
+  for (const [source, destination] of mappings) {
+    if (!fs.lstatSync(path.join(root, source)).isDirectory()) {
+      throw new Error(`oracle fixture harness is not a directory: ${source}`);
+    }
+    if (entries.includes(destination)) {
+      throw new Error(`oracle fixture harness collision: ${destination}`);
+    }
+  }
+  for (const [source, destination] of mappings) {
+    fs.renameSync(path.join(root, source), path.join(root, destination));
+  }
+}
+
 export function stageWorkspace(name) {
   // realpath, so every path the verbs see and every <WS> the harness passes
   // (env, args, lock files) is the same string. macOS's tmpdir is a symlink
@@ -97,6 +116,7 @@ export function stageWorkspace(name) {
     const src = path.join(WORKSPACES_DIR, name);
     if (!fs.existsSync(src)) throw new Error(`oracle workspace not found: ${name}`);
     fs.cpSync(src, tmp, { recursive: true });
+    materializeFixtureHarnesses(tmp);
   }
   return tmp;
 }
@@ -264,7 +284,8 @@ export function runCase(c, { impl = 'js', bin = process.env.IMPECCABLE_BIN } = {
   try {
     const isolatedHome = path.join(ws, '.oracle-home');
     if (c.isolateHome !== false) fs.mkdirSync(isolatedHome, { recursive: true });
-    if (typeof c.setup === 'function') c.setup(ws);
+    rebrandStagedTree(ws);
+    if (typeof c.setup === 'function') { c.setup(ws); rebrandStagedTree(ws); }
     const steps = c.steps || [c];
     const results = [];
     const daemons = [];
@@ -273,7 +294,7 @@ export function runCase(c, { impl = 'js', bin = process.env.IMPECCABLE_BIN } = {
         const merged = { ...c, ...step, verb: step.verb || c.verb };
         // A step-level setup stages state between verbs (e.g. the agent's
         // variant files between wrap and accept).
-        if (c.steps && typeof step.setup === 'function') step.setup(ws);
+        if (c.steps && typeof step.setup === 'function') { step.setup(ws); rebrandStagedTree(ws); }
         if (step.daemon) {
           daemons.push(runDaemonStep(merged, { impl, bin, ws, isolatedHome }));
           results.push({ stdout: '', stderr: '', status: null, signal: null, daemon: true });
@@ -316,7 +337,8 @@ function buildInvocation(c, { impl, bin, ws, isolatedHome }) {
     if (!bin) throw new Error('IMPECCABLE_BIN not set');
     argv = binArgv(bin, c.verb);
   }
-  const sub = (v) => String(v).replaceAll('<WS>', ws).replaceAll('<REPO>', REPO_ROOT);
+  // FORK DELTA (Melzi): inputs pass through the rebrand too; see rebrandStagedTree.
+  const sub = (v) => rebrandText(String(v).replaceAll('<WS>', ws).replaceAll('<REPO>', REPO_ROOT));
   argv.push(...(c.args || []).map(sub));
   const env = {
     ...process.env,
@@ -413,16 +435,78 @@ export function readGolden(id) {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 
+// FORK DELTA (Melzi). The goldens were recorded from upstream's JavaScript under
+// upstream's brand, and this fork's engine is built from rebranded sources. So a
+// case is compared against its golden AS OUR REBRAND WOULD HAVE WRITTEN IT: the
+// same transform scripts/rebrand.mjs applies to source, applied to the recorded
+// output (keys too, since written-file paths carry the skill directory name).
+// A mismatch that survives this is either a real behaviour change or a brand
+// string the engine builds at runtime, which is precisely what a source-level
+// rebrand cannot see. Never hand-edit goldens to paper over one.
+import { transform as rebrandText } from '../../scripts/rebrand.mjs';
+
+// The same holds for a case's INPUTS: a recorded workspace that plants
+// `.claude/skills/impeccable/` or `src/impeccable/` describes an install of upstream,
+// so a Melzi binary would correctly find nothing there. Translate the staged tree
+// (paths and text contents), argv, env, and stdin through the same transform, so the
+// case asks the question it was recorded to ask, in our brand.
+function rebrandStagedTree(root) {
+  const moved = new Set();
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const abs = path.join(dir, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) { walk(abs); continue; }
+      if (!entry.isFile()) continue;
+      const rel = path.relative(root, abs).split(path.sep).join('/');
+      const nextRel = rebrandText(rel);
+      // A case may stage a deliberately unreadable file to exercise a permission
+      // error; leave it exactly as staged.
+      let buf;
+      try { buf = fs.readFileSync(abs); } catch { continue; }
+      const text = isProbablyText(buf) ? buf.toString('utf8') : null;
+      const nextText = text == null ? null : rebrandText(text);
+      if (nextRel === rel && nextText === text) continue;
+      const dest = path.join(root, ...nextRel.split('/'));
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, nextText == null ? buf : nextText, { mode: fs.statSync(abs).mode });
+      if (dest !== abs) { fs.rmSync(abs); moved.add(path.dirname(abs)); }
+    }
+  };
+  walk(root);
+  // Remove directories the renames emptied: an empty skills/impeccable/ still reads as an install.
+  for (const dir of [...moved].sort((a, b) => b.length - a.length)) {
+    let d = dir;
+    while (d.startsWith(root) && d !== root && fs.existsSync(d) && fs.readdirSync(d).length === 0) {
+      fs.rmdirSync(d);
+      d = path.dirname(d);
+    }
+  }
+}
+
+function rebrandGolden(value) {
+  if (typeof value === 'string') return rebrandText(value);
+  if (Array.isArray(value)) return value.map(rebrandGolden);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [rebrandText(k), rebrandGolden(v)]));
+  }
+  return value;
+}
+
 /** Return a list of human-readable differences, empty if equal. */
 export function diffResults(golden, actual) {
+  return diffResultsRaw(rebrandGolden(golden), actual);
+}
+
+function diffResultsRaw(golden, actual) {
   const diffs = [];
   if (golden.steps || actual.steps) {
     const g = golden.steps || [], a = actual.steps || [];
     if (g.length !== a.length) diffs.push(`steps: expected ${g.length}, got ${a.length}`);
     for (let i = 0; i < Math.min(g.length, a.length); i++) {
-      for (const d of diffResults({ ...g[i], files: {} }, { ...a[i], files: {} })) diffs.push(`step ${i + 1} ${d}`);
+      for (const d of diffResultsRaw({ ...g[i], files: {} }, { ...a[i], files: {} })) diffs.push(`step ${i + 1} ${d}`);
     }
-    for (const d of diffResults({ files: golden.files, exit: 0, signal: null, stdout: '', stderr: '' }, { files: actual.files, exit: 0, signal: null, stdout: '', stderr: '' })) diffs.push(d);
+    for (const d of diffResultsRaw({ files: golden.files, exit: 0, signal: null, stdout: '', stderr: '' }, { files: actual.files, exit: 0, signal: null, stdout: '', stderr: '' })) diffs.push(d);
     const gd = golden.daemon || [], ad = actual.daemon || [];
     if (gd.length !== ad.length) diffs.push(`daemons: expected ${gd.length}, got ${ad.length}`);
     for (let i = 0; i < Math.min(gd.length, ad.length); i++) {

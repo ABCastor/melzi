@@ -1,12 +1,21 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 describe('skill reference authoring contracts', () => {
+  it('never emits repo-relative skill/scripts command paths', () => {
+    const referenceDir = join(ROOT, 'skill/reference');
+    const offenders = readdirSync(referenceDir)
+      .filter((file) => file.endsWith('.md'))
+      .filter((file) => readFileSync(join(referenceDir, file), 'utf-8').includes('skill/scripts/'));
+
+    assert.deepEqual(offenders, [], 'installed references must resolve commands through {{scripts_path}}');
+  });
+
   it('keeps direction contracts in development-only surface briefs', () => {
     const newWork = readFileSync(join(ROOT, 'skill/reference/new-work.md'), 'utf-8').replace(/\r\n?/g, '\n');
     const recordDecision = newWork.match(/## 5\. Record the decision\n([\s\S]*?)\n## 6\./)?.[1] ?? '';
@@ -44,7 +53,10 @@ describe('skill reference authoring contracts', () => {
 
   it('keeps reduced-motion guidance on the animation build path', () => {
     const animate = readFileSync(join(ROOT, 'skill/reference/animate.md'), 'utf-8').replace(/\r\n?/g, '\n');
-    const accessibility = animate.match(/## Accessibility and control\n([\s\S]*?)\n## Verify/)?.[1] ?? '';
+    // Stop at the NEXT heading, not at `## Verify` by name: a section added between the
+    // two (the motion-capture procedure) would otherwise be swallowed into what this
+    // test reads as the accessibility block, and the guard would pass on the wrong text.
+    const accessibility = animate.match(/## Accessibility and control\n([\s\S]*?)(?:\n## |$)/)?.[1] ?? '';
     const verify = animate.match(/## Verify\n([\s\S]*?)(?:\n## |$)/)?.[1] ?? '';
 
     assert.match(accessibility, /prefers-reduced-motion/);
@@ -69,10 +81,13 @@ describe('skill reference authoring contracts', () => {
   });
 
   it('keeps touch-gesture verification in the adapt, audit, and harden references', () => {
-    const adapt = readFileSync(join(ROOT, 'skill/reference/adapt.md'), 'utf-8').replace(/\r\n?/g, '\n');
+    // FORK DELTA (Melzi): `adapt` is a compatibility alias whose web half folds into
+    // polish.md's "Web adaptation implementation" section (there is no adapt.md), so
+    // the adaptation assertions read that section. Same checks, absorbing reference.
+    const polish = readFileSync(join(ROOT, 'skill/reference/polish.md'), 'utf-8').replace(/\r\n?/g, '\n');
     const audit = readFileSync(join(ROOT, 'skill/reference/audit.md'), 'utf-8').replace(/\r\n?/g, '\n');
     const harden = readFileSync(join(ROOT, 'skill/reference/harden.md'), 'utf-8').replace(/\r\n?/g, '\n');
-    const verifyAdaptations = adapt.match(/## Verify Adaptations\n([\s\S]*?)\n## /)?.[1] ?? '';
+    const verifyAdaptations = polish.match(/## Web adaptation implementation\n([\s\S]*?)(?:\n## |$)/)?.[1] ?? '';
     const responsive = audit.match(/### 4\. Responsive Design\n([\s\S]*?)\n### 5\./)?.[1] ?? '';
     const edgeCases = harden.match(/### Edge Cases & Boundary Conditions\n([\s\S]*?)\n### /)?.[1] ?? '';
     const verifyHardening = harden.match(/## Verify Hardening\n([\s\S]*?)(?:\n## |$)/)?.[1] ?? '';

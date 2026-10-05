@@ -64,7 +64,7 @@ const svg = `
     <rect width="24" height="24" rx="4.5" fill="#1a1a1a"/>
     <!-- Slash matches the brand icon: (76,24)→(52,104) in 128 viewBox, scaled to 24 -->
     <line x1="14.25" y1="4.5" x2="9.75" y2="19.5" stroke="${TEXT}" stroke-width="1.3" stroke-linecap="round"/>
-    <text x="34" y="17" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" font-size="16" font-weight="600" fill="${TEXT}" letter-spacing="-0.01em">Impeccable</text>
+    <text x="34" y="17" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" font-size="16" font-weight="600" fill="${TEXT}" letter-spacing="-0.01em">Melzi</text>
   </g>
 
   <!-- Small badge top-right -->
@@ -96,7 +96,7 @@ const svg = `
           font-family="-apple-system, system-ui, sans-serif"
           font-size="10" fill="#9b94a8" letter-spacing="0.02em">Reimagining the future of everything</text>
 
-    <!-- Impeccable magenta outline (offset by 2px outside the card)
+    <!-- Melzi magenta outline (offset by 2px outside the card)
          Path so top-left corner is square (where label meets it) -->
     <path d="M -4 -4 L 312 -4 Q 316 -4 316 0 L 316 92 Q 316 96 312 96 L 0 96 Q -4 96 -4 92 L -4 -4 Z"
           fill="none" stroke="${MAGENTA}" stroke-width="2" stroke-linejoin="round"/>

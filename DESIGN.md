@@ -1,5 +1,5 @@
 ---
-name: Impeccable
+name: Melzi
 description: Neo kinpaku system. Two brand anchors, kinpaku gold and verdigris patina, sit on dark warm-black lacquer. Restraint in chrome, brilliance in texture.
 
 # All values below mirror site/styles/kinpaku-tokens.css verbatim. That file

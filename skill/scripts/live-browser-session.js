@@ -1,5 +1,5 @@
 /**
- * Browser-side durable session helpers for Impeccable live mode.
+ * Browser-side durable session helpers for Melzi live mode.
  *
  * Kept separate from live-browser.js so recovery state can be tested without
  * booting the full overlay UI. Served before live-browser.js and attached to

@@ -9,9 +9,9 @@
 //! "<skill>/scripts/impeccable" hook` (`hook-before-edit` for Cursor), the
 //! shape the public build's `transformers/hooks.js` puts in the bundle; the
 //! Codex `commandWindows` sibling runs `impeccable.cmd` behind `if exist`.
-//! `impeccable hooks on` (`impeccable_hook::admin`) writes the same launcher
+//! `/melzi hooks on` (`impeccable_hook::admin`) writes the same launcher
 //! invocation for a project install (without the existence guard). Recognition of an
-//! Impeccable-owned entry (either the JS `.mjs` generation or the launcher
+//! Melzi-owned entry (either the JS `.mjs` generation or the launcher
 //! generation) is shared with the hook crate, `context`, and `doctor` through
 //! `impeccable_context::hook_markers::is_impeccable_hook_command`, so the two
 //! writers and the three readers can never disagree on what counts as ours.
@@ -93,7 +93,7 @@ pub fn hook_verb(provider: &str) -> &'static str {
 /// project-relative launcher path (Claude keeps its `${CLAUDE_PROJECT_DIR}`
 /// token).
 pub fn launcher_rel_path(provider: &str) -> String {
-    let rel = format!("{provider}/skills/impeccable/scripts/impeccable");
+    let rel = format!("{provider}/skills/melzi/scripts/impeccable");
     if provider == ".claude" {
         format!("${{CLAUDE_PROJECT_DIR}}/{rel}")
     } else if provider == ".gemini" {
@@ -113,7 +113,7 @@ pub fn launcher_rel_path(provider: &str) -> String {
 pub fn launcher_path(skill_root: &str, provider: &str) -> Option<String> {
     match provider {
         ".cursor" | ".claude" | ".agents" | ".grok" | ".gemini" => {
-            Some(jsp::join(&[skill_root, provider, "skills", "impeccable", "scripts", "impeccable"]))
+            Some(jsp::join(&[skill_root, provider, "skills", "melzi", "scripts", "impeccable"]))
         }
         _ => None,
     }
@@ -259,7 +259,7 @@ pub fn value_has_impeccable_hook_marker(value: &Value) -> bool {
     }
 }
 
-/// True when `value` names an Impeccable hook in the launcher generation.
+/// True when `value` names an Melzi hook in the launcher generation.
 pub fn value_has_launcher_hook_marker(value: &Value) -> bool {
     match value {
         Value::String(s) => is_launcher_hook_command(s),
@@ -269,7 +269,7 @@ pub fn value_has_launcher_hook_marker(value: &Value) -> bool {
     }
 }
 
-/// True when a manifest's `hooks` subtree carries an Impeccable hook only in
+/// True when a manifest's `hooks` subtree carries an Melzi hook only in
 /// the JS-era `.mjs` spelling (no launcher marker): a pre-launcher install
 /// whose hook script no longer exists after the skill update, so the hook is
 /// dead and the manifest must be rewritten to the launcher form.
@@ -514,9 +514,9 @@ pub fn copy_provider_hooks(sys: &crate::providers::Sys, bundle_dir: &str, root: 
 /// the launcher-era skill no longer ships, so the editor fires a dead command
 /// on every edit and `context` would otherwise still count the stale marker as
 /// an active hook. Rewrite each such manifest's command strings to the
-/// launcher form this engine writes, in place, without touching non-Impeccable
+/// launcher form this engine writes, in place, without touching non-Melzi
 /// entries. Runs regardless of hook consent — it repairs an already-installed
-/// hook, it does not add one (a dir with no Impeccable marker is left alone).
+/// hook, it does not add one (a dir with no Melzi marker is left alone).
 /// Idempotent: a manifest already in the launcher form is not stale and is
 /// skipped. `.github` (and any provider with no rewritable launcher path)
 /// carries a portable, team-committed command form that must not be pinned to
@@ -559,7 +559,7 @@ pub fn repair_stale_hook_manifests(sys: &Sys, root: &str, providers: &[&'static 
 }
 
 /// JS: HOOK_EXPLAINER
-pub const HOOK_EXPLAINER: &str = "\nImpeccable can install a design hook for this project. In Claude/Codex it\nchecks UI files after edits; in Cursor it checks proposed writes before they\nland and can block writes with detector findings. It feeds results back to\nyour agent so design slop gets caught as you build. Change it later with\n/impeccable hooks on|off.\n";
+pub const HOOK_EXPLAINER: &str = "\nImpeccable can install a design hook for this project. In Claude/Codex it\nchecks UI files after edits; in Cursor it checks proposed writes before they\nland and can block writes with detector findings. It feeds results back to\nyour agent so design slop gets caught as you build. Change it later with\n/melzi hooks on|off.\n";
 
 /// JS: impeccable-config.mjs#setHookConsent(root, value)
 pub fn set_hook_consent(root: &str, value: &str) -> Result<String, String> {

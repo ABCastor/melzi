@@ -409,8 +409,17 @@ describe('skill scripts payload', () => {
       'lib/png.mjs',
       'lib/raster.mjs',
     ]);
+    // FORK DELTA (Melzi): Melzi's own tools ship as Node scripts beside the launcher
+    // and are invoked by the skill text as `node {{scripts_path}}/<dir>/...`: the
+    // taste, signature, and world-pool tools, the Pollux explore engine, and the
+    // review island. They are fork-owned, not upstream engine verbs left behind.
+    const forkOwnedPrefixes = ['melzi/', 'pollux-uxui/', 'island/'];
+    const forkOwnedScripts = new Set(['motion-eyes.mjs']);
     const stray = [...names].filter((n) =>
-      (n.endsWith('.mjs') || n.startsWith('detector/') || n.startsWith('lib/')) && !allowedNodeScripts.has(n));
+      (n.endsWith('.mjs') || n.startsWith('detector/') || n.startsWith('lib/'))
+      && !allowedNodeScripts.has(n)
+      && !forkOwnedScripts.has(n)
+      && !forkOwnedPrefixes.some((p) => n.startsWith(p)));
     expect(stray).toEqual([]);
   });
 
@@ -433,7 +442,7 @@ describe('degraded-mode fallback reference generation', () => {
 
   const readDegraded = (provider, configDir, role) =>
     fs.readFileSync(
-      path.join(DIST, provider, configDir, 'skills', 'impeccable', 'reference', 'degraded', `${role}.md`),
+      path.join(DIST, provider, configDir, 'skills', 'melzi', 'reference', 'degraded', `${role}.md`),
       'utf-8'
     );
 
@@ -450,7 +459,7 @@ describe('degraded-mode fallback reference generation', () => {
   });
 
   test('a build emits reference/degraded/<role>.md for every agent, prefix-stripped', () => {
-    const dir = path.join(DIST, 'codex', '.codex', 'skills', 'impeccable', 'reference', 'degraded');
+    const dir = path.join(DIST, 'codex', '.codex', 'skills', 'melzi', 'reference', 'degraded');
     const files = fs.readdirSync(dir).sort();
     expect(files).toEqual([
       'asset-producer.md',
@@ -559,14 +568,14 @@ describe('GitHub Copilot custom agent generation', () => {
     // The asset producer's body references the skill's scripts dir; the
     // placeholder resolves to the provider-aware path.
     const assetProducer = fs.readFileSync(path.join(AGENTS_DIR, 'impeccable-asset-producer.agent.md'), 'utf-8');
-    expect(assetProducer).toContain('.github/skills/impeccable/scripts');
+    expect(assetProducer).toContain('.github/skills/melzi/scripts');
     // A distinctive body phrase proves the agent body itself was inlined.
     const reviewer = fs.readFileSync(path.join(AGENTS_DIR, 'impeccable-finish-reviewer.agent.md'), 'utf-8');
     expect(reviewer).toContain('material_fixes');
   });
 
   test('degraded fallbacks still ship for the github provider alongside the real agents', () => {
-    const degradedDir = path.join(DIST, 'github', '.github', 'skills', 'impeccable', 'reference', 'degraded');
+    const degradedDir = path.join(DIST, 'github', '.github', 'skills', 'melzi', 'reference', 'degraded');
     const files = fs.readdirSync(degradedDir).sort();
     expect(files).toEqual([
       'asset-producer.md',
@@ -634,7 +643,7 @@ describe('Cursor subagent generation', () => {
       expect(content).not.toMatch(/<!--\s*rule:/);
     }
     const assetProducer = fs.readFileSync(path.join(AGENTS_DIR, 'impeccable-asset-producer.md'), 'utf-8');
-    expect(assetProducer).toContain('.cursor/skills/impeccable/scripts');
+    expect(assetProducer).toContain('.cursor/skills/melzi/scripts');
   });
 });
 
@@ -650,14 +659,14 @@ describe('agent bodies resolve placeholders on every surface that ships them', (
   // [emitted file, the scripts path that provider installs to]
   const SURFACES = [
     // Nested Codex .toml: the skill install is the whole delivery for these.
-    ['codex/.codex/skills/impeccable/agents/impeccable_asset_producer.toml', '.codex/skills/impeccable/scripts'],
-    ['agents/.agents/skills/impeccable/agents/impeccable_asset_producer.toml', '.agents/skills/impeccable/scripts'],
+    ['codex/.codex/skills/melzi/agents/impeccable_asset_producer.toml', '.codex/skills/melzi/scripts'],
+    ['agents/.agents/skills/melzi/agents/impeccable_asset_producer.toml', '.agents/skills/melzi/scripts'],
     // Native agent files.
-    ['claude-code/.claude/agents/impeccable-asset-producer.md', '.claude/skills/impeccable/scripts'],
-    ['github/.github/agents/impeccable-asset-producer.agent.md', '.github/skills/impeccable/scripts'],
-    ['grok/.grok/agents/impeccable-asset-producer.md', '.grok/skills/impeccable/scripts'],
+    ['claude-code/.claude/agents/impeccable-asset-producer.md', '.claude/skills/melzi/scripts'],
+    ['github/.github/agents/impeccable-asset-producer.agent.md', '.github/skills/melzi/scripts'],
+    ['grok/.grok/agents/impeccable-asset-producer.md', '.grok/skills/melzi/scripts'],
     // Degraded fallback reference generated from the same agent definition.
-    ['codex/.codex/skills/impeccable/reference/degraded/asset-producer.md', '.codex/skills/impeccable/scripts'],
+    ['codex/.codex/skills/melzi/reference/degraded/asset-producer.md', '.codex/skills/melzi/scripts'],
   ];
 
   beforeEach(() => {

@@ -1,6 +1,15 @@
 {
-  "name": "impeccable",
-  "owner": { "name": "Renaissance Geek, Inc." },
-  "metadata": { "description": "Impeccable design tools for Cursor" },
-  "plugins": [{ "name": "impeccable", "source": "./cursor-plugin" }]
+  "name": "melzi",
+  "owner": {
+    "name": "Anneo22"
+  },
+  "metadata": {
+    "description": "Melzi design review tools for Cursor"
+  },
+  "plugins": [
+    {
+      "name": "melzi",
+      "source": "./cursor-plugin"
+    }
+  ]
 }

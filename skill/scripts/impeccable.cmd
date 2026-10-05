@@ -1,6 +1,6 @@
 @echo off
 setlocal
-rem Impeccable launcher (Windows). Runs bin\windows-<arch>\impeccable.exe next
+rem Melzi launcher (Windows). Runs bin\windows-<arch>\impeccable.exe next
 rem to this file, else a cached or freshly downloaded engine binary.
 rem
 rem Structure notes (this file is exercised by dry parsing and string-level
@@ -66,10 +66,10 @@ rem Last resort: fetch this version's binary from the release channel into
 rem the version-pinned user cache, verify it, then run it. Never inside
 rem another launcher's probe: fail fast and quiet instead.
 if defined IMPECCABLE_LAUNCHER_PROBE exit /b 127
+if not defined IMPECCABLE_DOWNLOAD_BASE goto no_download_endpoint
 if not defined version goto fail
 where curl.exe >nul 2>nul
 if errorlevel 1 goto curl_missing
-if not defined IMPECCABLE_DOWNLOAD_BASE set "IMPECCABLE_DOWNLOAD_BASE=https://github.com/pbakaus/impeccable/releases/download"
 if exist "%IMPECCABLE_HOME%\bin\%version%\" goto cache_ready
 mkdir "%IMPECCABLE_HOME%\bin\%version%" >nul 2>nul
 if errorlevel 1 goto cache_directory_failed
@@ -207,8 +207,15 @@ echo Run this launcher ("%~f0") with engine-probe in a terminal that has those p
 echo Alternatively, set IMPECCABLE_HOME to a writable cache location, or IMPECCABLE_BIN to a preinstalled engine binary. 1>&2
 exit /b 127
 
+:no_download_endpoint
+echo impeccable: no download endpoint is configured; this fork does not publish engine binaries. Refusing to download upstream's engine. 1>&2
+echo Build this checkout: cargo build --release -p impeccable 1>&2
+echo Set IMPECCABLE_BIN to target\release\impeccable.exe, or copy it to "%USERPROFILE%\.impeccable\bin\impeccable.exe". 1>&2
+echo To use an explicit release channel, set IMPECCABLE_DOWNLOAD_BASE. 1>&2
+exit /b 127
+
 :fail
 del "%cached%.part" >nul 2>nul
 echo impeccable: no engine binary found (looked in %bin%, %cached%, PATH). 1>&2
-echo Download impeccable-windows-%arch%.exe from https://github.com/pbakaus/impeccable/releases (tag engine-v%version%) and save it as %cached%, or set IMPECCABLE_BIN to a preinstalled engine binary. Docs: https://impeccable.style 1>&2
+echo Build this checkout with cargo build --release -p impeccable, then set IMPECCABLE_BIN to the resulting binary. 1>&2
 exit /b 127

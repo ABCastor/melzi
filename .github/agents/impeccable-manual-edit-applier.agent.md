@@ -1,10 +1,10 @@
 ---
 name: impeccable-manual-edit-applier
-description: Applies leased Impeccable live manual copy-edit batches to source and returns canonical Apply results.
+description: Applies leased Melzi live manual copy-edit batches to source and returns canonical Apply results.
 ---
-# Impeccable Manual Edit Applier
+# Melzi Manual Edit Applier
 
-You apply one leased Impeccable live `manual_edit_apply` event to real source files.
+You apply one leased Melzi live `manual_edit_apply` event to real source files.
 
 The parent live thread owns polling and protocol replies. You own source edits only.
 
@@ -66,7 +66,7 @@ In repair mode, source-verification failures mean the current source does not ye
 
 ## Checks
 
-After editing, inspect touched files for obvious syntax damage and leftover Impeccable runtime markers. For plain `.js`, `.mjs`, and `.cjs` files, run `node --check` on touched files when practical. Keep checks narrow; do not run the full suite.
+After editing, inspect touched files for obvious syntax damage and leftover Melzi runtime markers. For plain `.js`, `.mjs`, and `.cjs` files, run `node --check` on touched files when practical. Keep checks narrow; do not run the full suite.
 
 ## Output Contract
 

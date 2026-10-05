@@ -6,7 +6,7 @@ import { generateYamlFrontmatter, parseFrontmatter } from './utils.js';
  * Rewrite project-relative script paths for the plugin subtree (issue #523).
  *
  * The ./plugin subtree is a verbatim copy of the dist/claude-code output,
- * where {{scripts_path}} resolves to `.claude/skills/impeccable/scripts`,
+ * where {{scripts_path}} resolves to `.claude/skills/melzi/scripts`,
  * a path relative to the user's project. Run from the plugin cache, that
  * path points at whatever the project has installed: a plugin-only user
  * gets MODULE_NOT_FOUND, and a dual-install user silently runs the
@@ -25,7 +25,7 @@ import { generateYamlFrontmatter, parseFrontmatter } from './utils.js';
 
 // The resolved {{scripts_path}} in dist/claude-code output, fixed by the
 // Claude Code transformer's configDir (.claude) + skill name (impeccable).
-export const CLAUDE_PROJECT_SCRIPTS_PATH = '.claude/skills/impeccable/scripts';
+export const CLAUDE_PROJECT_SCRIPTS_PATH = '.claude/skills/melzi/scripts';
 
 export const PLUGIN_SCRIPTS_PATH = '${CLAUDE_SKILL_DIR}/scripts';
 
@@ -48,8 +48,8 @@ function stripAllowedToolsFrontmatter(content) {
 // fix). SKILL.md receives host substitution; references need the directory
 // resolved by the assistant, so spell out that boundary in the entrypoint.
 const SETUP_FALLBACK_TEXT =
-  'That base directory resolves every `.claude/skills/impeccable/scripts/impeccable <verb>` command in this skill and its references, ' +
-  'and `.claude/skills/impeccable/scripts` is the fallback only when the runtime reports no base directory.';
+  'That base directory resolves every `.claude/skills/melzi/scripts/impeccable <verb>` command in this skill and its references, ' +
+  'and `.claude/skills/melzi/scripts` is the fallback only when the runtime reports no base directory.';
 const SETUP_PLUGIN_TEXT =
   'Every `"${CLAUDE_SKILL_DIR}/scripts/impeccable" <verb>` command in this skill and its references resolves against that base directory. ' +
   'In reference files, replace the skill-base-dir placeholder with this directory before running commands; it is not a shell variable.';
@@ -65,7 +65,7 @@ const SETUP_PLUGIN_TEXT =
 // rather than rewritten.) Grok Build reads this same subtree with its own
 // substitution behavior, so the embed instruction carries a sidecar
 // fallback for any harness that hands the agent the unexpanded literal.
-export const PLUGIN_AGENT_SCRIPTS_PATH = '${CLAUDE_PLUGIN_ROOT}/skills/impeccable/scripts';
+export const PLUGIN_AGENT_SCRIPTS_PATH = '${CLAUDE_PLUGIN_ROOT}/skills/melzi/scripts';
 
 // Appended as its own sentence after the agent's embed instruction so
 // behavior is defined even where the variable reaches the agent
@@ -111,14 +111,14 @@ export function rewritePluginAgentMarkdown(content) {
   return content
     .replaceAll(CLAUDE_PROJECT_SCRIPTS_PATH, PLUGIN_AGENT_SCRIPTS_PATH)
     .replace(
-      /node \$\{CLAUDE_PLUGIN_ROOT\}\/skills\/impeccable\/scripts\/([^\s`"]+)/g,
-      'node "${CLAUDE_PLUGIN_ROOT}/skills/impeccable/scripts/$1"',
+      /node \$\{CLAUDE_PLUGIN_ROOT\}\/skills\/melzi\/scripts\/([^\s`"]+)/g,
+      'node "${CLAUDE_PLUGIN_ROOT}/skills/melzi/scripts/$1"',
     )
     // Anchors on the command this rewrite just produced plus the rest of
     // its sentence, so the fallback lands as the following sentence rather
     // than splicing into the middle of one.
     .replace(
-      /(`node "\$\{CLAUDE_PLUGIN_ROOT\}\/skills\/impeccable\/scripts\/embed-prompt\.mjs"[^`]*`[^.]*\.)/g,
+      /(`node "\$\{CLAUDE_PLUGIN_ROOT\}\/skills\/melzi\/scripts\/embed-prompt\.mjs"[^`]*`[^.]*\.)/g,
       `$1${AGENT_EMBED_FALLBACK}`,
     );
 }

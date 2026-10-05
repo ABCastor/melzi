@@ -1,0 +1,17 @@
+/api/skills /_data/api/skills.json 200
+/api/commands /_data/api/commands.json 200
+/api/version /_data/api/version.json 200
+/api/patterns /_data/api/patterns.json 200
+/api/command-source/:id /_data/api/command-source/:id.json 200
+/gallery /slop#try-it-live 301
+/cheatsheet /docs 301
+/skills /docs 301
+/skills/teach /docs/init 301
+/skills/:id /docs/:id 301
+/docs/teach /docs/init 301
+/anti-patterns /slop#catalog 301
+/visual-mode /slop#see-it 301
+/neon-mirai /neo-mirai/ 301
+/neon-mirai/ /neo-mirai/ 301
+/cases/neon-mirai /cases/neo-mirai 301
+/cases/neon-mirai/ /cases/neo-mirai 301

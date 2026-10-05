@@ -6,7 +6,7 @@
 use impeccable_common::Io;
 use serde_json::Value;
 
-use crate::bundle::{self, download};
+use crate::bundle;
 use crate::engine_binary::install_engine_binaries;
 use crate::hook_manifest::{self, copy_provider_hooks, hook_installed_for_provider, HOOK_EXPLAINER};
 use crate::prompt::{CheckboxOption, Prompt, RadioOption};
@@ -20,19 +20,19 @@ use crate::{Flow, R};
 const SUBCOMMAND_HELP: &[(&str, &str)] = &[
     (
         "install",
-        "Usage: impeccable install [options]\n\nInstall compiled Impeccable skills into project or user-level harness folders.\n\nOptions:\n  -y, --yes              Accept detected defaults without prompting\n  --providers=<names>    Comma-separated harnesses to install\n  --scope=<scope>        Install scope: project or global\n  --project              Install into the current project\n  --user, --global       Install at the user level\n  --no-hooks             Install skills without provider hook manifests\n  --force                Replace an existing installation\n  -h, --help             Show this help message",
+        "Usage: impeccable install [options]\n\nInstall a locally built Melzi bundle into project or user-level harness folders.\nRequires IMPECCABLE_BUNDLE_PATH=/absolute/path/to/dist/universal.zip. Remote installation is unavailable.\n\nOptions:\n  -y, --yes              Accept detected defaults without prompting\n  --providers=<names>    Comma-separated harnesses to install\n  --scope=<scope>        Install scope: project or global\n  --project              Install into the current project\n  --user, --global       Install at the user level\n  --no-hooks             Install skills without provider hook manifests\n  --force                Replace an existing installation\n  -h, --help             Show this help message",
     ),
     (
         "link",
-        "Usage: impeccable link [options]\n\nLink Impeccable skills from a local checkout or submodule.\n\nOptions:\n  --source=<path>        Source checkout (default: .impeccable)\n  --providers=<names>    Comma-separated harnesses to link\n  -y, --yes              Accept detected defaults without prompting\n  --force                Replace existing skill folders with links\n  -h, --help             Show this help message",
+        "Usage: impeccable link [options]\n\nLink Melzi skills from a local checkout or submodule.\n\nOptions:\n  --source=<path>        Source checkout (default: .impeccable)\n  --providers=<names>    Comma-separated harnesses to link\n  -y, --yes              Accept detected defaults without prompting\n  --force                Replace existing skill folders with links\n  -h, --help             Show this help message",
     ),
     (
         "update",
-        "Usage: impeccable update [options]\n\nUpdate an existing Impeccable skill installation.\n\nOptions:\n  -y, --yes              Accept detected defaults without prompting\n  --scope=<scope>        Update scope: project or global\n  --project              Update the current project installation\n  --user, --global       Update the user-level installation\n  --no-hooks             Update skills without changing hook manifests\n  --force                Replace installed skill files\n  -h, --help             Show this help message",
+        "Usage: impeccable update [options]\n\nRefresh an existing Melzi installation from a locally built bundle.\nRequires IMPECCABLE_BUNDLE_PATH=/absolute/path/to/dist/universal.zip. Remote updates are unavailable.\n\nOptions:\n  -y, --yes              Accept detected defaults without prompting\n  --scope=<scope>        Update scope: project or global\n  --project              Update the current project installation\n  --user, --global       Update the user-level installation\n  --no-hooks             Update skills without changing hook manifests\n  --force                Replace installed skill files\n  -h, --help             Show this help message",
     ),
     (
         "check",
-        "Usage: impeccable check [options]\n\nCheck whether installed Impeccable skills are up to date.\n\nOptions:\n  -h, --help             Show this help message",
+        "Usage: impeccable check [options]\n\nCompare installed Melzi skills with a locally built bundle.\nRequires IMPECCABLE_BUNDLE_PATH=/absolute/path/to/dist/universal.zip. Remote update checks are unavailable.\n\nOptions:\n  -h, --help             Show this help message",
     ),
 ];
 
@@ -49,6 +49,15 @@ pub fn run(args: &[String], io: &mut Io) -> R<()> {
             return Ok(());
         }
     }
+    // Fail before prompts, project scans or writes. Remote distribution is not
+    // configured for Melzi; inherited protocol code remains for provenance.
+    if matches!(sub, "install" | "update" | "check") && !has_explicit_local_bundle(io) {
+        err(io, &format!("melzi: remote `{sub}` is unavailable. No Melzi remote distribution is published."));
+        err(io, "Build this checkout: cargo build --release -p impeccable && bun run build:release");
+        err(io, "Copy the generated skill directory for your tool, or set IMPECCABLE_BUNDLE_PATH to an existing local dist/universal.zip.");
+        err(io, "Local installation instructions: https://github.com/ABCastor/melzi#build-and-use");
+        return Err(Flow::Exit(1));
+    }
     match sub {
         "" | "help" | "--help" | "-h" => show_help(io),
         "install" => install(&rest, io),
@@ -61,6 +70,16 @@ pub fn run(args: &[String], io: &mut Io) -> R<()> {
             Err(Flow::Exit(1))
         }
     }
+}
+
+fn has_explicit_local_bundle(io: &Io) -> bool {
+    io.env("IMPECCABLE_BUNDLE_PATH")
+        .filter(|path| !path.is_empty())
+        .is_some_and(|path| {
+            let path = std::path::Path::new(path);
+            let resolved = if path.is_absolute() { path.to_path_buf() } else { io.cwd.join(path) };
+            resolved.is_file() || resolved.is_dir()
+        })
 }
 
 fn ctx(io: &Io) -> (Sys, Prompt) {
@@ -85,13 +104,19 @@ fn err(io: &mut Io, line: &str) {
 
 /// JS: showHelp()
 fn show_help(io: &mut Io) -> R<()> {
-    let commands: Vec<Value> = match download(&format!("{API_BASE}/api/commands"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-    {
-        Some(Value::Array(a)) => a,
+    // FORK DELTA (Melzi): list this skill's own commands from the metadata the engine
+    // already embeds for `pin`. Upstream fetches its site's command list, which names
+    // upstream's commands and needs the network; this fork publishes no such endpoint.
+    let commands: Vec<Value> = match serde_json::from_str::<Value>(impeccable_context::pin::COMMAND_METADATA_JSON) {
+        Ok(Value::Object(map)) => map
+            .into_iter()
+            .map(|(id, meta)| {
+                let description = meta.get("description").cloned().unwrap_or_else(|| Value::String(String::new()));
+                serde_json::json!({ "id": id, "description": description })
+            })
+            .collect(),
         _ => {
-            err(io, "Could not fetch command list from impeccable.style. Check your network connection.");
+            err(io, "Could not read the bundled command list.");
             return Err(Flow::Exit(1));
         }
     };
@@ -99,11 +124,12 @@ fn show_help(io: &mut Io) -> R<()> {
         let len = utf16_len(s);
         format!("{s}{}", " ".repeat(n.saturating_sub(len)))
     };
-    out(io, "\n  Impeccable Skills & Commands\n");
-    out(io, "  Install:  npx impeccable install");
-    out(io, "  Link:     npx impeccable link --source=.impeccable");
-    out(io, "  Update:   npx impeccable update");
-    out(io, "  Docs:     https://impeccable.style/cheatsheet\n");
+    out(io, "\n  Melzi Skills & Commands\n");
+    out(io, "  Build:    cargo build --release -p impeccable && bun run build:release");
+    out(io, "  Install:  copy the generated skill directory for your tool");
+    out(io, "  Bundle:   install/update/check require an explicit local IMPECCABLE_BUNDLE_PATH");
+    out(io, "  Remote installation and updates are unavailable.");
+    out(io, "  Docs:     https://github.com/ABCastor/melzi#build-and-use\n");
     out(io, &format!("  {} Description", pad("Command", 22)));
     out(io, &format!("  {} {}", "-".repeat(22), "-".repeat(52)));
 
@@ -154,8 +180,8 @@ fn check(io: &mut Io) -> R<()> {
         None
     };
     if sys.is_already_installed(&root, scope).is_none() {
-        out(io, "Impeccable is not installed in this project.");
-        out(io, "Run `npx impeccable install` to install.");
+        out(io, "Melzi is not installed in this project.");
+        out(io, "Run `npx melzi install` to install.");
         return Err(Flow::Exit(0));
     }
     let providers = sys.find_impeccable_providers(&root, scope);
@@ -173,7 +199,7 @@ fn check(io: &mut Io) -> R<()> {
         }
         Ok(false) => {
             out(io, "Updates available.");
-            out(io, "Run `npx impeccable update` to update.");
+            out(io, "Run `npx melzi update` to update.");
         }
         Err(e) => {
             err(io, &format!("Could not check for updates: {e}"));
@@ -204,7 +230,7 @@ fn print_install_intro(prompt: &Prompt, io: &mut Io) {
     if !prompt.interactive() {
         return;
     }
-    out(io, &format!("{} {}", prompt.accent(&prompt.bold("impeccable")), prompt.dim("install")));
+    out(io, &format!("{} {}", prompt.accent(&prompt.bold("melzi")), prompt.dim("install")));
     out(io, "");
 }
 
@@ -572,7 +598,7 @@ fn install(flags: &[String], io: &mut Io) -> R<()> {
     };
 
     if let (Some(existing), true) = (existing, !force && missing_selected_targets.len() < targets.len()) {
-        out(io, &format!("Impeccable skills are already installed (found in {existing}/)."));
+        out(io, &format!("Melzi skills are already installed (found in {existing}/)."));
         let selected_installed: Vec<&'static str> = targets.iter().copied().filter(|p| installed_targets.contains(p)).collect();
         let linked_targets = sys.find_linked_providers(&install_root, &selected_installed, scope_opt);
         let copy_targets: Vec<&'static str> = selected_installed.iter().copied().filter(|p| !linked_targets.contains(p)).collect();
@@ -582,7 +608,7 @@ fn install(flags: &[String], io: &mut Io) -> R<()> {
         let outcome: Result<(), String> = (|| {
             if !linked_targets.is_empty() {
                 out(io, &format!("Linked skills found in: {}", linked_targets.join(", ")));
-                out(io, "Update the source checkout with `git submodule update --remote`, then rerun `npx impeccable link --source=.impeccable` if new skills are added.");
+                out(io, "Update the source checkout with `git submodule update --remote`, then rerun `npx melzi link --source=.impeccable` if new skills are added.");
                 if !copy_targets.is_empty() {
                     out(io, &format!("Continuing with copied installs in: {}\n", copy_targets.join(", ")));
                 }
@@ -686,11 +712,11 @@ fn install(flags: &[String], io: &mut Io) -> R<()> {
 
     let want_hooks = install_hooks && decide_hook_install(&mut prompt, io, &hook_root, &targets, yes)?;
 
-    out(io, "\nDownloading impeccable skills...");
+    out(io, "\nLoading local Melzi skills...");
     let bundle_dir = match bundle::download_and_extract_bundle(&sys) {
         Ok(d) => d,
         Err(e) => {
-            err(io, &format!("Download failed: {e}"));
+            err(io, &format!("Local bundle failed: {e}"));
             return Err(Flow::Exit(1));
         }
     };
@@ -732,7 +758,7 @@ fn install(flags: &[String], io: &mut Io) -> R<()> {
     if !hook_targets.is_empty() {
         out(io, &format!("Installed hooks into: {}", hook_targets.join(", ")));
     }
-    out(io, "\nDone! Now type /impeccable init in your AI coding agent's chat (not in this terminal) to set up design context.\n");
+    out(io, "\nDone! Now type /melzi init in your AI coding agent's chat (not in this terminal) to set up design context.\n");
     Ok(())
 }
 
@@ -769,14 +795,14 @@ fn update(flags: &[String], io: &mut Io) -> R<()> {
             }
             None => out(io, "No impeccable skill folders found in this project or at the user level."),
         }
-        out(io, "Run `npx impeccable install` to install first.");
+        out(io, "Run `npx melzi install` to install first.");
         return Err(Flow::Exit(1));
     };
 
     let (root, scope, agent_scope, providers, scope_label) = match target {
         UpdateTarget::Resolved { root, scope, agent_scope, providers, scope_label } => (root, scope, agent_scope, providers, scope_label),
         UpdateTarget::Ambiguous { project_providers, user_providers } => {
-            out(io, "Impeccable is installed both here and at the user level:");
+            out(io, "Melzi is installed both here and at the user level:");
             out(io, &format!("  project    {project_root}  ({})", project_providers.join(", ")));
             out(io, &format!("  user level {}  ({})", sys.format_path_for_display(&home), user_providers.join(", ")));
             let mut pick_user = false;
@@ -800,7 +826,7 @@ fn update(flags: &[String], io: &mut Io) -> R<()> {
 
     if !linked_providers.is_empty() {
         out(io, &format!("Linked skills found in: {}", linked_providers.join(", ")));
-        out(io, "Update the source checkout with `git submodule update --remote`, then rerun `npx impeccable link --source=.impeccable` if new skills are added.");
+        out(io, "Update the source checkout with `git submodule update --remote`, then rerun `npx melzi link --source=.impeccable` if new skills are added.");
         if copy_providers.is_empty() {
             return Err(Flow::Exit(0));
         }
@@ -812,7 +838,7 @@ fn update(flags: &[String], io: &mut Io) -> R<()> {
     let tmp_dir = match bundle::download_and_extract_bundle(&sys) {
         Ok(d) => d,
         Err(e) => {
-            err(io, &format!("Download failed: {e}"));
+            err(io, &format!("Local bundle failed: {e}"));
             return Err(Flow::Exit(1));
         }
     };
@@ -876,7 +902,7 @@ fn update(flags: &[String], io: &mut Io) -> R<()> {
     let outcome: R<()> = (|| {
         let migrated = sys.migrate_unprefix_impeccable(&root, scope);
         if migrated > 0 {
-            out(io, "Migrated a prefixed install back to /impeccable (the i- prefix is no longer used).");
+            out(io, "Migrated a prefixed install back to /melzi (the i- prefix is no longer used).");
         }
         let refreshed = bundle::refresh_provider_skills(&sys, &tmp_dir, &root, &copy_providers, scope).map_err(Flow::Throw)?;
         let agents = bundle::copy_provider_agents(&sys, &tmp_dir, &root, &copy_providers, agent_scope).map_err(Flow::Throw)?;

@@ -48,7 +48,7 @@ const providerSmoke = {
     fixture: 'src/__impeccable_provider_smoke_claude.html',
     confirmedFixture: 'src/__impeccable_provider_smoke_confirmed_claude.html',
     agentChoiceFixture: 'src/__impeccable_provider_smoke_font_choice_claude.html',
-    launcher: '.claude/skills/impeccable/scripts/impeccable',
+    launcher: '.claude/skills/melzi/scripts/impeccable',
     hookVerb: 'hook',
     event: (file) => postToolUseEvent('confirmed-claude', file, 'Edit'),
   },
@@ -56,7 +56,7 @@ const providerSmoke = {
     fixture: 'src/__impeccable_provider_smoke_codex.html',
     confirmedFixture: 'src/__impeccable_provider_smoke_confirmed_codex.html',
     agentChoiceFixture: 'src/__impeccable_provider_smoke_font_choice_codex.html',
-    launcher: '.agents/skills/impeccable/scripts/impeccable',
+    launcher: '.agents/skills/melzi/scripts/impeccable',
     hookVerb: 'hook',
     event: (file) => postToolUseEvent('confirmed-codex', file, 'apply_patch'),
   },
@@ -64,7 +64,7 @@ const providerSmoke = {
     fixture: 'src/__impeccable_provider_smoke_cursor.html',
     confirmedFixture: 'src/__impeccable_provider_smoke_confirmed_cursor.html',
     agentChoiceFixture: 'src/__impeccable_provider_smoke_font_choice_cursor.html',
-    launcher: '.cursor/skills/impeccable/scripts/impeccable',
+    launcher: '.cursor/skills/melzi/scripts/impeccable',
     hookVerb: 'hook-before-edit',
     event: (file) => ({
       hook_event_name: 'preToolUse',
@@ -220,13 +220,13 @@ async function reinstallFresh() {
   assertPath(tarball, 'local npm tarball');
 
   const env = { IMPECCABLE_BUNDLE_PATH: bundlePath };
-  run('npx', ['--yes', '--package', tarball, 'impeccable', 'skills', 'install', '-y', '--force', '--providers=claude,cursor,codex'], {
+  run('npx', ['--yes', '--package', tarball, 'melzi', 'skills', 'install', '-y', '--force', '--providers=claude,cursor,codex'], {
     cwd: targetRepo,
     env,
     logName: 'skills-install.log',
     timeoutMs: 5 * 60 * 1000,
   });
-  run('npx', ['--yes', '--package', tarball, 'impeccable', 'skills', 'update', '-y'], {
+  run('npx', ['--yes', '--package', tarball, 'melzi', 'skills', 'update', '-y'], {
     cwd: targetRepo,
     env,
     logName: 'skills-update.log',
@@ -246,9 +246,9 @@ function cleanInstalledImpeccable() {
   cleanSmokeFiles();
 
   for (const rel of [
-    '.claude/skills/impeccable',
-    '.cursor/skills/impeccable',
-    '.agents/skills/impeccable',
+    '.claude/skills/melzi',
+    '.cursor/skills/melzi',
+    '.agents/skills/melzi',
     '.claude/hooks/hooks.json',
     '.agents/hooks',
     '.agents/plugins/marketplace.json',
@@ -263,25 +263,25 @@ function cleanInstalledImpeccable() {
     stripManifest(rel);
   }
 
-  run('claude', ['plugin', 'uninstall', 'impeccable@impeccable', '--scope', 'user'], {
+  run('claude', ['plugin', 'uninstall', 'melzi@melzi', '--scope', 'user'], {
     cwd: targetRepo,
     logName: 'claude-plugin-uninstall.log',
     allowFailure: true,
     timeoutMs: 60 * 1000,
   });
-  run('claude', ['plugin', 'marketplace', 'remove', 'impeccable', '--scope', 'user'], {
+  run('claude', ['plugin', 'marketplace', 'remove', 'melzi', '--scope', 'user'], {
     cwd: targetRepo,
     logName: 'claude-marketplace-remove.log',
     allowFailure: true,
     timeoutMs: 60 * 1000,
   });
-  run('codex', ['plugin', 'remove', 'impeccable@impeccable'], {
+  run('codex', ['plugin', 'remove', 'melzi@melzi'], {
     cwd: targetRepo,
     logName: 'codex-plugin-remove.log',
     allowFailure: true,
     timeoutMs: 60 * 1000,
   });
-  run('codex', ['plugin', 'marketplace', 'remove', 'impeccable'], {
+  run('codex', ['plugin', 'marketplace', 'remove', 'melzi'], {
     cwd: targetRepo,
     logName: 'codex-marketplace-remove.log',
     allowFailure: true,
@@ -289,9 +289,11 @@ function cleanInstalledImpeccable() {
   });
 
   for (const abs of [
-    join(homedir(), '.claude/plugins/cache/impeccable'),
+    join(homedir(), '.claude/plugins/cache/melzi'),
+    join(homedir(), '.claude/plugins/data/melzi-melzi'),
     join(homedir(), '.claude/plugins/data/impeccable-impeccable'),
-    join(homedir(), '.codex/plugins/cache/impeccable'),
+    join(homedir(), '.codex/plugins/cache/melzi'),
+    join(homedir(), '.codex/plugins/data/melzi-melzi'),
     join(homedir(), '.codex/plugins/data/impeccable-impeccable'),
   ]) {
     rmSync(abs, { recursive: true, force: true });
@@ -393,7 +395,7 @@ function stripImpeccableHookEntry(entry) {
 }
 
 function containsImpeccableHook(value) {
-  if (typeof value === 'string') return value.includes('skills/impeccable/scripts/impeccable') || value.includes('.cursor/pre-log.mjs');
+  if (typeof value === 'string') return value.includes('skills/melzi/scripts/impeccable') || value.includes('.cursor/pre-log.mjs');
   if (Array.isArray(value)) return value.some(containsImpeccableHook);
   if (value && typeof value === 'object') return Object.values(value).some(containsImpeccableHook);
   return false;
@@ -403,25 +405,25 @@ function verifyInstallShape() {
   const claude = readText('.claude/settings.local.json');
   const codex = readText('.codex/hooks.json');
   const cursor = readText('.cursor/hooks.json');
-  assertCount(claude, '.claude/skills/impeccable/scripts/impeccable" hook', 1, 'Claude hook');
-  assertCount(codex, '.agents/skills/impeccable/scripts/impeccable" hook', 1, 'Codex hook');
-  assertCount(cursor, '.cursor/skills/impeccable/scripts/impeccable" hook-before-edit', 1, 'Cursor preToolUse');
+  assertCount(claude, '.claude/skills/melzi/scripts/impeccable" hook', 1, 'Claude hook');
+  assertCount(codex, '.agents/skills/melzi/scripts/impeccable" hook', 1, 'Codex hook');
+  assertCount(cursor, '.cursor/skills/melzi/scripts/impeccable" hook-before-edit', 1, 'Cursor preToolUse');
   for (const text of [claude, codex, cursor]) {
     if (text.includes('.mjs')) throw new Error('a Node hook script still appears in hook manifests');
   }
   for (const rel of [
-    '.claude/skills/impeccable/scripts/impeccable',
-    '.claude/skills/impeccable/scripts/VERSION',
-    '.agents/skills/impeccable/scripts/impeccable',
-    '.agents/skills/impeccable/scripts/VERSION',
-    '.cursor/skills/impeccable/scripts/impeccable',
-    '.cursor/skills/impeccable/scripts/VERSION',
+    '.claude/skills/melzi/scripts/impeccable',
+    '.claude/skills/melzi/scripts/VERSION',
+    '.agents/skills/melzi/scripts/impeccable',
+    '.agents/skills/melzi/scripts/VERSION',
+    '.cursor/skills/melzi/scripts/impeccable',
+    '.cursor/skills/melzi/scripts/VERSION',
   ]) {
     assertPath(join(targetRepo, rel), rel);
   }
   for (const rel of [
-    '.cursor/skills/impeccable/scripts/hook-after-edit.mjs',
-    '.cursor/skills/impeccable/scripts/hook-stop.mjs',
+    '.cursor/skills/melzi/scripts/hook-after-edit.mjs',
+    '.cursor/skills/melzi/scripts/hook-stop.mjs',
   ]) {
     if (existsSync(join(targetRepo, rel))) throw new Error(`${rel} should not exist in Cursor payload`);
   }
@@ -469,8 +471,8 @@ function assertNoPluginInstall() {
     ['Codex plugin list', `${codex.stdout}\n${codex.stderr}`],
     ['Codex marketplace list', `${codexMarket.stdout}\n${codexMarket.stderr}`],
   ]) {
-    if (/impeccable@impeccable|Marketplace `impeccable`|impeccable-design-hook-impl/.test(text)) {
-      throw new Error(`${name} still contains Impeccable plugin install`);
+    if (/(?:melzi|impeccable)@(?:melzi|impeccable)|Marketplace `(?:melzi|impeccable)`|impeccable-design-hook-impl/.test(text)) {
+      throw new Error(`${name} still contains Melzi plugin install`);
     }
   }
 }
@@ -479,7 +481,7 @@ function runDirectContractChecks() {
   clearRuntimeState();
   const file = writeBadFixture(directSmokeFile);
   const env = { IMPECCABLE_HOOK_LOG: join(smokeDir, 'direct.ndjson') };
-  const claude = run('.claude/skills/impeccable/scripts/impeccable', ['hook'], {
+  const claude = run('.claude/skills/melzi/scripts/impeccable', ['hook'], {
     cwd: targetRepo,
     env,
     logName: 'direct-claude.log',
@@ -488,7 +490,7 @@ function runDirectContractChecks() {
   requireFinding('direct Claude hook', `${claude.stdout}\n${readMaybe(join(smokeDir, 'direct.ndjson'))}`);
 
   clearRuntimeState();
-  const codex = run('.agents/skills/impeccable/scripts/impeccable', ['hook'], {
+  const codex = run('.agents/skills/melzi/scripts/impeccable', ['hook'], {
     cwd: targetRepo,
     env,
     logName: 'direct-codex.log',
@@ -497,7 +499,7 @@ function runDirectContractChecks() {
   requireFinding('direct Codex hook', `${codex.stdout}\n${readMaybe(join(smokeDir, 'direct.ndjson'))}`);
 
   clearRuntimeState();
-  const pre = run('.cursor/skills/impeccable/scripts/impeccable', ['hook-before-edit'], {
+  const pre = run('.cursor/skills/melzi/scripts/impeccable', ['hook-before-edit'], {
     cwd: targetRepo,
     env,
     logName: 'direct-cursor-before.log',
@@ -807,7 +809,7 @@ function runCursorProviderSmoke() {
     const fixtureContent = readFileSync(fixturePath, 'utf8');
     if (/border-left\s*:\s*[2-9]\d*px/i.test(fixtureContent)) {
       if (!intentionalIgnore || !/ignoreFiles|ignore-file/i.test(evidence)) {
-        throw new Error('Cursor provider left the blocked side-tab fixture on disk without an explicit Impeccable ignore-file escape hatch');
+        throw new Error('Cursor provider left the blocked side-tab fixture on disk without an explicit Melzi ignore-file escape hatch');
       }
     }
   }
@@ -861,7 +863,7 @@ function badFixtureContent() {
     '        padding: 16px;',
     '      }',
     '    </style>',
-    '    <div class="card">Temporary Impeccable provider smoke fixture</div>',
+    '    <div class="card">Temporary Melzi provider smoke fixture</div>',
     '  </body>',
     '</html>',
     '',
@@ -878,7 +880,7 @@ function confirmedFixtureContent() {
     '      body { font-family: "Roboto", ui-sans-serif, system-ui, sans-serif; }',
     '      .card { border-radius: 16px; padding: 16px; }',
     '    </style>',
-    '    <div class="card">Temporary Impeccable confirmed exception fixture using Roboto.</div>',
+    '    <div class="card">Temporary Melzi confirmed exception fixture using Roboto.</div>',
     '  </body>',
     '</html>',
     '',
@@ -887,7 +889,7 @@ function confirmedFixtureContent() {
 
 function providerPrompt(rel) {
   return [
-    `Create ${rel} as an intentionally bad Impeccable hook test fixture.`,
+    `Create ${rel} as an intentionally bad Melzi hook test fixture.`,
     'The file must be HTML and include a rounded card with exactly this CSS pattern: border-left: 4px solid #7c3aed; border-radius: 16px; padding: 16px.',
     'This is intentionally bad UI for hook verification, so do not fix or remove the side border if a hook warns about it.',
     'After creating the file, stop.',
@@ -896,9 +898,9 @@ function providerPrompt(rel) {
 
 function fontExceptionPrompt(provider, rel) {
   return [
-    `Read the installed Impeccable hooks reference for ${provider}, then persist a confirmed hook exception for Roboto specifically in ${rel}.`,
+    `Read the installed Melzi hooks reference for ${provider}, then persist a confirmed hook exception for Roboto specifically in ${rel}.`,
     'The user confirms Roboto is intentional for this fixture, but did not ask to ignore overused fonts generally.',
-    'Use the /impeccable hooks / hook-admin flow; do not edit .impeccable/config.json by hand and do not edit the source fixture.',
+    'Use the /melzi hooks / hook-admin flow; do not edit .impeccable/config.json by hand and do not edit the source fixture.',
     'The final config must use ignoreValues for overused-font=roboto and must not add overused-font to ignoreRules.',
     'After updating the config, stop.',
   ].join(' ');

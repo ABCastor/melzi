@@ -1,6 +1,6 @@
 //! JS: live/sveltekit-adapter.mjs + live/frameworks/sveltekit.mjs. Mounts a
 //! dev-only shadow host from `+layout.svelte` via a generated
-//! `src/lib/impeccable/ImpeccableLiveRoot.svelte`; `src/app.html` stays
+//! `src/lib/melzi/ImpeccableLiveRoot.svelte`; `src/app.html` stays
 //! untouched.
 
 use crate::config::LiveConfig;
@@ -12,20 +12,20 @@ use once_cell::sync::Lazy;
 use regex::{Regex, RegexBuilder};
 use serde_json::{json, Value};
 
-pub const SVELTE_LIVE_ROOT_COMPONENT: &str = "src/lib/impeccable/ImpeccableLiveRoot.svelte";
+pub const SVELTE_LIVE_ROOT_COMPONENT: &str = "src/lib/melzi/ImpeccableLiveRoot.svelte";
 pub const SVELTE_LAYOUT_MARKER_OPEN: &str = "<!-- impeccable-live-svelte-start -->";
 pub const SVELTE_LAYOUT_MARKER_CLOSE: &str = "<!-- impeccable-live-svelte-end -->";
 pub const SVELTE_ROOT_IMPORT: &str =
-    "import ImpeccableLiveRoot from '$lib/impeccable/ImpeccableLiveRoot.svelte';";
+    "import ImpeccableLiveRoot from '$lib/melzi/ImpeccableLiveRoot.svelte';";
 
 static SVELTE_ROOT_IMPORT_LINE_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?m)^[ \t]*import ImpeccableLiveRoot from '\$lib/impeccable/ImpeccableLiveRoot\.svelte(?:\?[^']*)?';[ \t]*\r?\n?").unwrap()
+    Regex::new(r"(?m)^[ \t]*import ImpeccableLiveRoot from '\$lib/melzi/ImpeccableLiveRoot\.svelte(?:\?[^']*)?';[ \t]*\r?\n?").unwrap()
 });
 
 /// JS: svelteRootImportLine(rev)
 pub fn svelte_root_import_line(rev: Option<&str>) -> String {
     match rev {
-        Some(r) if !r.is_empty() => format!("import ImpeccableLiveRoot from '$lib/impeccable/ImpeccableLiveRoot.svelte?impeccable-live={}';", r),
+        Some(r) if !r.is_empty() => format!("import ImpeccableLiveRoot from '$lib/melzi/ImpeccableLiveRoot.svelte?impeccable-live={}';", r),
         _ => SVELTE_ROOT_IMPORT.to_string(),
     }
 }
@@ -288,7 +288,7 @@ pub fn build_svelte_live_root_component(port: i64, token: Option<&str>) -> Strin
     script.async = true;
     script.dataset.impeccableLiveScript = 'true';
     script.onerror = () => console.error(
-      '[impeccable] live.js failed to load from ' + LIVE_URL
+      '[melzi] live.js failed to load from ' + LIVE_URL
       + ' (helper down, or the token rotated while a stale adapter module was cached).'
       + ' Re-run the live boot, then reload this page.'
     );

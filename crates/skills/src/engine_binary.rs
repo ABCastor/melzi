@@ -1,9 +1,9 @@
 //! After a skill directory is written, make it self-contained: when its
 //! `scripts/VERSION` names an engine release and no
-//! `scripts/bin/<os>-<arch>/impeccable[.exe]` is present, download that
-//! release's binary for this platform from this repo's `engine-v<version>`
-//! GitHub Release (the same asset naming and `.sha256` sidecar the launcher
-//! uses) and set the executable bit. Not part of the JS; see the crate docs.
+//! `scripts/bin/<os>-<arch>/impeccable[.exe]` is present, copy IMPECCABLE_BIN
+//! or download from an explicit IMPECCABLE_DOWNLOAD_BASE. This unpublished
+//! fork has no default endpoint. Remote binaries keep the launcher's asset
+//! naming and required `.sha256` verification. Not part of the JS.
 
 use std::collections::HashMap;
 
@@ -14,7 +14,7 @@ use crate::bundle::{download, hex};
 use crate::providers::Sys;
 use crate::util::{self, jsp};
 
-pub const DEFAULT_DOWNLOAD_BASE: &str = "https://github.com/pbakaus/impeccable/releases/download";
+pub const DEFAULT_DOWNLOAD_BASE: &str = "";
 
 /// The `<os>-<arch>` tag the launcher computes (`darwin|linux|windows` x
 /// `arm64|x64`); `None` on a platform without a release asset.
@@ -103,10 +103,19 @@ pub fn ensure_executable_scripts(skill_dir: &str) {
 
 /// Install the engine binary into every skill dir in `skill_dirs` that needs
 /// one. Prints one line per binary installed; download failures are reported
-/// on stderr and do not fail the install (the launcher fetches the binary on
-/// first run as a fallback). Also repairs the executable bit on the launcher
-/// and any binaries already present in those dirs.
+/// on stderr and do not fail the skill install. Without a configured source,
+/// the launcher also refuses until a local engine is supplied. Repairs the
+/// executable bit on the launcher and any binaries already present.
 pub fn install_engine_binaries(sys: &Sys, io: &mut Io, skill_dirs: &[String]) {
+    install_engine_binaries_with(sys, io, skill_dirs, &mut fetch_binary);
+}
+
+fn install_engine_binaries_with(
+    sys: &Sys,
+    io: &mut Io,
+    skill_dirs: &[String],
+    fetch: &mut dyn FnMut(&str) -> Result<Vec<u8>, String>,
+) {
     for skill_dir in skill_dirs {
         ensure_executable_scripts(skill_dir);
     }
@@ -132,7 +141,17 @@ pub fn install_engine_binaries(sys: &Sys, io: &mut Io, skill_dirs: &[String]) {
         let url = asset_url(&base, version, os, arch);
         let fetched = cache
             .entry(version.to_string())
-            .or_insert_with(|| fetch_binary(&url))
+            .or_insert_with(|| {
+                if let Some(local) = sys.env.get("IMPECCABLE_BIN").filter(|v| !v.is_empty()) {
+                    return util::read_bytes(&jsp::resolve(&sys.cwd, &[local]));
+                }
+                if base.is_empty() {
+                    return Err(
+                        "no download endpoint is configured; this fork does not publish engine binaries. Refusing to download upstream's engine. Build this checkout: cargo build --release -p impeccable. Set IMPECCABLE_BIN to target/release/impeccable (target/release/impeccable.exe on Windows), or copy it to ~/.impeccable/bin/impeccable for the launcher. Set IMPECCABLE_DOWNLOAD_BASE to use an explicit release channel.".into()
+                    );
+                }
+                fetch(&url)
+            })
             .clone();
         match fetched {
             Ok(bytes) => {
@@ -153,7 +172,7 @@ pub fn install_engine_binaries(sys: &Sys, io: &mut Io, skill_dirs: &[String]) {
             Err(e) => {
                 if !e.is_empty() {
                     io.err(&format!(
-                        "Could not download the impeccable engine v{version} for {os}-{arch} ({url}): {e}. The launcher fetches it on first run.\n"
+                        "Could not install the impeccable engine v{version} for {os}-{arch}: {e}. Supply a local binary or an explicit download endpoint before retrying.\n"
                     ));
                     // Report once per version, then stay quiet for its siblings.
                     cache.insert(version.to_string(), Err(String::new()));
@@ -168,10 +187,50 @@ mod tests {
     use super::*;
 
     #[test]
+    fn fork_engine_install_refuses_no_endpoint_and_accepts_local_or_explicit_sources() {
+        let Some((os, arch)) = platform_tag() else { return };
+        let root = std::env::temp_dir().join(format!("impeccable-engine-fork-{}", std::process::id()));
+        let skill = root.join("skill");
+        std::fs::create_dir_all(skill.join("scripts")).unwrap();
+        std::fs::write(skill.join("scripts/VERSION"), "1.2.3").unwrap();
+        let skill = skill.to_string_lossy().into_owned();
+        let dest = binary_path(&skill, os, arch);
+        let mut sys = Sys::new(Default::default(), root.to_string_lossy().into_owned());
+        let (mut io, captured) = Io::captured("", root.clone(), Default::default());
+        let mut forbidden = |_: &str| -> Result<Vec<u8>, String> { panic!("unexpected download") };
+        install_engine_binaries_with(&sys, &mut io, &[skill.clone()], &mut forbidden);
+        let stderr = String::from_utf8_lossy(&captured.stderr.borrow()).into_owned();
+        assert!(stderr.contains("no download endpoint"), "{stderr}");
+        assert!(stderr.contains("cargo build --release -p impeccable"));
+        assert!(!util::exists(&dest));
+
+        std::fs::write(root.join("local-engine"), b"local engine").unwrap();
+        sys.env.insert("IMPECCABLE_BIN".into(), "local-engine".into());
+        install_engine_binaries_with(&sys, &mut io, &[skill.clone()], &mut forbidden);
+        assert_eq!(util::read_bytes(&dest).unwrap(), b"local engine");
+        // Existing sibling engines stay ahead of all source lookups.
+        sys.env.insert("IMPECCABLE_BIN".into(), "missing-engine".into());
+        install_engine_binaries_with(&sys, &mut io, &[skill.clone()], &mut forbidden);
+        assert_eq!(util::read_bytes(&dest).unwrap(), b"local engine");
+        std::fs::remove_file(&dest).unwrap();
+        install_engine_binaries_with(&sys, &mut io, &[skill.clone()], &mut forbidden);
+        assert!(!util::exists(&dest), "an invalid local override must not fall through");
+
+        sys.env.remove("IMPECCABLE_BIN");
+        sys.env.insert("IMPECCABLE_DOWNLOAD_BASE".into(), "https://fork.invalid/releases".into());
+        let mut calls = Vec::new();
+        let mut fetch = |url: &str| { calls.push(url.to_string()); Ok(b"verified remote engine".to_vec()) };
+        install_engine_binaries_with(&sys, &mut io, &[skill], &mut fetch);
+        assert_eq!(calls, vec![asset_url("https://fork.invalid/releases", "1.2.3", os, arch)]);
+        assert_eq!(util::read_bytes(&dest).unwrap(), b"verified remote engine");
+        util::rm_rf(&root.to_string_lossy());
+    }
+
+    #[test]
     fn asset_naming_matches_launcher() {
         assert_eq!(
-            asset_url(DEFAULT_DOWNLOAD_BASE, "1.2.3", "darwin", "arm64"),
-            "https://github.com/pbakaus/impeccable/releases/download/engine-v1.2.3/impeccable-darwin-arm64"
+            asset_url("https://fork.invalid/releases", "1.2.3", "darwin", "arm64"),
+            "https://fork.invalid/releases/engine-v1.2.3/impeccable-darwin-arm64"
         );
         assert_eq!(asset_url("http://x/", "1", "windows", "x64"), "http://x/engine-v1/impeccable-windows-x64.exe");
         // The sibling binary path is joined with the host's path semantics

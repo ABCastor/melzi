@@ -47,13 +47,13 @@ fn bundle_with_commands(bundle: &str, provider: &str, names: &[&str]) {
     for name in names {
         write(
             &format!("{bundle}/{provider}/commands/{name}.md"),
-            &format!("description: Impeccable {name} bridge\nagent: build\nsubtask: true\n\nbody {name}\n"),
+            &format!("description: Melzi {name} bridge\nagent: build\nsubtask: true\n\nbody {name}\n"),
         );
     }
 }
 
 fn bundle_with_skill(bundle: &str, provider: &str, body: &str) {
-    write(&format!("{bundle}/{provider}/skills/impeccable/SKILL.md"), body);
+    write(&format!("{bundle}/{provider}/skills/melzi/SKILL.md"), body);
 }
 
 #[test]
@@ -176,7 +176,7 @@ fn is_up_to_date_tracks_the_command_bridge() {
     let skill = "---\nname: impeccable\nversion: 1.0.0\n---\n";
     bundle_with_skill(&bundle, ".opencode", skill);
     bundle_with_commands(&bundle, ".opencode", &["impeccable"]);
-    write(&format!("{project}/.opencode/skills/impeccable/SKILL.md"), skill);
+    write(&format!("{project}/.opencode/skills/melzi/SKILL.md"), skill);
     let sys = sys_with(&root, &[]);
 
     // Skills match but the bridge is missing.
@@ -192,6 +192,6 @@ fn is_up_to_date_tracks_the_command_bridge() {
 
     // A local-only command (a pinned shortcut) does not affect freshness.
     copy_provider_commands(&sys, &bundle, &project, &["opencode"], Some(Scope::Project));
-    write(&format!("{project}/.opencode/commands/impeccable-polish.md"), "pinned\n");
+    write(&format!("{project}/.opencode/commands/melzi-polish.md"), "pinned\n");
     assert!(is_up_to_date(&sys, &project, &[".opencode"], &bundle, Some(Scope::Project), Some(Scope::Project)).unwrap());
 }

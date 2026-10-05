@@ -63,10 +63,13 @@ Commands:
   detect [file-or-dir-or-url...]   Scan for UI anti-patterns and design quality issues
   ignores                          Manage detector ignore rules, files, and values
   help                             List all available skills and commands
-  install                          Install impeccable skills into your project or global harness
+  install                          Install an explicit local IMPECCABLE_BUNDLE_PATH bundle
   link                             Symlink skills from a local checkout or submodule
-  update                           Update skills to the latest version
-  check                            Check if skill updates are available
+  update                           Refresh skills from an explicit local bundle
+  check                            Compare skills with an explicit local bundle
+
+Remote skill installation and updates are unavailable.
+Local build and installation: https://github.com/ABCastor/melzi#build-and-use
 
 Options:
   --help       Show this help message
@@ -77,4 +80,4 @@ Compatibility:
 ";
 
 /// The `impeccable init` mistake message (`cli.js`).
-pub const INIT_MESSAGE: &str = "\"init\" is not a CLI command. Type /impeccable init in your AI coding agent's chat (Claude Code, Cursor, Codex, ...), not in this terminal.\n";
+pub const INIT_MESSAGE: &str = "\"init\" is not a CLI command. Type /melzi init in your AI coding agent's chat (Claude Code, Cursor, Codex, ...), not in this terminal.\n";

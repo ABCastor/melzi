@@ -4,6 +4,7 @@ Resolve one stable target, run two independent assessments, synthesize a design 
 
 ### Hard Invariants
 
+- Read [rigor.md](rigor.md) before synthesizing. It is mandatory here: every material finding carries the narrowest accurate evidence label, confidence sits on the decision rather than on every sentence, and a clean detector is never evidence of quality.
 - Assessment A (design review) and Assessment B (detector/browser evidence) are both required.
 - Assessment A and B MUST run as two isolated sub-agents whenever a sub-agent/Task tool is exposed. Running them inline in this context is "possible" but is NOT permitted; it is a degraded run. Inline is allowed ONLY when no sub-agent tool exists (or the user declined, on harnesses that ask).
 - If you degrade for any reason, the report's first line MUST be a banner: `⚠️ DEGRADED: single-context (<reason>)`. A silent degraded critique is a failed critique.
@@ -42,7 +43,7 @@ Sub-agent gate (all harnesses):
 Codex sub-agent gate (overrides the default above; Codex's permission model requires asking before spawning):
 - Asking is the normal path, not a degradation. Approving and spawning is the dual-agent path; do not emit the degraded banner just for asking.
 - If `spawn_agent` is exposed and the user explicitly allowed sub-agents, delegation, or parallel agent work, spawn A and B immediately.
-- If `spawn_agent` is exposed but the user did not explicitly allow sub-agents, ask exactly once: "Impeccable critique is designed to run two independent sub-agents for an unanchored assessment. May I use sub-agents for this critique?" Then stop until the user answers.
+- If `spawn_agent` is exposed but the user did not explicitly allow sub-agents, ask exactly once: "Melzi critique is designed to run two independent sub-agents for an unanchored assessment. May I use sub-agents for this critique?" Then stop until the user answers.
 - If allowed, spawn A and B. If declined, run sequentially and lead the report with `⚠️ DEGRADED: single-context (sub-agents declined by user)`.
 - If `spawn_agent` is not exposed, do not ask; run sequentially and lead with `⚠️ DEGRADED: single-context (spawn_agent unavailable in this session)`.
 - If spawning fails after permission, run sequentially and lead with `⚠️ DEGRADED: single-context (sub-agent spawn failed: <exact error>)`.
@@ -106,7 +107,7 @@ Synthesize both assessments into a single report. Do NOT simply concatenate. Wea
 The chat response is the primary user-facing deliverable. Present the full structured critique below in chat; do not replace it with a summary and a link. The persisted snapshot is an archive of that run.
 
 <codex>
-Codex final-answer note: `$impeccable critique` produces a report artifact, so the final chat response should intentionally exceed the usual concise close-out style. Do not title the final response "Critique Summary" unless the user explicitly asked for a summary.
+Codex final-answer note: `$melzi critique` produces a report artifact, so the final chat response should intentionally exceed the usual concise close-out style. Do not title the final response "Critique Summary" unless the user explicitly asked for a summary.
 </codex>
 
 Structure your feedback as a design director would:
@@ -170,7 +171,7 @@ For each issue, tag with **P0-P3 severity** (see [Issue Severity below](#issue-s
 #### Persona Red Flags
 > *Consult the [Personas reference](#persona-based-design-testing) below.*
 
-Auto-select 2-3 personas most relevant to this interface type (use the selection table in the reference). If `{{config_file}}` contains a `## Design Context` section from `impeccable init`, also generate 1-2 project-specific personas from the audience/brand info.
+Auto-select 2-3 personas most relevant to this interface type (use the selection table in the reference). If `{{config_file}}` contains a `## Design Context` section from `melzi init`, also generate 1-2 project-specific personas from the audience/brand info.
 
 For each selected persona, walk through the primary user action and list specific red flags found:
 
@@ -214,7 +215,7 @@ Persistence is not the end of the run. After it, the response continues with the
 
 ### Persist the Snapshot
 
-Once the report above is finalized, write it to `.impeccable/critique/` so the user can refer back, and so `{{command_prefix}}impeccable polish` can pick up the priority issues without a copy-paste.
+Once the report above is finalized, write it to `.impeccable/critique/` so the user can refer back, and so `{{command_prefix}}melzi polish` can pick up the priority issues without a copy-paste.
 
 Skip this step if the Setup slug was null (vague or root-level target).
 
@@ -250,7 +251,7 @@ Skip this step if the Setup slug was null (vague or root-level target).
 
    If this is the first run for the slug, the trend is just one score; say so: "First run for this target, no trend yet."
 
-6. **Close the run.** Go to Ask the User below and emit the questions, or the `Questions skipped: <reason>` line when the count allows it. The run is not complete until you do. Persistence is bookkeeping and cleanup is not an ending; stopping here leaves the user with a report and no way forward, and leaves `{{command_prefix}}impeccable polish` with no priorities to inherit.
+6. **Close the run.** Go to Ask the User below and emit the questions, or the `Questions skipped: <reason>` line when the count allows it. The run is not complete until you do. Persistence is bookkeeping and cleanup is not an ending; stopping here leaves the user with a report and no way forward, and leaves `{{command_prefix}}melzi polish` with no priorities to inherit.
 
 This is fire-and-forget. Do not show the user the helper's JSON output; only the human-readable trend line and the written path. Failures here should not block the rest of the flow; print the error and move on.
 
@@ -298,13 +299,13 @@ List recommended commands in priority order, based on the user's answers:
 - Skip commands that would address zero issues
 - If the user chose a limited scope, only include items within that scope
 - If the user marked areas as off-limits, exclude commands that would touch those areas
-- End with `{{command_prefix}}impeccable polish` as the final step if any fixes were recommended
+- End with `{{command_prefix}}melzi polish` as the final step if any fixes were recommended
 
 After presenting the summary, tell the user:
 
 > You can ask me to run these one at a time, all at once, or in any order you prefer.
 >
-> Re-run `{{command_prefix}}impeccable critique` after fixes to see your score improve.
+> Re-run `{{command_prefix}}melzi critique` after fixes to see your score improve.
 
 ---
 
@@ -822,7 +823,7 @@ Choose personas based on the interface type:
 
 #### Project-Specific Personas
 
-If `{{config_file}}` contains a `## Design Context` section (generated by `impeccable init`), derive 1–2 additional personas from the audience and brand information:
+If `{{config_file}}` contains a `## Design Context` section (generated by `melzi init`), derive 1–2 additional personas from the audience and brand information:
 
 1. Read the target audience description
 2. Identify the primary user archetype not covered by the 5 predefined personas

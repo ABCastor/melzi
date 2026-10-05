@@ -1,3 +1,4 @@
+import { copyDistributionNotices } from './distribution-notices.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -25,7 +26,7 @@ function writeJson(absPath, value) {
  */
 export function stageOpenAIPlugin(rootDir, distDir) {
   const rootManifestPath = path.join(rootDir, '.claude-plugin', 'plugin.json');
-  const codexSkillSrc = path.join(distDir, 'codex', '.codex', 'skills', 'impeccable');
+  const codexSkillSrc = path.join(distDir, 'codex', '.codex', 'skills', 'melzi');
   const iconSrc = path.join(rootDir, 'scripts', 'lib', 'assets', 'plugin-icon.png');
 
   requirePath(rootManifestPath, 'root plugin manifest');
@@ -48,7 +49,7 @@ export function stageOpenAIPlugin(rootDir, distDir) {
   fs.mkdirSync(path.join(pluginRoot, 'skills'), { recursive: true });
   fs.cpSync(
     codexSkillSrc,
-    path.join(pluginRoot, 'skills', 'impeccable'),
+    path.join(pluginRoot, 'skills', 'melzi'),
     { recursive: true },
   );
 
@@ -57,5 +58,6 @@ export function stageOpenAIPlugin(rootDir, distDir) {
     buildCodexPluginHooksManifest(),
   );
 
+  copyDistributionNotices(rootDir, pluginRoot);
   return pluginRoot;
 }

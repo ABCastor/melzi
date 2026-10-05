@@ -30,4 +30,45 @@ Strip the copy out of your planned section and study the bare structure. Does th
 - The conventions the section carried, including anything that drives an action, still work the same way.
 - The section is unmistakably the same brand, only more sure of itself.
 
-When the target holds its own without pulling the page apart, hand off to `{{command_prefix}}impeccable polish` for the final pass.
+When the target holds its own without pulling the page apart, hand off to `{{command_prefix}}melzi polish` for the final pass.
+
+## Earned delight
+
+A typed `delight` command enters here. Establish the brand's emotional range first. Make the experience memorable only where the moment earns it: useful interaction, humane response, or an unexpectedly considered detail. Generic whimsy is not delight.
+
+Persuade and Experience surfaces may carry personality through voice, composition, motion, and discovery while the artifact remains the focus. Operate and Read surfaces concentrate delight at first use, meaningful completion, recovery, or mastery; routine interactions stay reliable.
+
+Inspect the target, DESIGN.md, product voice, repeat frequency, and emotional context. Look for effort worth acknowledging; waiting that can become informative; empty or first-use states that can orient; error and recovery that need empathy; an interaction whose physical or verbal response can express the brand; or useful capability worth discovering. Do not manufacture a celebration for an ordinary click.
+
+Write one delight thesis: what the user should feel and why that feeling belongs to this product. Deliver it with the smallest suitable system:
+
+- a distinctive response to a meaningful action;
+- product-specific language that clarifies while carrying voice;
+- an interaction or transition with recognizable material behavior;
+- an illustration, sound, haptic, or environmental detail grounded in the product world;
+- a discovery reward that reveals real utility.
+
+Match success to effort and consequence. Major milestones can expand; routine saves should feel certain. Waiting shows truthful progress or useful product-specific activity, never fake work or a staged delay. Empty and first-use states make the next action clear before adding character. Error and recovery lead with the problem and the recovery; jokes never trivialize loss, money, privacy, or blocked work. Repeated responses must survive the hundredth use; variation is allowed only while it stays coherent and predictable enough to trust. Discovery may reward curiosity but cannot hide required functionality.
+
+Use the product's language. Delight cannot delay, block, or obscure the task; override platform conventions or accessibility; add factual claims; play sound without consent; ignore mute settings; become mandatory or exhausting; or add a dependency or asset cost out of proportion to the moment. For authored motion, load [animate.md](animate.md). Respect screen readers, keyboard, touch, localization, and cultural context. Stop nonessential loops when hidden.
+
+Verify that the moment is product-specific; improves comprehension, confidence, motivation, or recovery; leaves the task fast and obvious without the flourish; survives repetition; works muted and across input and localization paths; and belongs to the selected world.
+
+## Overdrive phase
+
+A typed `overdrive` command enters here and starts the response with:
+
+```text
+──────────── ⚡ OVERDRIVE ─────────────
+》》》 Entering overdrive mode...
+```
+
+Push the interface past conventional limits in the way this product can earn. A particle system can fit a creative portfolio and embarrass a settings page. Instant optimistic saves and precise state transitions may be the extraordinary move for a settings page. The technique serves the experience.
+
+Before implementation, present two or three materially different directions with appearance, browser support, performance cost, and complexity inside each option. Get the user's pick before writing code. Technically ambitious effects also require browser automation: preview the real result, verify it visually, and iterate from evidence.
+
+Define extraordinary for the surface. Visual and marketing work may earn a scroll-driven reveal, shader field, cinematic transition, or generative response. Functional UI earns it through feel: trigger-to-dialog morphing, virtualized data, streaming validation, or physical drag behavior. Performance-critical UI earns it by never hesitating. Data-heavy UI may use GPU rendering and fluid state transitions. The common test is that the implementation exceeds what users expect while serving the task.
+
+Load [animate.md](animate.md) for the browser-API catalogue and progressive-enhancement rules. Fix design fundamentals before technical spectacle. Keep one extraordinary moment, preserve a complete fallback, test on real mid-range devices, and refine the detail that determines whether the result feels inevitable.
+
+Never ship jank; a new API without a working fallback; sound without opt-in; technical ambition hiding weak fundamentals; or multiple competing showcase moments. Verify the reaction with someone who has not seen it, remove the effect and check that something meaningful is lost, test phone, tablet, and low-powered hardware, and confirm the move makes sense for this brand and audience.

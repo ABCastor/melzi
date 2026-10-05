@@ -75,7 +75,7 @@ describe('hook manifest builders', () => {
     assert.equal(manifest.hooks.AfterAgent[0].hooks[0].timeout, 30000);
     // Gemini substitutes $GEMINI_PROJECT_DIR with a shell-escaped path before
     // bash runs the command, so the token is bare, not double-quoted.
-    const launcher = '$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable';
+    const launcher = '$GEMINI_PROJECT_DIR/.gemini/skills/melzi/scripts/impeccable';
     for (const event of ['BeforeTool', 'AfterAgent']) {
       assert.equal(manifest.hooks[event][0].hooks[0].command, `[ ! -f ${launcher} ] || ${launcher} hook`);
     }
@@ -90,10 +90,10 @@ describe('hook manifest builders', () => {
     assert.equal(handler.type, 'command');
     assert.equal(handler.timeout, 5);
     assert.equal(handler.statusMessage, 'Checking UI changes');
-    expectCommand(handler.command, '.claude/skills/impeccable/scripts');
+    expectCommand(handler.command, '.claude/skills/melzi/scripts');
     assert.ok(handler.command.includes('${CLAUDE_PROJECT_DIR}'));
     assert.equal(handler.args, undefined);
-    expectCommand(manifest.hooks.SessionStart[0].hooks[0].command, '.claude/skills/impeccable/scripts');
+    expectCommand(manifest.hooks.SessionStart[0].hooks[0].command, '.claude/skills/melzi/scripts');
     assert.equal(manifest.hooks.SessionStart[0].hooks[0].timeout, 5);
 
     // Stop deep pass: same script, no matcher, longer budget.
@@ -101,7 +101,7 @@ describe('hook manifest builders', () => {
     assert.equal(manifest.hooks.Stop[0].matcher, undefined);
     assert.equal(stop.timeout, 30);
     assert.equal(stop.statusMessage, 'Design deep pass');
-    expectCommand(stop.command, '.claude/skills/impeccable/scripts');
+    expectCommand(stop.command, '.claude/skills/melzi/scripts');
   });
 
   it('builds Codex project-local hooks for the real detector hook', () => {
@@ -117,7 +117,7 @@ describe('hook manifest builders', () => {
     assert.equal(handler.type, 'command');
     assert.equal(handler.timeout, 5);
     assert.equal(handler.statusMessage, 'Checking UI changes');
-    expectCommand(handler.command, '.codex/skills/impeccable/scripts');
+    expectCommand(handler.command, '.codex/skills/melzi/scripts');
     assert.ok(!handler.command.includes('git rev-parse --show-toplevel'));
     assert.ok(!handler.command.includes('${PLUGIN_ROOT}'));
     assert.equal(manifest.hooks.SessionStart, undefined);
@@ -126,12 +126,12 @@ describe('hook manifest builders', () => {
     // pass too.
     const stop = manifest.hooks.Stop[0].hooks[0];
     assert.equal(stop.timeout, 30);
-    expectCommand(stop.command, '.codex/skills/impeccable/scripts');
+    expectCommand(stop.command, '.codex/skills/melzi/scripts');
 
     // Codex 0.146.0+ selects `commandWindows` on Windows (issue #452), where
     // the POSIX guard is not a command; that form calls impeccable.cmd.
-    expectWindowsCommand(handler.commandWindows, '.codex/skills/impeccable/scripts');
-    expectWindowsCommand(stop.commandWindows, '.codex/skills/impeccable/scripts');
+    expectWindowsCommand(handler.commandWindows, '.codex/skills/melzi/scripts');
+    expectWindowsCommand(stop.commandWindows, '.codex/skills/melzi/scripts');
   });
 
   it('derives the Codex hook payload path from the install dir', () => {
@@ -139,22 +139,22 @@ describe('hook manifest builders', () => {
     // `.codex`-directory install at `.codex/skills`, a `.agents` (Codex repo
     // skills) install at `.agents/skills`.
     const codexDir = buildCodexHooksManifest('.codex');
-    expectCommand(codexDir.hooks.PostToolUse[0].hooks[0].command, '.codex/skills/impeccable/scripts');
-    expectCommand(codexDir.hooks.Stop[0].hooks[0].command, '.codex/skills/impeccable/scripts');
+    expectCommand(codexDir.hooks.PostToolUse[0].hooks[0].command, '.codex/skills/melzi/scripts');
+    expectCommand(codexDir.hooks.Stop[0].hooks[0].command, '.codex/skills/melzi/scripts');
 
     const agentsDir = buildCodexHooksManifest('.agents');
-    expectCommand(agentsDir.hooks.PostToolUse[0].hooks[0].command, '.agents/skills/impeccable/scripts');
-    expectCommand(agentsDir.hooks.Stop[0].hooks[0].command, '.agents/skills/impeccable/scripts');
+    expectCommand(agentsDir.hooks.PostToolUse[0].hooks[0].command, '.agents/skills/melzi/scripts');
+    expectCommand(agentsDir.hooks.Stop[0].hooks[0].command, '.agents/skills/melzi/scripts');
     assert.ok(!agentsDir.hooks.PostToolUse[0].hooks[0].command.includes('.codex/skills'));
 
     // hooksJsonFor threads the provider's configDir through to the builder.
     expectCommand(
       hooksJsonFor('codex', { configDir: '.agents' }).hooks.PostToolUse[0].hooks[0].command,
-      '.agents/skills/impeccable/scripts',
+      '.agents/skills/melzi/scripts',
     );
     expectCommand(
       hooksJsonFor('codex').hooks.PostToolUse[0].hooks[0].command,
-      '.codex/skills/impeccable/scripts',
+      '.codex/skills/melzi/scripts',
     );
   });
 
@@ -168,7 +168,7 @@ describe('hook manifest builders', () => {
     assert.equal(manifest.hooks.afterFileEdit, undefined);
     assert.equal(manifest.hooks.stop, undefined);
     assert.equal(manifest.hooks.sessionStart, undefined);
-    expectCommand(beforeEdit.command, '.cursor/skills/impeccable/scripts', 'hook-before-edit');
+    expectCommand(beforeEdit.command, '.cursor/skills/melzi/scripts', 'hook-before-edit');
     assert.equal(beforeEdit.timeout, 5);
   });
 
@@ -185,7 +185,7 @@ describe('hook manifest builders', () => {
     assert.equal(entry.timeoutSec, 5);
     assert.equal(entry.timeout, undefined);
     assert.equal(entry.command, undefined);
-    expectCommand(entry.bash, '.github/skills/impeccable/scripts');
+    expectCommand(entry.bash, '.github/skills/melzi/scripts');
     assert.ok(entry.bash.includes('git rev-parse --show-toplevel'));
     assert.equal(manifest.hooks.PostToolUse, undefined);
     assert.equal(manifest.hooks.preToolUse, undefined);
@@ -201,7 +201,7 @@ describe('hook manifest builders', () => {
     assert.equal(handler.type, 'command');
     assert.equal(handler.timeout, 5);
     assert.equal(handler.statusMessage, 'Checking UI changes');
-    expectCommand(handler.command, '.grok/skills/impeccable/scripts');
+    expectCommand(handler.command, '.grok/skills/melzi/scripts');
     assert.ok(!handler.command.includes('${CLAUDE_PROJECT_DIR}'));
     assert.ok(!handler.command.includes('${GROK_PLUGIN_ROOT}'));
     assert.equal(manifest.hooks.SessionStart, undefined);
@@ -209,7 +209,7 @@ describe('hook manifest builders', () => {
     const stop = manifest.hooks.Stop[0].hooks[0];
     assert.equal(stop.timeout, 30);
     assert.equal(stop.statusMessage, 'Design deep pass');
-    expectCommand(stop.command, '.grok/skills/impeccable/scripts');
+    expectCommand(stop.command, '.grok/skills/melzi/scripts');
   });
 
   it('emits commandWindows only for Codex-shaped manifests', () => {
@@ -270,7 +270,7 @@ describe('hook manifest builders', () => {
 // the launcher swap, the tracked manifests still describe the Node scripts;
 // gate these assertions on the synced launcher so a source-first branch is
 // not red for output it is not allowed to stage.
-const SYNCED = fs.existsSync(path.join(REPO_ROOT, '.claude/skills/impeccable/scripts/impeccable'));
+const SYNCED = fs.existsSync(path.join(REPO_ROOT, '.claude/skills/melzi/scripts/impeccable'));
 
 describe('generated hook artifacts in repo', { skip: SYNCED ? false : 'generated provider output not yet synced (bun run build:release on main)' }, () => {
   for (const rel of [
@@ -297,8 +297,8 @@ describe('generated hook artifacts in repo', { skip: SYNCED ? false : 'generated
     const manifest = readJson('.claude/settings.json');
     const handler = manifest.hooks.PostToolUse[0].hooks[0];
 
-    expectCommand(handler.command, '.claude/skills/impeccable/scripts');
-    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.claude/skills/impeccable/scripts')));
+    expectCommand(handler.command, '.claude/skills/melzi/scripts');
+    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.claude/skills/melzi/scripts')));
   });
 
   it('Cursor project hooks reference only the pre-write runtime in .cursor/skills', () => {
@@ -306,9 +306,9 @@ describe('generated hook artifacts in repo', { skip: SYNCED ? false : 'generated
     const beforeEdit = manifest.hooks.preToolUse[0];
 
     assert.equal(Object.keys(manifest.hooks).length, 1);
-    expectCommand(beforeEdit.command, '.cursor/skills/impeccable/scripts', 'hook-before-edit');
-    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.cursor/skills/impeccable/scripts/impeccable')));
-    assert.equal(fs.existsSync(path.join(REPO_ROOT, '.cursor/skills/impeccable/scripts/hook-before-edit.mjs')), false);
+    expectCommand(beforeEdit.command, '.cursor/skills/melzi/scripts', 'hook-before-edit');
+    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.cursor/skills/melzi/scripts/impeccable')));
+    assert.equal(fs.existsSync(path.join(REPO_ROOT, '.cursor/skills/melzi/scripts/hook-before-edit.mjs')), false);
   });
 
   it('Codex project hooks reference the launcher in the .codex skill payload', () => {
@@ -320,7 +320,7 @@ describe('generated hook artifacts in repo', { skip: SYNCED ? false : 'generated
     const manifest = readJson('.codex/hooks.json');
     const handler = manifest.hooks.PostToolUse[0].hooks[0];
 
-    expectCommand(handler.command, '.codex/skills/impeccable/scripts');
+    expectCommand(handler.command, '.codex/skills/melzi/scripts');
     assert.ok(!handler.command.includes('.agents/skills'));
 
     // The self-consistent Codex bundle at `dist/codex/.codex/skills/` is a build
@@ -330,8 +330,8 @@ describe('generated hook artifacts in repo', { skip: SYNCED ? false : 'generated
 
     // The repo ships the Codex skill payload at `.agents/skills` (the
     // layout CLI installs use, and where the rewritten command resolves).
-    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.agents/skills/impeccable/SKILL.md')));
-    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.agents/skills/impeccable/scripts')));
+    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.agents/skills/melzi/SKILL.md')));
+    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.agents/skills/melzi/scripts')));
   });
 
   it('GitHub Copilot repo hooks reference the launcher in the .github skill payload', () => {
@@ -339,14 +339,14 @@ describe('generated hook artifacts in repo', { skip: SYNCED ? false : 'generated
     const entry = manifest.hooks.postToolUse[0];
 
     assert.equal(entry.matcher, 'edit|create|apply_patch');
-    expectCommand(entry.bash, '.github/skills/impeccable/scripts');
-    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.github/skills/impeccable/SKILL.md')));
-    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.github/skills/impeccable/scripts')));
+    expectCommand(entry.bash, '.github/skills/melzi/scripts');
+    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.github/skills/melzi/SKILL.md')));
+    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.github/skills/melzi/scripts')));
   });
 
   it('does not generate probe scripts into provider skill payloads', () => {
     for (const providerDir of ['.claude', '.cursor', '.agents', 'plugin']) {
-      const probe = path.join(REPO_ROOT, providerDir, 'skills', 'impeccable', 'scripts', 'hook-probe.mjs');
+      const probe = path.join(REPO_ROOT, providerDir, 'skills', 'melzi', 'scripts', 'hook-probe.mjs');
       assert.equal(fs.existsSync(probe), false, `${providerDir} still has hook-probe.mjs`);
     }
   });
@@ -376,7 +376,7 @@ describe('generated hook artifacts in repo', { skip: SYNCED ? false : 'generated
 
     const handler = manifest.hooks.PostToolUse[0].hooks[0];
     assert.equal(manifest.hooks.PostToolUse[0].matcher, 'Edit|Write');
-    expectCommand(handler.command, 'skills/impeccable/scripts');
+    expectCommand(handler.command, 'skills/melzi/scripts');
     // Resolves relative to the installed plugin, not a `.claude/skills/` layout.
     assert.ok(handler.command.includes('${CLAUDE_PLUGIN_ROOT}'),
       `plugin hook command must use $\{CLAUDE_PLUGIN_ROOT}: ${handler.command}`);
@@ -386,19 +386,19 @@ describe('generated hook artifacts in repo', { skip: SYNCED ? false : 'generated
     // Stop deep pass ships in the plugin manifest too, plugin-root-relative.
     const stop = manifest.hooks.Stop[0].hooks[0];
     assert.equal(stop.timeout, 30);
-    expectCommand(stop.command, 'skills/impeccable/scripts');
+    expectCommand(stop.command, 'skills/melzi/scripts');
     assert.ok(stop.command.includes('${CLAUDE_PLUGIN_ROOT}'));
 
     // The script the plugin hook points at must ship inside the plugin payload.
-    assert.ok(fs.existsSync(path.join(REPO_ROOT, 'plugin/skills/impeccable/scripts')));
+    assert.ok(fs.existsSync(path.join(REPO_ROOT, 'plugin/skills/melzi/scripts')));
   });
 
   it('generated skill payloads ship the executable launcher and no Node scripts', () => {
     for (const scriptDir of [
-      '.claude/skills/impeccable/scripts',
-      '.cursor/skills/impeccable/scripts',
-      '.agents/skills/impeccable/scripts',
-      'plugin/skills/impeccable/scripts',
+      '.claude/skills/melzi/scripts',
+      '.cursor/skills/melzi/scripts',
+      '.agents/skills/melzi/scripts',
+      'plugin/skills/melzi/scripts',
     ]) {
       const abs = path.join(REPO_ROOT, scriptDir);
       const launcher = path.join(abs, 'impeccable');
@@ -409,7 +409,11 @@ describe('generated hook artifacts in repo', { skip: SYNCED ? false : 'generated
       assert.ok(fs.existsSync(path.join(abs, 'impeccable.cmd')), `impeccable.cmd missing in ${scriptDir}`);
       assert.ok(fs.existsSync(path.join(abs, 'VERSION')), `VERSION missing in ${scriptDir}`);
       assert.equal(fs.existsSync(path.join(abs, 'bin')), false, `${scriptDir} must stay launcher-only in git; binaries ship only in IMPECCABLE_BUNDLE_ENGINE=1 release zips`);
-      const stray = fs.readdirSync(abs).filter((f) => f.endsWith('.mjs') || f === 'detector' || f === 'lib');
+      // FORK DELTA (Melzi): motion-eyes.mjs is a fork-owned tool the skill text runs with
+      // node, not an upstream engine verb left behind. Melzi's other Node tools live in
+      // subdirectories (melzi/, pollux-uxui/, island/), which this top-level check never flags.
+      const forkOwned = new Set(['motion-eyes.mjs']);
+      const stray = fs.readdirSync(abs).filter((f) => (f.endsWith('.mjs') || f === 'detector' || f === 'lib') && !forkOwned.has(f));
       assert.deepEqual(stray, [], `Node-era files still in ${scriptDir}`);
     }
   });

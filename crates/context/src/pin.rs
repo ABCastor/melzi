@@ -4,20 +4,25 @@ use crate::jsp;
 use crate::util::{exists, read_json, safe_read};
 use impeccable_common::Io;
 
-/// Bundled copy of `skill/scripts/command-metadata.json` (build-time copy;
-/// keep in sync with the public repo).
-pub const COMMAND_METADATA_JSON: &str = include_str!("command-metadata.json");
+/// Compile the canonical skill metadata into the standalone binary.
+pub const COMMAND_METADATA_JSON: &str = include_str!("../../../skill/scripts/command-metadata.json");
 
 const HARNESS_DIRS: [&str; 18] = [
     ".claude", ".cursor", ".dsh", ".gemini", ".codex", ".agents", ".agent", ".github", ".grok", ".hermes", ".trae", ".trae-cn",
     ".pi", ".opencode", ".kiro", ".rovodev", ".vibe", ".qoder",
 ];
 const CODEX_HARNESSES: [&str; 2] = [".codex", ".agents"];
-pub const VALID_COMMANDS: [&str; 24] = [
-    "craft", "init", "extract", "document", "shape", "critique", "audit", "polish", "bolder", "quieter", "distill",
-    "harden", "onboard", "live", "animate", "colorize", "typeset", "layout", "delight", "overdrive", "clarify",
-    "adapt", "optimize", "generate",
+pub const VALID_COMMANDS: [&str; 21] = [
+    "animate", "audit", "bolder", "clarify", "colorize", "critique", "document", "explore", "generate", "handdrawn",
+    "harden", "identity", "init", "layout", "live", "polish", "quieter", "shape", "study", "teach", "typeset",
 ];
+// JS-PARITY: pin.mjs keeps folded shortcuts outside the canonical command count.
+pub const COMPATIBILITY_ALIASES: [&str; 9] = [
+    "adapt", "craft", "delight", "distill", "extract", "logo", "onboard", "optimize", "overdrive",
+];
+fn accepted_commands() -> String {
+    [VALID_COMMANDS.as_slice(), COMPATIBILITY_ALIASES.as_slice()].concat().join(", ")
+}
 const PIN_MARKER: &str = "<!-- impeccable-pinned-skill -->";
 const OPENCODE_PIN_MARKER: &str = "<!-- impeccable-pinned-command -->";
 
@@ -43,7 +48,7 @@ fn find_harness_dirs(project_root: &str) -> Vec<String> {
     let mut dirs = Vec::new();
     for h in HARNESS_DIRS {
         let skills = jsp::join(&[project_root, h, "skills"]);
-        if exists(&jsp::join(&[&skills, "impeccable"])) || exists(&jsp::join(&[&skills, "i-impeccable"])) {
+        if exists(&jsp::join(&[&skills, "melzi"])) || exists(&jsp::join(&[&skills, "i-impeccable"])) {
             dirs.push(skills);
         }
     }
@@ -66,7 +71,7 @@ fn generate_pinned_skill(command: &str, metadata: &serde_json::Value, prefix: &s
         .and_then(|d| d.as_str())
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
-        .unwrap_or_else(|| format!("Shortcut for {}impeccable {}.", prefix, command));
+        .unwrap_or_else(|| format!("Shortcut for {}melzi {}.", prefix, command));
     let hint = entry
         .and_then(|e| e.get("argumentHint"))
         .and_then(|d| d.as_str())
@@ -78,7 +83,7 @@ fn generate_pinned_skill(command: &str, metadata: &serde_json::Value, prefix: &s
         format!("argument-hint: \"{}\"\nuser-invocable: true", hint)
     };
     format!(
-        "---\nname: {command}\ndescription: \"{desc}\"\n{provider_fm}\n---\n\n{marker}\n\nThis is a pinned shortcut for `{prefix}impeccable {command}`.\n\nInvoke {prefix}impeccable {command}, passing along any arguments provided here, and follow its instructions.\n",
+        "---\nname: {command}\ndescription: \"{desc}\"\n{provider_fm}\n---\n\n{marker}\n\nThis is a pinned shortcut for `{prefix}melzi {command}`.\n\nInvoke {prefix}melzi {command}, passing along any arguments provided here, and follow its instructions.\n",
         command = command,
         desc = desc,
         provider_fm = provider_fm,
@@ -90,10 +95,10 @@ fn generate_pinned_skill(command: &str, metadata: &serde_json::Value, prefix: &s
 // OpenCode 1.18.10 does not honor `user-invocable: true` on SKILL.md
 // frontmatter (see docs/HARNESSES.md), so a pinned skill there shows up in
 // `opencode debug skill` but never in the slash menu. The fix is a sibling
-// `commands/impeccable-<cmd>.md` on the OpenCode command schema. The body
+// `commands/melzi-<cmd>.md` on the OpenCode command schema. The body
 // loads the skill, runs the context verb, then reads the sub-command's
 // reference file, so `/impeccable-<cmd>` runs the same workflow
-// `/impeccable <cmd>` routes to.
+// `/melzi <cmd>` routes to.
 //
 // JS: pin.mjs#generatePinnedOpencodeCommand. The JS body says
 // `node <skill-base-dir>/scripts/context.mjs`; the engine names its own
@@ -106,10 +111,10 @@ fn generate_pinned_opencode_command(command: &str, metadata: &serde_json::Value)
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
         .unwrap_or_else(|| {
-            format!("Impeccable sub-command shortcut; runs the {command} workflow via /impeccable.")
+            format!("Melzi sub-command shortcut; runs the {command} workflow via /melzi.")
         });
     format!(
-        "---\ndescription: \"{desc}\"\nagent: build\nsubtask: true\n---\n\n{marker}\n\nLoad the `impeccable` skill via the skill tool (name: \"impeccable\"), then run `<skill-base-dir>/scripts/impeccable context`, then load `<skill-base-dir>/reference/{command}.md` and follow it. `<skill-base-dir>` is the skill's base directory as reported by the skill tool response; substitute the actual absolute path before running or reading anything.\n\n$ARGUMENTS\n",
+        "---\ndescription: \"{desc}\"\nagent: build\nsubtask: true\n---\n\n{marker}\n\nLoad the `melzi` skill via the skill tool (name: \"melzi\"), then run `<skill-base-dir>/scripts/impeccable context`, then load `<skill-base-dir>/reference/{command}.md` and follow it. `<skill-base-dir>` is the skill's base directory as reported by the skill tool response; substitute the actual absolute path before running or reading anything.\n\n$ARGUMENTS\n",
         desc = desc,
         marker = OPENCODE_PIN_MARKER,
         command = command
@@ -129,7 +134,7 @@ fn opencode_user_config_dir(io: &Io) -> String {
 }
 
 /// JS: pin.mjs#findOpencodeCommandsDirs. The project-local dir when the
-/// project has the skill, plus the user config dir when Impeccable is
+/// project has the skill, plus the user config dir when Melzi is
 /// installed globally. With `for_cleanup`, both are included even when the
 /// skill is gone, so unpin can still reach a pin a removed install left
 /// behind; removal stays safe because it is marker-guarded.
@@ -141,11 +146,11 @@ fn find_opencode_commands_dirs(project_root: &str, io: &Io, for_cleanup: bool) -
             dirs.push(dir);
         }
     };
-    if for_cleanup || exists(&jsp::join(&[project_root, ".opencode", "skills", "impeccable"])) {
+    if for_cleanup || exists(&jsp::join(&[project_root, ".opencode", "skills", "melzi"])) {
         push(jsp::join(&[project_root, ".opencode", "commands"]));
     }
     let user_config = opencode_user_config_dir(io);
-    if for_cleanup || exists(&jsp::join(&[&user_config, "skills", "impeccable"])) {
+    if for_cleanup || exists(&jsp::join(&[&user_config, "skills", "melzi"])) {
         push(jsp::join(&[&user_config, "commands"]));
     }
     dirs
@@ -158,7 +163,7 @@ fn write_pinned_opencode_command(
     metadata: &serde_json::Value,
     io: &mut Io,
 ) -> bool {
-    let command_file = jsp::join(&[commands_dir, &format!("impeccable-{command}.md")]);
+    let command_file = jsp::join(&[commands_dir, &format!("melzi-{command}.md")]);
     if exists(&command_file) {
         let existing = safe_read(&command_file).unwrap_or_default();
         if !existing.contains(OPENCODE_PIN_MARKER) {
@@ -178,7 +183,7 @@ fn write_pinned_opencode_command(
 
 /// JS: pin.mjs#removePinnedOpencodeCommand
 fn remove_pinned_opencode_command(commands_dir: &str, command: &str, io: &mut Io) -> bool {
-    let command_file = jsp::join(&[commands_dir, &format!("impeccable-{command}.md")]);
+    let command_file = jsp::join(&[commands_dir, &format!("melzi-{command}.md")]);
     if !exists(&command_file) {
         return false;
     }
@@ -216,16 +221,16 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
     let command = args.get(1).cloned();
     let (Some(action), Some(command)) = (action.filter(|a| !a.is_empty()), command.filter(|c| !c.is_empty())) else {
         io.out("Usage: impeccable pin <pin|unpin> <command>\n");
-        io.out(&format!("\nAvailable commands: {}\n", VALID_COMMANDS.join(", ")));
+        io.out(&format!("\nAvailable commands and aliases: {}\n", accepted_commands()));
         return 1;
     };
     if action != "pin" && action != "unpin" {
         io.err(&format!("Unknown action: {}. Use 'pin' or 'unpin'.\n", action));
         return 1;
     }
-    if !VALID_COMMANDS.contains(&command.as_str()) {
+    if !VALID_COMMANDS.contains(&command.as_str()) && !COMPATIBILITY_ALIASES.contains(&command.as_str()) {
         io.err(&format!("Unknown command: {}\n", command));
-        io.err(&format!("Available commands: {}\n", VALID_COMMANDS.join(", ")));
+        io.err(&format!("Available commands and aliases: {}\n", accepted_commands()));
         return 1;
     }
     let cwd = io.cwd.to_string_lossy().into_owned();
@@ -235,7 +240,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
         let harness_dirs = find_harness_dirs(&root);
         let opencode_commands_dirs = find_opencode_commands_dirs(&root, io, false);
         if harness_dirs.is_empty() && opencode_commands_dirs.is_empty() {
-            io.out("No harness directories with impeccable installed found.\n");
+            io.out("No harness directories with melzi installed found.\n");
             return 0;
         }
         let mut created = 0;
@@ -281,7 +286,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
         let mut removed = 0;
         // OpenCode has its own cleanup path below; skip the skill loop here so
         // a stray `.opencode/skills/<cmd>/SKILL.md` written by an older
-        // Impeccable version is never silently dropped.
+        // Melzi version is never silently dropped.
         for skills_dir in &harness_dirs {
             if is_opencode_skills_dir(skills_dir) {
                 continue;
@@ -313,10 +318,53 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
         }
         if removed > 0 {
             io.out(&format!("\nUnpinned '{}' from {} location(s).\n", command, removed));
-            io.out(&format!("Use Impeccable's '{}' workflow directly to access it.\n", command));
+            io.out(&format!("Use Melzi's '{}' workflow directly to access it.\n", command));
         } else {
             io.out(&format!("No pinned '{}' shortcut found.\n", command));
         }
     }
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn handdrawn_pins_and_unpins_with_metadata_in_each_shortcut_format() {
+        let root = std::env::temp_dir().join(format!(
+            "melzi-handdrawn-pin-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        for harness in [".claude", ".agents", ".opencode"] {
+            std::fs::create_dir_all(root.join(harness).join("skills/melzi")).unwrap();
+        }
+        std::fs::write(root.join("package.json"), "{}").unwrap();
+        let env = HashMap::from([
+            ("HOME".into(), root.to_string_lossy().into_owned()),
+            ("OPENCODE_CONFIG_DIR".into(), root.join("user-config").to_string_lossy().into_owned()),
+        ]);
+        let (mut io, capture) = Io::captured("", root.clone(), env);
+        assert_eq!(run(&["pin".into(), "handdrawn".into()], &mut io), 0,
+            "{}", String::from_utf8_lossy(&capture.stderr.borrow()));
+        for (file, route) in [
+            (".claude/skills/handdrawn/SKILL.md", "/melzi handdrawn"),
+            (".agents/skills/handdrawn/SKILL.md", "$melzi handdrawn"),
+            (".opencode/commands/melzi-handdrawn.md", "reference/handdrawn.md"),
+        ] {
+            let content = std::fs::read_to_string(root.join(file)).unwrap();
+            assert!(content.contains(route), "{file}: {content}");
+            assert!(content.contains("mascot"), "{file} lost the command description");
+            if file.ends_with("SKILL.md") {
+                assert!(content.contains("argument-hint: \"[target]\""));
+            }
+        }
+        assert_eq!(run(&["unpin".into(), "handdrawn".into()], &mut io), 0);
+        assert!(!root.join(".claude/skills/handdrawn").exists());
+        assert!(!root.join(".agents/skills/handdrawn").exists());
+        assert!(!root.join(".opencode/commands/melzi-handdrawn.md").exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

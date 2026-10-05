@@ -97,7 +97,7 @@ fn admin_on_and_reset_manage_gemini_without_losing_user_settings() {
     let t = Tmp::new();
     let cwd = t.path();
     let r = rt(&cwd);
-    std::fs::create_dir_all(t.0.join(".gemini/skills/impeccable")).unwrap();
+    std::fs::create_dir_all(t.0.join(".gemini/skills/melzi")).unwrap();
     t.write(".gemini/settings.json", "{\n  // user model\n  \"model\": {\"name\": \"gemini-3-pro\"}, /* auth */\n  \"security\": {\"auth\": {\"selectedType\": \"oauth-personal\"}}\n}\n");
     let (out, _, code) = admin_run(&r, &["on"]);
     assert_eq!(code, 0);
@@ -265,7 +265,7 @@ fn rt_with(cwd: &str, env: HashMap<String, String>) -> Runtime<'static> {
     Runtime::new(
         cwd.to_string(),
         env,
-        "/impeccable".to_string(),
+        "/melzi".to_string(),
         "/opt/bin/impeccable",
         &HTML,
     )
@@ -1136,9 +1136,9 @@ fn render_template_caps_and_footers() {
         .collect();
     let text = render_template(&r, &many, "/x/Card.tsx", &c, &opts("/x"));
     assert!(text.starts_with(
-        "[impeccable@1] Design hook findings requiring review in Card.tsx (12 issue(s)):"
+        "[melzi@1] Design hook findings requiring review in Card.tsx (12 issue(s)):"
     ));
-    assert!(text.contains("... and 7 more (see /impeccable audit)."));
+    assert!(text.contains("... and 7 more (see /melzi audit)."));
     assert_eq!(text.lines().filter(|l| l.starts_with("- L")).count(), 5);
     // The self-command is quoted in the host's shell form (#476 / #533):
     // single quotes under sh, double quotes on Windows.
@@ -1146,7 +1146,7 @@ fn render_template_caps_and_footers() {
     assert!(text.contains(&format!(
         "Run `{self_cmd} hooks ignore-value <rule> \"<value>\" --reason \"<who decided: evidence>\"`"
     )));
-    assert!(text.contains("Full suppression ladder: /impeccable hooks."));
+    assert!(text.contains("Full suppression ladder: /melzi hooks."));
     let short = render_template(
         &r,
         &many[..1],
@@ -1316,8 +1316,8 @@ fn render_template_clamps_inside_budget_and_keeps_policy() {
         },
     ];
     let text = render_grouped_template(&r, &groups, &HookConfig::default(), &opts("/x"));
-    assert!(text.starts_with("[impeccable@1] Design hook findings requiring review across 2 files (7 issue(s)):\na.css (4 issue(s)):\n"));
-    assert!(text.contains("b.css (3 issue(s)):\n- L1 [gradient-text] G. d\n- ... 2 more in b.css (see /impeccable audit)."));
+    assert!(text.starts_with("[melzi@1] Design hook findings requiring review across 2 files (7 issue(s)):\na.css (4 issue(s)):\n"));
+    assert!(text.contains("b.css (3 issue(s)):\n- L1 [gradient-text] G. d\n- ... 2 more in b.css (see /melzi audit)."));
     let pending = render_pending_ack(
         &r,
         "/x/a.css",
@@ -1327,7 +1327,7 @@ fn render_template_clamps_inside_budget_and_keeps_policy() {
     assert!(pending
         .contains("Still has 4 finding(s) flagged earlier this session (a:1, b:2, c:3, +1 more)."));
     assert!(render_clean_ack(&r, "/x/a.css", "/x")
-        .ends_with("keep following the project design system and the impeccable skill guidance."));
+        .ends_with("keep following the project design system and the melzi skill guidance."));
 }
 
 // ── events / targets ──────────────────────────────────────────────────────
@@ -1676,7 +1676,7 @@ fn run_hook_oversized_files_and_suppression() {
     for _ in 0..9 {
         outputs.push(hook::run_hook(&r, &edit_event(&cwd, &css, "sup")));
     }
-    assert!(outputs[6].stdout.contains("Suppressing further design hints on src/b.css. More than 6 edits in this session reached. Run /impeccable audit to revisit."));
+    assert!(outputs[6].stdout.contains("Suppressing further design hints on src/b.css. More than 6 edits in this session reached. Run /melzi audit to revisit."));
     assert_eq!(outputs[6].audit["suppressed"], json!(true));
     assert!(outputs[7].stdout.is_empty());
     assert_eq!(outputs[8].audit["emitted"], json!(false));
@@ -1833,7 +1833,7 @@ fn before_edit_denies_shell_and_edit_shapes() {
     let deny = |stdin: &str, label: &str| {
         let (out, code) = hbe(&r, stdin);
         assert_eq!(code, 0);
-        assert!(out.starts_with("{\"permission\":\"deny\",\"user_message\":\"[impeccable@1] Impeccable design hook blocked this write before it landed. Design hook findings requiring review in"), "{label}: {out}");
+        assert!(out.starts_with("{\"permission\":\"deny\",\"user_message\":\"[melzi@1] Melzi design hook blocked this write before it landed. Design hook findings requiring review in"), "{label}: {out}");
         out
     };
     let allow = |stdin: &str, label: &str| {
@@ -1938,7 +1938,7 @@ fn before_edit_denies_shell_and_edit_shapes() {
         last.starts_with("{\"permission\":\"allow\",\"user_message\":\""),
         "{last}"
     );
-    assert!(last.contains("This is the 7th repeated denial for the same file and finding signature, so Impeccable is allowing this write to avoid a loop."));
+    assert!(last.contains("This is the 7th repeated denial for the same file and finding signature, so Melzi is allowing this write to avoid a loop."));
     let cache = read_cache(&cwd);
     assert_eq!(
         cache["sessions"]["cv1"]["files"][jsp::join(&[&cwd, "src/new.css"])]["cursorDenials"]
@@ -2013,7 +2013,7 @@ fn admin_ignore_value_scoping_and_idempotency() {
     assert!(out.contains("ignoreRules:  side-tab\n"));
     let (_, err, code) = admin_run(&r, &["ignore-value", "overused-font", "*"]);
     assert_eq!(code, 1);
-    assert_eq!(err, "Error: Wildcard value ignores must be scoped with --file <glob>, e.g. /impeccable hooks ignore-value design-system-font-size \"*\" --file \"src/widget.js\". To suppress the rule project-wide use /impeccable hooks ignore-rule overused-font --all-values.\n");
+    assert_eq!(err, "Error: Wildcard value ignores must be scoped with --file <glob>, e.g. /melzi hooks ignore-value design-system-font-size \"*\" --file \"src/widget.js\". To suppress the rule project-wide use /melzi hooks ignore-rule overused-font --all-values.\n");
     let (_, err, _) = admin_run(&r, &["ignore-value", "overused-font", "Inter", "--file="]);
     assert_eq!(err, "Error: --file requires a non-empty glob\n");
     let (_, err, _) = admin_run(&r, &["ignore-value", "overused-font", "Inter", "--shard"]);
@@ -2037,10 +2037,10 @@ fn admin_ignore_value_refuses_inert_exact_values() {
     let r = rt(&cwd);
     let (_, err, code) = admin_run(&r, &["ignore-value", "cramped-padding", "padding: 4px 8px"]);
     assert_eq!(code, 1);
-    assert_eq!(err, "Error: cramped-padding has no extractable ignore value. Use /impeccable hooks ignore-value cramped-padding \"*\" --file <glob> to suppress it in matching files.\n");
+    assert_eq!(err, "Error: cramped-padding has no extractable ignore value. Use /melzi hooks ignore-value cramped-padding \"*\" --file <glob> to suppress it in matching files.\n");
     let (_, err, code) = admin_run(&r, &["ignore-value", "side-tab", "Inter", "--file", "a.css"]);
     assert_eq!(code, 1);
-    assert_eq!(err, "Error: side-tab has no extractable ignore value. Use /impeccable hooks ignore-value side-tab \"*\" --file <glob> to suppress it in matching files.\n");
+    assert_eq!(err, "Error: side-tab has no extractable ignore value. Use /melzi hooks ignore-value side-tab \"*\" --file <glob> to suppress it in matching files.\n");
     assert!(!t.exists(".impeccable/config.json"), "a refused ignore must not write config");
 
     let (out, _, code) = admin_run(&r, &["ignore-value", "overused-font", "Inter"]);
@@ -2091,7 +2091,7 @@ fn admin_on_off_preserve_sibling_hook_fields() {
         cfg.as_object().unwrap().keys().cloned().collect::<Vec<_>>(),
         vec!["hook", "updateCheck", "detector"]
     );
-    std::fs::create_dir_all(t.0.join(".github/skills/impeccable")).unwrap();
+    std::fs::create_dir_all(t.0.join(".github/skills/melzi")).unwrap();
     let (out, _, _) = admin_run(&r, &["on"]);
     assert_eq!(out, format!(
         "Design hook enabled for this project (wrote {}). Recorded local hook consent in {}. Installed or repaired hook manifests for: .github.\n",
@@ -2113,14 +2113,14 @@ fn admin_on_prunes_local_manifest_when_shared_settings_carry_the_hook() {
     let t = Tmp::new();
     let cwd = t.path();
     let r = rt(&cwd);
-    std::fs::create_dir_all(t.0.join(".claude/skills/impeccable")).unwrap();
+    std::fs::create_dir_all(t.0.join(".claude/skills/melzi")).unwrap();
     t.write(
         ".claude/settings.json",
-        r#"{"hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\""}]}]}}"#,
+        r#"{"hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"node \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/hook.mjs\""}]}]}}"#,
     );
     t.write(
         ".claude/settings.local.json",
-        "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  },\n  \"hooks\": {\n    \"PostToolUse\": [\n      {\n        \"matcher\": \"Edit\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"node old/skills/impeccable/scripts/hook.mjs\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
+        "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls)\"\n    ]\n  },\n  \"hooks\": {\n    \"PostToolUse\": [\n      {\n        \"matcher\": \"Edit\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"node old/skills/melzi/scripts/hook.mjs\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
     );
     let (out, _, _) = admin_run(&r, &["on"]);
     assert!(
@@ -2136,7 +2136,7 @@ fn admin_on_prunes_local_manifest_when_shared_settings_carry_the_hook() {
     // a local manifest holding only impeccable entries is deleted outright
     t.write(
         ".claude/settings.local.json",
-        r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"node x/skills/impeccable/scripts/hook.mjs"}]}]}}"#,
+        r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"node x/skills/melzi/scripts/hook.mjs"}]}]}}"#,
     );
     admin_run(&r, &["on"]);
     assert!(!t.exists(".claude/settings.local.json"));
@@ -2148,10 +2148,10 @@ fn admin_on_writes_launcher_manifests_for_every_harness() {
     let cwd = t.path();
     let r = rt(&cwd);
     for skill in [
-        ".claude/skills/impeccable",
-        ".agents/skills/impeccable",
-        ".cursor/skills/impeccable",
-        ".github/skills/impeccable",
+        ".claude/skills/melzi",
+        ".agents/skills/melzi",
+        ".cursor/skills/melzi",
+        ".github/skills/melzi",
     ] {
         std::fs::create_dir_all(t.0.join(skill)).unwrap();
     }
@@ -2160,7 +2160,7 @@ fn admin_on_writes_launcher_manifests_for_every_harness() {
     assert!(out.ends_with("Installed or repaired hook manifests for: .claude, .agents, .cursor, .github.\n"), "{out}");
 
     let claude: Value = serde_json::from_str(&t.read(".claude/settings.local.json")).unwrap();
-    let cmd = "\"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook";
+    let cmd = "\"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" hook";
     assert_eq!(claude["hooks"]["PostToolUse"][0]["hooks"][0]["command"], json!(cmd));
     assert_eq!(claude["hooks"]["Stop"][0]["hooks"][0]["command"], json!(cmd));
     assert!(claude["hooks"]["PostToolUse"][0]["hooks"][0].get("commandWindows").is_none());
@@ -2168,26 +2168,26 @@ fn admin_on_writes_launcher_manifests_for_every_harness() {
 
     let codex: Value = serde_json::from_str(&t.read(".codex/hooks.json")).unwrap();
     let entry = &codex["hooks"]["PostToolUse"][0]["hooks"][0];
-    assert_eq!(entry["command"], json!("\".agents/skills/impeccable/scripts/impeccable\" hook"));
-    assert_eq!(entry["commandWindows"], json!("\".agents/skills/impeccable/scripts/impeccable.cmd\" hook"));
+    assert_eq!(entry["command"], json!("\".agents/skills/melzi/scripts/impeccable\" hook"));
+    assert_eq!(entry["commandWindows"], json!("\".agents/skills/melzi/scripts/impeccable.cmd\" hook"));
     assert_eq!(
         entry.as_object().unwrap().keys().cloned().collect::<Vec<_>>(),
         vec!["type", "command", "commandWindows", "timeout", "statusMessage"]
     );
     let stop = &codex["hooks"]["Stop"][0]["hooks"][0];
-    assert_eq!(stop["command"], json!("\".agents/skills/impeccable/scripts/impeccable\" hook"));
-    assert_eq!(stop["commandWindows"], json!("\".agents/skills/impeccable/scripts/impeccable.cmd\" hook"));
+    assert_eq!(stop["command"], json!("\".agents/skills/melzi/scripts/impeccable\" hook"));
+    assert_eq!(stop["commandWindows"], json!("\".agents/skills/melzi/scripts/impeccable.cmd\" hook"));
     assert_eq!(stop["timeout"], json!(30));
 
     let cursor: Value = serde_json::from_str(&t.read(".cursor/hooks.json")).unwrap();
     assert_eq!(
         cursor["hooks"]["preToolUse"][0]["command"],
-        json!("\".cursor/skills/impeccable/scripts/impeccable\" hook-before-edit")
+        json!("\".cursor/skills/melzi/scripts/impeccable\" hook-before-edit")
     );
     let github: Value = serde_json::from_str(&t.read(".github/hooks/impeccable.json")).unwrap();
     assert_eq!(
         github["hooks"]["postToolUse"][0]["bash"],
-        json!("\"$(git rev-parse --show-toplevel)/.github/skills/impeccable/scripts/impeccable\" hook")
+        json!("\"$(git rev-parse --show-toplevel)/.github/skills/melzi/scripts/impeccable\" hook")
     );
 
     // A second `on` is a no-op against the manifests it just wrote.
@@ -2200,17 +2200,17 @@ fn admin_on_repairs_legacy_mjs_manifests_to_the_launcher_form() {
     let t = Tmp::new();
     let cwd = t.path();
     let r = rt(&cwd);
-    std::fs::create_dir_all(t.0.join(".claude/skills/impeccable")).unwrap();
-    std::fs::create_dir_all(t.0.join(".agents/skills/impeccable")).unwrap();
+    std::fs::create_dir_all(t.0.join(".claude/skills/melzi")).unwrap();
+    std::fs::create_dir_all(t.0.join(".agents/skills/melzi")).unwrap();
     // JS-era Claude manifest with a foreign entry alongside the impeccable one.
     t.write(
         ".claude/settings.local.json",
-        r#"{"permissions":{"allow":["Bash(ls)"]},"hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"echo other"}]},{"matcher":"Edit|Write|MultiEdit","hooks":[{"type":"command","command":"node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"","timeout":5}]}],"Stop":[{"hooks":[{"type":"command","command":"[ ! -f '/x/.claude/skills/impeccable/scripts/hook.mjs' ] || node '/x/.claude/skills/impeccable/scripts/hook.mjs'"}]}]}}"#,
+        r#"{"permissions":{"allow":["Bash(ls)"]},"hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"echo other"}]},{"matcher":"Edit|Write|MultiEdit","hooks":[{"type":"command","command":"node \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/hook.mjs\"","timeout":5}]}],"Stop":[{"hooks":[{"type":"command","command":"[ ! -f '/x/.claude/skills/melzi/scripts/hook.mjs' ] || node '/x/.claude/skills/melzi/scripts/hook.mjs'"}]}]}}"#,
     );
     // JS-era Codex manifest carrying the CLI installer's commandWindows sibling.
     t.write(
         ".codex/hooks.json",
-        r#"{"hooks":{"PostToolUse":[{"matcher":"Edit|Write|apply_patch","hooks":[{"type":"command","command":"[ ! -f \".agents/skills/impeccable/scripts/hook.mjs\" ] || node \".agents/skills/impeccable/scripts/hook.mjs\"","commandWindows":"if exist \".agents/skills/impeccable/scripts/hook.mjs\" (node \".agents/skills/impeccable/scripts/hook.mjs\" & exit /b)","timeout":5}]}]}}"#,
+        r#"{"hooks":{"PostToolUse":[{"matcher":"Edit|Write|apply_patch","hooks":[{"type":"command","command":"[ ! -f \".agents/skills/melzi/scripts/hook.mjs\" ] || node \".agents/skills/melzi/scripts/hook.mjs\"","commandWindows":"if exist \".agents/skills/melzi/scripts/hook.mjs\" (node \".agents/skills/melzi/scripts/hook.mjs\" & exit /b)","timeout":5}]}]}}"#,
     );
     let (out, _, code) = admin_run(&r, &["on"]);
     assert_eq!(code, 0, "{out}");
@@ -2225,7 +2225,7 @@ fn admin_on_repairs_legacy_mjs_manifests_to_the_launcher_form() {
     assert_eq!(post[0]["hooks"][0]["command"], json!("echo other"));
     assert_eq!(
         post[1]["hooks"][0]["command"],
-        json!("\"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook")
+        json!("\"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" hook")
     );
     // Upstream 611147a3: the repaired Claude group must exist and carry the
     // current Edit|Write matcher (MultiEdit is retired; see 55fb8e8).
@@ -2238,19 +2238,19 @@ fn admin_on_repairs_legacy_mjs_manifests_to_the_launcher_form() {
     assert_eq!(codex["hooks"]["PostToolUse"].as_array().unwrap().len(), 1);
     assert_eq!(
         codex["hooks"]["PostToolUse"][0]["hooks"][0]["commandWindows"],
-        json!("\".agents/skills/impeccable/scripts/impeccable.cmd\" hook")
+        json!("\".agents/skills/melzi/scripts/impeccable.cmd\" hook")
     );
 
     // A launcher-form manifest written by another checkout is recognized as
     // ours too: shared settings carrying it make `on` prune the local file.
     t.write(
         ".claude/settings.json",
-        r#"{"hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook"}]}]}}"#,
+        r#"{"hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" hook"}]}]}}"#,
     );
     let (out, _, _) = admin_run(&r, &["on"]);
     assert!(out.contains("already installed for: .claude"), "{out}");
     let local = t.read(".claude/settings.local.json");
-    assert!(!local.contains("skills/impeccable"), "launcher-form entries pruned: {local}");
+    assert!(!local.contains("skills/melzi"), "launcher-form entries pruned: {local}");
     let local: Value = serde_json::from_str(&local).unwrap();
     assert_eq!(local["hooks"]["PostToolUse"][0]["hooks"][0]["command"], json!("echo other"));
     assert!(local["hooks"].get("Stop").is_none());

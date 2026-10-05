@@ -1,5 +1,5 @@
 //! JS: live/tanstack-adapter.mjs + live/frameworks/tanstack-start.mjs. A
-//! dev-only managed component under `src/impeccable/` mounted from the root
+//! dev-only managed component under `src/melzi/` mounted from the root
 //! route file.
 
 use super::detect_utils::{file_exists, has_any_dependency};
@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 
 pub const TANSTACK_MARKER_OPEN: &str = "{/* impeccable-live-tanstack-start */}";
 pub const TANSTACK_MARKER_CLOSE: &str = "{/* impeccable-live-tanstack-end */}";
-pub const TANSTACK_COMPONENT_DIR: &str = "src/impeccable";
+pub const TANSTACK_COMPONENT_DIR: &str = "src/melzi";
 pub const TANSTACK_COMPONENT_BASENAME: &str = "ImpeccableLiveRoot";
 
 const ROOT_ROUTE_CANDIDATES: [&str; 6] = [
@@ -80,7 +80,7 @@ pub fn apply_tanstack_live_adapter(
         return json!({
             "file": project.component_file,
             "error": "tanstack_component_conflict",
-            "hint": format!("{} already exists and is not managed by Impeccable Live", project.component_file),
+            "hint": format!("{} already exists and is not managed by Melzi Live", project.component_file),
         });
     }
     let _ = write_file(&component_abs, &component_body);
@@ -174,7 +174,7 @@ import {{ useEffect }} from 'react';
 const LIVE_SRC = '{src}';
 const LIVE_SELECTOR = 'script[data-impeccable-live-tanstack]';
 
-// Dev-only mount for Impeccable Live. TanStack Start server-renders the root
+// Dev-only mount for Melzi Live. TanStack Start server-renders the root
 // document, so this appends the live-mode bundle from the client after
 // hydration (mirrors the Nuxt/SvelteKit adapters). Renders nothing on the
 // server, so there is no hydration mismatch.

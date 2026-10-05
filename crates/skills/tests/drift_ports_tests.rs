@@ -50,7 +50,7 @@ fn read(path: &str) -> String {
 fn create_fake_universal_bundle(root: &str, providers: &[&str]) -> String {
     let bundle_root = format!("{root}/universal-bundle");
     for provider in providers {
-        let skill_dir = format!("{bundle_root}/{provider}/skills/impeccable");
+        let skill_dir = format!("{bundle_root}/{provider}/skills/melzi");
         write(
             &format!("{skill_dir}/SKILL.md"),
             &format!("---\nname: impeccable\nversion: 9.9.9-local\n---\n\nLocal deterministic bundle for {provider}.\n"),
@@ -62,7 +62,7 @@ fn create_fake_universal_bundle(root: &str, providers: &[&str]) -> String {
             &format!("{bundle_root}/.claude/settings.json"),
             &json!({
                 "description": "fresh claude hook",
-                "hooks": { "PostToolUse": [{ "matcher": "Edit", "hooks": [{ "type": "command", "command": "node \".claude/skills/impeccable/scripts/hook.mjs\"" }] }] },
+                "hooks": { "PostToolUse": [{ "matcher": "Edit", "hooks": [{ "type": "command", "command": "node \".claude/skills/melzi/scripts/hook.mjs\"" }] }] },
             })
             .to_string(),
         );
@@ -76,7 +76,7 @@ fn create_fake_universal_bundle(root: &str, providers: &[&str]) -> String {
             &format!("{bundle_root}/.cursor/hooks.json"),
             &json!({
                 "version": 1,
-                "hooks": { "preToolUse": [{ "command": "node \".cursor/skills/impeccable/scripts/hook-before-edit.mjs\"" }] },
+                "hooks": { "preToolUse": [{ "command": "node \".cursor/skills/melzi/scripts/hook-before-edit.mjs\"" }] },
             })
             .to_string(),
         );
@@ -89,7 +89,7 @@ fn create_fake_universal_bundle(root: &str, providers: &[&str]) -> String {
         write(
             &format!("{bundle_root}/.codex/hooks.json"),
             &json!({
-                "hooks": { "PostToolUse": [{ "matcher": "apply_patch", "hooks": [{ "type": "command", "command": "node \".codex/skills/impeccable/scripts/hook.mjs\"" }] }] },
+                "hooks": { "PostToolUse": [{ "matcher": "apply_patch", "hooks": [{ "type": "command", "command": "node \".codex/skills/melzi/scripts/hook.mjs\"" }] }] },
             })
             .to_string(),
         );
@@ -98,7 +98,7 @@ fn create_fake_universal_bundle(root: &str, providers: &[&str]) -> String {
         write(
             &format!("{bundle_root}/.grok/hooks/impeccable.json"),
             &json!({
-                "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "node \".grok/skills/impeccable/scripts/hook.mjs\"" }] }] },
+                "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "node \".grok/skills/melzi/scripts/hook.mjs\"" }] }] },
             })
             .to_string(),
         );
@@ -314,7 +314,7 @@ fn local_bundle_uses_mkdtemp_staging_under_tmpdir() {
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(std::fs::metadata(&staging).unwrap().permissions().mode() & 0o777, 0o700);
     }
-    assert!(std::path::Path::new(&format!("{staging}/.claude/skills/impeccable/SKILL.md")).exists());
+    assert!(std::path::Path::new(&format!("{staging}/.claude/skills/melzi/SKILL.md")).exists());
     std::fs::remove_dir_all(&root).ok();
 }
 
@@ -411,10 +411,10 @@ fn dsh_install_and_update_use_relocated_home_without_touching_project_skills() {
     let bundle = create_fake_universal_bundle(&root, &[".dsh"]);
     let mut env = base_env(&home, &tmpdir, &bundle);
     env.insert("DSH_HOME".into(), dsh_home.clone());
-    let project_skill = jsp::join(&[&project, ".dsh", "skills", "impeccable", "SKILL.md"]);
+    let project_skill = jsp::join(&[&project, ".dsh", "skills", "melzi", "SKILL.md"]);
     write(&project_skill, "project skill must stay untouched");
-    let installed = jsp::join(&[&dsh_home, "skills", "impeccable", "SKILL.md"]);
-    let source = jsp::join(&[&bundle, ".dsh", "skills", "impeccable", "SKILL.md"]);
+    let installed = jsp::join(&[&dsh_home, "skills", "melzi", "SKILL.md"]);
+    let source = jsp::join(&[&bundle, ".dsh", "skills", "melzi", "SKILL.md"]);
 
     let r = run_cli(&["install", "-y", "--providers=deepseek-harness", "--scope=global"], &project, &env);
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
@@ -512,7 +512,7 @@ fn check_ignores_leftover_pi_project_layout_in_home_rooted_tree() {
         &env,
     );
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
-    assert!(std::path::Path::new(&format!("{home}/.pi/agent/skills/impeccable/SKILL.md")).exists());
+    assert!(std::path::Path::new(&format!("{home}/.pi/agent/skills/melzi/SKILL.md")).exists());
     write(
         &format!("{home}/.pi/skills/other/SKILL.md"),
         "---\nname: other\n---\nLeftover project-layout skill.\n",
@@ -545,8 +545,8 @@ fn check_sees_home_rooted_project_scope_pi_install() {
         &env,
     );
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
-    assert!(std::path::Path::new(&format!("{home}/.pi/skills/impeccable/SKILL.md")).exists());
-    assert!(!std::path::Path::new(&format!("{home}/.pi/agent/skills/impeccable/SKILL.md")).exists());
+    assert!(std::path::Path::new(&format!("{home}/.pi/skills/melzi/SKILL.md")).exists());
+    assert!(!std::path::Path::new(&format!("{home}/.pi/agent/skills/melzi/SKILL.md")).exists());
     write(
         &format!("{home}/.pi/agent/skills/other/SKILL.md"),
         "---\nname: other\n---\nLeftover user-layout skill.\n",
@@ -578,7 +578,7 @@ fn check_reports_stale_impeccable_in_home_rooted_tree() {
     );
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
     write(
-        &format!("{home}/.claude/skills/impeccable/SKILL.md"),
+        &format!("{home}/.claude/skills/melzi/SKILL.md"),
         "---\nname: impeccable\nversion: 0.0.0-stale\n---\n\nStale copy.\n",
     );
 
@@ -639,7 +639,7 @@ fn manifest_names_launcher(manifest: &str, home: &str, provider: &str) -> bool {
             _ => false,
         }
     }
-    let p = jsp::join(&[home, provider, "skills", "impeccable", "scripts", "impeccable"]);
+    let p = jsp::join(&[home, provider, "skills", "melzi", "scripts", "impeccable"]);
     let escaped = p.replace('\\', "\\\\");
     let value: Value = serde_json::from_str(&read(manifest)).unwrap();
     any_string(&value, &|s: &str| s.contains(&p) || s.contains(&escaped))
@@ -670,8 +670,8 @@ fn global_install_rewrites_grok_project_hooks_to_the_global_skill_path() {
         r.stdout
     );
     for provider in [".claude", ".agents", ".cursor", ".grok"] {
-        assert!(std::path::Path::new(&format!("{home}/{provider}/skills/impeccable/SKILL.md")).exists());
-        assert!(!std::path::Path::new(&format!("{tmp}/{provider}/skills/impeccable/SKILL.md")).exists());
+        assert!(std::path::Path::new(&format!("{home}/{provider}/skills/melzi/SKILL.md")).exists());
+        assert!(!std::path::Path::new(&format!("{tmp}/{provider}/skills/melzi/SKILL.md")).exists());
     }
     // Launcher-era adaptation: the JS asserted the rewritten hook.mjs path;
     // the engine writes the launcher form pointing at the same global root.
@@ -685,7 +685,7 @@ fn global_install_rewrites_grok_project_hooks_to_the_global_skill_path() {
         "grok hook not rewritten to the global skill path: {grok_hooks}"
     );
     assert!(
-        !grok_hooks.contains("\\\".grok/skills/impeccable/scripts/hook.mjs\\\"") && !grok_hooks.contains("hook.mjs"),
+        !grok_hooks.contains("\\\".grok/skills/melzi/scripts/hook.mjs\\\"") && !grok_hooks.contains("hook.mjs"),
         "grok hook still points at the project-relative bundle command: {grok_hooks}"
     );
     std::fs::remove_dir_all(&root).ok();
@@ -695,7 +695,7 @@ fn global_install_rewrites_grok_project_hooks_to_the_global_skill_path() {
 
 #[test]
 fn merge_hook_manifests_replaces_legacy_windows_path_claude_hooks() {
-    let legacy_path = r"C:\Users\alice\.claude\skills\impeccable\scripts\hook.mjs";
+    let legacy_path = r"C:\Users\alice\.claude\skills\melzi\scripts\hook.mjs";
     let legacy_command = format!("[ ! -f \"{legacy_path}\" ] || node \"{legacy_path}\"");
     let fresh_command = format!("node -e \"guard\" \"{legacy_path}\"");
     let merged = merge_hook_manifests(

@@ -1,0 +1,22 @@
+{
+  "steps": [
+    {
+      "stdout": "  + <WS>/.claude/skills/generate\n  + <WS>/.cursor/skills/generate\n  + <WS>/.agents/skills/generate\n\nPinned 'generate' as a standalone shortcut in 3 location(s).\nUse the pinned command directly in each harness.\n",
+      "stderr": "",
+      "exit": 0,
+      "signal": null
+    },
+    {
+      "stdout": "  - <WS>/.claude/skills/generate\n  - <WS>/.cursor/skills/generate\n  - <WS>/.agents/skills/generate\n\nUnpinned 'generate' from 3 location(s).\nUse Melzi's 'generate' workflow directly to access it.\n",
+      "stderr": "",
+      "exit": 0,
+      "signal": null
+    }
+  ],
+  "files": {
+    ".agents/skills/melzi/SKILL.md": "---\nname: melzi\ndescription: fixture\n---\n",
+    ".claude/skills/audit/SKILL.md": "---\nname: audit\ndescription: a user-authored audit skill\n---\nNot pinned.\n",
+    ".claude/skills/melzi/SKILL.md": "---\nname: melzi\ndescription: fixture\n---\n",
+    ".cursor/skills/melzi/SKILL.md": "---\nname: melzi\ndescription: fixture\n---\n"
+  }
+}

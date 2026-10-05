@@ -32,6 +32,7 @@ jobs:
     outputs:
       core: ${{ steps.plan.outputs.core }}
       rust: ${{ steps.plan.outputs.rust }}
+      oracle: ${{ steps.plan.outputs.oracle }}
       detector: ${{ steps.plan.outputs.detector }}
       live: ${{ steps.plan.outputs.live }}
       framework: ${{ steps.plan.outputs.framework }}

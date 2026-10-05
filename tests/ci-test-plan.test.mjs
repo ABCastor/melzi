@@ -104,6 +104,7 @@ describe('ci-test-plan', () => {
   it('exposes planned opt-in suite outputs to workflow jobs', () => {
     const workflow = readFileSync('.github/workflows/ci.yml', 'utf-8');
 
+    assert.match(workflow, /oracle:\s*\$\{\{\s*steps\.plan\.outputs\.oracle\s*\}\}/);
     assert.match(workflow, /live_e2e_accept_cleanup:\s*\$\{\{\s*steps\.plan\.outputs\.live_e2e_accept_cleanup\s*\}\}/);
     assert.match(workflow, /live_svelte_adapter_deepseek:\s*\$\{\{\s*steps\.plan\.outputs\.live_svelte_adapter_deepseek\s*\}\}/);
     assert.match(workflow, /live-e2e-accept-cleanup:/);

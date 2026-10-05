@@ -6,7 +6,7 @@ the JS goldens; read this before touching a crate.
 ## Sources of truth
 
 - JS source: the public repo checkout (`../impeccable-second` locally,
-  `../impeccable` in CI; env `IMPECCABLE_PUBLIC_REPO` overrides).
+  `../melzi` in CI; env `IMPECCABLE_PUBLIC_REPO` overrides).
 - Contract: `docs/CLI-CONTRACT.md` in the public repo. Every verb's argv, env,
   stdout/stderr, exit codes, files, network.
 - Goldens: `tests/oracle/` in the public repo. `node tests/oracle/run.mjs`

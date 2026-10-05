@@ -24,7 +24,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
 
 fn not_implemented(verb: &str, io: &mut Io) -> i32 {
     io.err(&format!(
-        "impeccable {verb}: not implemented yet in this build. Use `npx impeccable {verb}` (the Node CLI) for now.\n"
+        "impeccable {verb}: not implemented yet in this build. Use `npx melzi {verb}` (the Node CLI) for now.\n"
     ));
     1
 }

@@ -1,32 +1,12 @@
-## Before opening
+## Change
 
-This repo is issue-first for outside contributions. If you are not `pbakaus` or `abdulwahabone`, please link the issue where a maintainer approved or requested this PR. Unsolicited PRs may be closed without review.
+<!-- What problem does this solve, and what happens after the change? -->
 
-- Linked issue:
-- Contributor status:
-  - [ ] I am `pbakaus` or `abdulwahabone`
-  - [ ] A maintainer approved this PR in the linked issue
+## Validation
 
-## Summary
+<!-- List the checks you ran and their results. Include limitations. -->
 
-<!-- What does this PR change and why? -->
-
-## Type of change
-
-- [ ] New command
-- [ ] New / updated skill reference
-- [ ] New anti-pattern guidance
-- [ ] Bug fix
-- [ ] Documentation update
-- [ ] Build system / tooling
-- [ ] Other: 
-
-## Checklist
-
-- [ ] Source files updated in `source/`
-- [ ] `bun run build` ran successfully
-- [ ] `bun test` passes
-- [ ] Tested with at least one provider (Cursor / Claude Code / Gemini CLI / Codex / Copilot / Grok Build / Kiro / OpenCode / Qoder / Mistral Vibe)
-- [ ] README / DEVELOP.md updated if needed
-- [ ] I reviewed the full diff myself before requesting human review
-- [ ] I disclosed any AI assistance in this PR and related commits/comments, or no AI assistance was used
+- [ ] Updated canonical source and regenerated provider output where needed
+- [ ] Ran the checks appropriate to this change
+- [ ] Reviewed the diff for private data and retained upstream attribution
+- [ ] Disclosed any AI assistance with Assisted-by metadata

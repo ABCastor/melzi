@@ -103,3 +103,95 @@ When this pass clears every Priority Issue it took from a snapshot, close that s
 ```
 
 This closes only the snapshot this pass actually processed; if a newer critique landed meanwhile, its backlog stays live. Do not close when no snapshot was read, when `snapshot_file` was not retained, or when Priority Issues remain.
+
+## Web adaptation implementation
+
+A typed web `adapt` command runs [audit.md](audit.md)'s adaptation evidence pass first, then implements here. Adaptation rethinks the experience for the target context. It does not scale pixels.
+
+### Choose the structure for the context
+
+**Desktop to mobile:** move to a clear single-column or deliberately stacked structure; make components fluid; transform navigation only where the information architecture stays recognizable; prioritize primary content; put secondary content behind progressive disclosure; use concise copy, persistent context, breadcrumbs, or a back path where the task needs them; keep text at a readable 16px baseline; and make every touch target at least 44x44px without relying on hover. Swipe, bottom sheets, drawers, and bottom navigation are available when the interaction and platform expectations justify them, never as automatic mobile substitutions.
+
+**Tablet:** support touch and pointer, portrait and landscape, and intermediate widths. Use two-column, side-panel, master-detail, or multi-column form layouts when they make the task clearer. Do not ship either a stretched phone or a cramped desktop.
+
+**Mobile to desktop:** use horizontal space for side navigation, multiple information panes, rich tables, and detail that benefits from simultaneous visibility. Add keyboard shortcuts, hover detail, context menus, drag and drop, and multi-select only where they remain discoverable and accessible. Keep a max width so a 4K screen does not stretch reading and controls into empty geography.
+
+**Print:** remove interactive chrome, choose logical page breaks, use print-safe colour, set margins, expand hidden or abbreviated content, print full URLs where useful, add page metadata and numbers, and convert interactive charts into readable static forms.
+
+**Email:** keep the layout single-column and about 600px wide, inline styles, use compatibility-safe table layout where clients demand it, make CTAs obvious, avoid hover-dependent behavior, and deep-link complex interaction back to the product.
+
+### Implement with content-driven conditions
+
+Write mobile-first base styles and add complexity with `min-width` queries. Stretch the content until it breaks, then add a breakpoint. Common 640px, 768px, and 1024px points are starting probes, not device truth. Use Grid, Flexbox, container queries, `clamp()`, media queries, and selective display changes according to the actual component.
+
+Detect input capability separately from width:
+
+```css
+@media (pointer: fine) {
+  .button { padding: 8px 16px; }
+}
+
+@media (pointer: coarse) {
+  .button { min-width: 44px; min-height: 44px; padding: 12px 20px; }
+}
+
+@media (hover: hover) {
+  .card:hover { transform: translateY(-2px); }
+}
+```
+
+No required action may depend on hover. Provide touch feedback and place frequent controls within practical reach without forcing a platform-specific mobile-app pattern onto a website.
+
+Handle notches, rounded corners, and home indicators:
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+```
+
+```css
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
+
+.footer {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+```
+
+Use `srcset` width descriptors and `sizes` for resolution selection:
+
+```html
+<img
+  src="hero-800.jpg"
+  srcset="hero-400.jpg 400w, hero-800.jpg 800w, hero-1200.jpg 1200w"
+  sizes="(max-width: 768px) 100vw, 50vw"
+  alt="..."
+>
+```
+
+Use `picture` when the composition itself needs a different crop:
+
+```html
+<picture>
+  <source media="(min-width: 768px)" srcset="wide.jpg">
+  <source media="(max-width: 767px)" srcset="tall.jpg">
+  <img src="fallback.jpg" alt="...">
+</picture>
+```
+
+Transform navigation in stages only when the target needs it: drawer on narrow screens, compact horizontal form on intermediate widths, full labels on wide screens. Tables may become labelled record blocks when columns cannot remain legible. `<details>` and `<summary>` are useful for secondary content that can truthfully collapse. Hiding content still downloads it; use selective loading for expensive secondary assets.
+
+### Protect the product across contexts
+
+Core functionality stays available on small screens. Keep one information architecture even when its presentation changes. Support touch on desktop hardware, landscape on phones and tablets, older devices, slow connections, and both fine and coarse pointers. Prefer feature detection to device-model detection. Keep one codebase unless the product itself is different.
+
+DevTools proves layout, not touch, keyboard appearance, real CPU and memory pressure, network behavior, or platform font rendering. Test at least one real iPhone, one real Android device, and a tablet when the product ships there. Include Safari, Chrome, Firefox, and Edge across the supported iOS, Android, Windows, and macOS paths; portrait and landscape; keyboard, mouse, touch, and zoom; 320px through large desktop; and a throttled network.
+
+**Custom controls** (sliders, drag surfaces, scrollable control strips): a before/after slider can pass every width check above and still refuse to drag on iOS, so exercise each one in scope in the same batched round as the checks above:
+
+- **Primary gesture**: Tap it and confirm it responds as designed, then drag it with the target input method; the drag must complete, not just start
+- **Scroll across it**: A swipe along the page's scroll axis across the control scrolls the page or container without activating it; a drag that starts on the control along its axis moves the control, not the page. Neither failure throws an error, so try both
+- **Evidence**: Say what produced the evidence: an emulated viewport, synthesized touch input through a browser tool, which engine ran it (Chromium is not Safari), or a physical device. Screenshots and resized viewports verify layout, never a gesture. Name what stayed untested and move on; unreachable hardware is a reported gap, not a blocker

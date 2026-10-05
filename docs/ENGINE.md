@@ -230,27 +230,12 @@ carries `pristine/*` rules on all three hooks and reaches the engine through
 this feature, replacing the `detectText` call it makes into the npm
 `impeccable@3` package today.
 
-## Releases
+## Build artifacts and release status
 
-Remote skill ZIPs require a pinned-key signature before extraction. See
-[bundle signing](BUNDLE-SIGNING.md) for the 1Password setup and the required
-signature-first rollout order.
+This fork currently supports local source builds. No Melzi engine binaries or npm platform engine packages are published. The manual `.github/workflows/release-engine.yml` builds five native targets and uploads unsigned artifacts without publishing a release. A future release needs its own signing identity, checksums, reviewed distribution configuration, and release verification.
 
-Two release kinds touch the runtime, in this order:
+Melzi's `install`, `update`, and `check` verbs require an explicit existing local `IMPECCABLE_BUNDLE_PATH` before prompts, project scans, or writes. Without it they fail with source-build and local installation instructions. Help describes this boundary. The inherited remote signing protocol/keyring remain unchanged, but this fork does not enable remote distribution. Install the generated skill directory using the root README, or explicitly supply a locally built bundle to the native installer.
 
-1. **Engine** (`engine-v<ENGINE_VERSION>`): `bun run release:engine` verifies
-   the version, the npm platform-package pins and a clean tree, then tags and
-   pushes; `.github/workflows/release-engine.yml` builds the five targets and
-   publishes the binaries with `.sha256` sidecars. The launcher, the npm shim
-   and `impeccable install` download from
-   `github.com/pbakaus/impeccable/releases/download/engine-v<X>/`.
-2. **npm platform packages**, then the **skill** and **CLI** releases, which
-   `scripts/check-engine-release.mjs` gates on the engine release.
+The extension vendors its own WASM core and never executes the engine binary. Building it requires a Rust toolchain and `wasm-pack`; see `bun run build:extension`.
 
-The extension ships its own vendored WASM core and never execs the engine
-binary, so `bun run release:ext` is exempt from that gate. It does need
-`bun run build:extension` (and therefore a Rust toolchain and `wasm-pack`)
-before the zip is attached.
-
-CI runs the workspace build and tests (`rust`, `rust-windows`) and replays the
-oracle against a release build from the checkout under test.
+CI runs the Rust workspace build and tests and replays the oracle against a release build from the checkout under test. See [Windows artifact status](WINDOWS-SIGNING.md) and [inherited bundle signature contract](BUNDLE-SIGNING.md).

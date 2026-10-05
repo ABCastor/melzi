@@ -24,7 +24,7 @@ const CURSOR_DENY_LIMIT: f64 = 4000.0;
 /// gate must not chew on it unbounded (triage A3). Over-cap content skips
 /// the gate (allow), the same fail-open shape as an unreadable original.
 const MAX_SCANNED_BYTES: u64 = 1024 * 1024;
-const BLOCK_PREFIX: &str = "Impeccable design hook blocked this write before it landed. ";
+const BLOCK_PREFIX: &str = "Melzi design hook blocked this write before it landed. ";
 
 /// The proposed content, or the reason the gate cannot scan it.
 enum Proposed {
@@ -559,8 +559,8 @@ fn cursor_block_message(
         },
     );
     rendered.replacen(
-        "[impeccable@1] Design hook findings requiring review",
-        &format!("[impeccable@1] {BLOCK_PREFIX}Design hook findings requiring review"),
+        "[melzi@1] Design hook findings requiring review",
+        &format!("[melzi@1] {BLOCK_PREFIX}Design hook findings requiring review"),
         1,
     )
 }
@@ -871,7 +871,7 @@ fn main_flow(rt: &Runtime, stdin: &str) -> Out {
     persist_cache(rt, &cwd, &cache);
     if count > EDIT_COUNT_THRESHOLD as f64 {
         let warning = format!(
-            "{message}\n\nThis is the {}th repeated denial for the same file and finding signature, so Impeccable is allowing this write to avoid a loop. Reconsider the issue immediately after the tool runs.",
+            "{message}\n\nThis is the {}th repeated denial for the same file and finding signature, so Melzi is allowing this write to avoid a loop. Reconsider the issue immediately after the tool runs.",
             js::number_to_string(count)
         );
         return allow(

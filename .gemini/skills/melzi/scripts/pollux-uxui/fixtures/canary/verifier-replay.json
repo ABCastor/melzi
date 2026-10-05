@@ -1,0 +1,1 @@
+{ "snapshotRefCount": 12, "replayedClick": true, "network": [ {"method":"GET","url":"http://localhost:8798/assets/avatar.png","status":404}, {"method":"POST","url":"http://localhost:8798/api/save","status":501} ], "savePostStatus": 501, "reproducedFailure": true }

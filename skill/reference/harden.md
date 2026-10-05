@@ -121,9 +121,9 @@ border-inline-end: 1px solid; /* Not border-right */
 new Intl.DateTimeFormat('en-US').format(date); // 1/15/2024
 new Intl.DateTimeFormat('de-DE').format(date); // 15.1.2024
 
-new Intl.NumberFormat('en-US', { 
-  style: 'currency', 
-  currency: 'USD' 
+new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD'
 }).format(1234.56); // $1,234.56
 ```
 
@@ -240,7 +240,7 @@ t('items', { count }) // Handles complex plural rules
 **Constraint handling**:
 ```html
 <!-- Set clear constraints -->
-<input 
+<input
   type="text"
   maxlength="100"
   pattern="[A-Za-z0-9]+"
@@ -342,4 +342,4 @@ Test thoroughly with edge cases:
 
 For gestures, say what produced the evidence (emulated viewport, synthesized touch, which engine, physical device) and name what stayed untested.
 
-When edge cases are covered, hand off to `{{command_prefix}}impeccable polish` for the final pass.
+When edge cases are covered, hand off to `{{command_prefix}}melzi polish` for the final pass.

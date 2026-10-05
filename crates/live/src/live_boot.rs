@@ -79,7 +79,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
             "projectRoot": sel.project_root,
             "repoRoot": sel.repo_root,
             "targetCandidates": sel.target_candidates,
-            "hint": "Ask the user which app Impeccable should use, then rerun live from that child app cwd. Use --target <path> only as a fallback or explicit path diagnostic.",
+            "hint": "Ask the user which app Melzi should use, then rerun live from that child app cwd. Use --target <path> only as a fallback or explicit path diagnostic.",
         });
         println(io, &json_pretty(&payload));
         return 0;

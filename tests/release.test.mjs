@@ -237,7 +237,7 @@ describe('release.mjs guards', () => {
     const tweetMatch = stdout.match(/--- Tweet \((\d+)\/280 chars\)[^\n]*---\n([\s\S]*?)\n--- end tweet ---/);
     assert.ok(tweetMatch, `no tweet block in output:\n${stdout}`);
     assert.ok(Number(tweetMatch[1]) <= 280);
-    assert.match(tweetMatch[2], /Impeccable v1\.2\.3 is out\./);
+    assert.match(tweetMatch[2], /Melzi v1\.2\.3 is out\./);
     assert.match(tweetMatch[2], /releases\/tag\/skill-v1\.2\.3/);
     assert.match(tweetMatch[2], /• Loader contract pinned/);
   });

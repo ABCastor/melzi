@@ -710,6 +710,8 @@ pub struct AllowedFontSize {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct DesignSystem {
     pub present: bool,
+    pub from_signature: bool,
+    pub allowed_font_families: Vec<String>,
     /// Class selectors the document names as its own (REN-406). Filled where
     /// the markdown itself is at hand; the allowlists come from frontmatter
     /// and sidecar, this comes from the prose.
@@ -1047,9 +1049,98 @@ fn mtime_ms(p: &str) -> Option<f64> {
     Some(d.as_secs_f64() * 1000.0)
 }
 
+// JS-PARITY: signatureFrontmatter accepts only object-valued invariants and
+// string leaves, skips role/note/concept and bare prose, tries colors first,
+// then ASCII font declarations of 1-60 characters and at most six words.
+re!(SIGNATURE_FONT_VALUE_RE, r#"^[a-zA-Z0-9_ ,'"().+\-]{1,60}$"#);
+
+fn build_signature_design_system(raw: &Value, source_path: &str) -> Option<DesignSystem> {
+    let invariants = raw.get("invariants")?.as_object()?;
+    let mut colors = Map::new();
+    let mut typography = Map::new();
+    let mut families = Vec::new();
+    for (name, invariant) in invariants {
+        let Some(invariant) = invariant.as_object() else { continue };
+        for (key, value) in invariant {
+            let Some(value) = value.as_str() else { continue };
+            if matches!(key.as_str(), "role" | "note" | "concept") { continue; }
+            let label = format!("{name}.{key}");
+            if parse_design_color(value).is_some() {
+                colors.insert(label, Value::String(value.to_string()));
+                continue;
+            }
+            let text = js::trim(value);
+            if !SIGNATURE_FONT_VALUE_RE.is_match(text) || WS_RUN_RE.split(text).count() > 6 { continue; }
+            let fonts = split_font_stack(value);
+            if fonts.is_empty() { continue; }
+            typography.insert(label, serde_json::json!({"fontFamily": value}));
+            for font in fonts {
+                if is_generic_font(&font) && !families.contains(&font) { families.push(font); }
+            }
+        }
+    }
+    let mut frontmatter = Map::new();
+    frontmatter.insert("colors".into(), Value::Object(colors));
+    frontmatter.insert("typography".into(), Value::Object(typography));
+    let mut ds = normalize_design_system(Some(&frontmatter), None, Some(source_path), None, false);
+    ds.from_signature = true;
+    ds.allowed_font_families = families;
+    ds.has_fonts = !ds.allowed_fonts.is_empty() || !ds.allowed_font_families.is_empty();
+    (ds.has_fonts || ds.has_colors).then_some(ds)
+}
+
+// JS-PARITY: signatureAppliesAt checks PRODUCT.md before project boundaries,
+// stops at home, and deliberately does not treat the hook's cache as intent.
+fn signature_applies_at(start_dir: &str, cwd: &str, home: &str) -> bool {
+    let mut dir = jsp::resolve(cwd, &[start_dir]);
+    let home_dirs = home_dir_forms(cwd, home);
+    loop {
+        if exists(&jsp::join(&[&dir, "PRODUCT.md"])) { return true; }
+        if PROJECT_ROOT_MARKERS.iter().any(|m| exists(&jsp::join(&[&dir, m])))
+            || home_dirs.contains(&dir) { return false; }
+        let parent = jsp::dirname(&dir);
+        if parent == dir { return false; }
+        dir = parent;
+    }
+}
+
+thread_local! {
+    // JS-PARITY: loadSignatureDesignSystem memoizes even missing/malformed
+    // signatures by resolved home for the lifetime of a CLI/hook invocation.
+    static SIGNATURE_CACHE: std::cell::RefCell<DesignSystemCache> = std::cell::RefCell::new(HashMap::new());
+}
+
+fn load_signature_design_system(cwd: &str, home: &str) -> Option<Rc<DesignSystem>> {
+    if std::env::var("IMPECCABLE_NO_SIGNATURE_FALLBACK").as_deref() == Ok("1") { return None; }
+    let key = jsp::resolve(cwd, &[home]);
+    SIGNATURE_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        cache.entry(key.clone()).or_insert_with(|| {
+            let file = jsp::join(&[&key, ".impeccable", "signature.json"]);
+            read_json(&file).and_then(|raw| build_signature_design_system(&raw, &file)).map(Rc::new)
+        }).clone()
+    })
+}
+
+/// JS: design-system.mjs#relabelSignatureFindings
+pub fn relabel_signature_findings(mut findings: Vec<Finding>, ds: &DesignSystem) -> Vec<Finding> {
+    if ds.from_signature {
+        for finding in &mut findings {
+            finding.snippet = finding.snippet.replace("DESIGN.md", "your signature");
+        }
+    }
+    findings
+}
+
 /// JS: design-system.mjs#loadDesignSystemForCwd
 pub fn load_design_system_for_cwd(cwd: &str) -> Option<DesignSystem> {
-    let md = resolve_design_md_path(cwd)?;
+    let Some(md) = resolve_design_md_path(cwd) else {
+        let home = impeccable_common::Io::stdio().home()?;
+        let home = home.to_string_lossy();
+        return signature_applies_at(cwd, cwd, &home)
+            .then(|| load_signature_design_system(cwd, &home)).flatten()
+            .map(|ds| (*ds).clone());
+    };
     let md_stat = mtime_ms(&md.path);
     let text = read_text(&md.path)?;
     let frontmatter = parse_frontmatter(&text)?;
@@ -1100,9 +1191,9 @@ pub struct DesignRoot {
     pub has_design: bool,
 }
 
-/// JS: design-system.mjs#readWorkspacePatternGroups — Impeccable projectRoots
+/// JS: design-system.mjs#readWorkspacePatternGroups — Melzi projectRoots
 /// govern any path they match (positive or negated); package-manager globs
-/// only apply to paths the Impeccable group does not match.
+/// only apply to paths the Melzi group does not match.
 fn read_workspace_pattern_groups(dir: &str) -> (Vec<String>, Vec<String>) {
     let mut impeccable: Vec<String> = Vec::new();
     for name in ["config.json", "config.local.json"] {
@@ -1435,8 +1526,10 @@ pub fn load_design_system_for_target(
     let start_dir = design_system_start_dir(target_path, cwd);
     let found = find_design_root(&start_dir, cwd, home);
     let key = match &found {
-        Some(f) => format!("root:{}", f.dir),
-        None => "\0none".to_string(),
+        Some(f) if f.has_design => format!("root:{}", f.dir),
+        // Unlike the old shared null key, a fallback is scoped to the target
+        // and home. Never let an unscoped file reuse a scoped target's answer.
+        _ => format!("signature:{}:{}", jsp::resolve(cwd, &[home]), start_dir),
     };
     if let Some(cache) = &cache {
         if let Some(hit) = cache.get(&key) {
@@ -1445,6 +1538,7 @@ pub fn load_design_system_for_target(
     }
     let loaded = match &found {
         Some(f) if f.has_design => load_design_system_for_cwd(&f.dir).map(Rc::new),
+        _ if signature_applies_at(&start_dir, cwd, home) => load_signature_design_system(cwd, home),
         _ => None,
     };
     if let Some(cache) = cache {
@@ -1457,11 +1551,24 @@ pub fn load_design_system_for_target(
 
 /// JS: design-system.mjs#isAllowedFont
 pub fn is_allowed_font(font: &str, ds: Option<&DesignSystem>) -> bool {
+    is_allowed_font_stack(font, "", ds)
+}
+
+/// JS: isAllowedFont and satisfiesAllowedFamily. Named-face proxies cannot
+/// measure glyph widths: Menlo without a monospace fallback still flags.
+pub fn is_allowed_font_stack(font: &str, stack: &str, ds: Option<&DesignSystem>) -> bool {
     if font.is_empty() || is_generic_font(font) {
         return true;
     }
     match ds {
-        Some(ds) if ds.has_fonts => ds.allowed_fonts.iter().any(|f| f == font),
+        Some(ds) if ds.has_fonts => ds.allowed_fonts.iter().any(|f| f == font)
+            || split_font_stack(stack).iter().any(|f| ds.allowed_font_families.contains(f))
+            || ds.allowed_font_families.iter().any(|family| match family.strip_prefix("ui-").unwrap_or(family) {
+                "monospace" => font.contains("mono"),
+                "serif" => font.contains("serif") && !font.contains("sans"),
+                "sans-serif" => font.contains("sans"),
+                _ => false,
+            }),
         _ => true,
     }
 }
@@ -1764,7 +1871,7 @@ fn check_font_stack(
     context: &str,
 ) -> Vec<Finding> {
     let primary = primary_font(stack);
-    if primary.is_empty() || is_allowed_font(&primary, Some(ds)) {
+    if primary.is_empty() || is_allowed_font_stack(&primary, stack, Some(ds)) {
         return vec![];
     }
     let display = title_case_ascii_words(&primary);
@@ -1971,7 +2078,7 @@ pub fn check_source_design_system(
             }
         }
     }
-    dedupe_design_findings(findings)
+    relabel_signature_findings(dedupe_design_findings(findings), ds)
 }
 
 /// JS: design-system.mjs#isTransparentCss
@@ -2238,6 +2345,70 @@ mod tests {
     /// An isolated home no walk in these fixtures ever reaches.
     fn far_home() -> String {
         "/nonexistent-home-for-design-system-tests".to_string()
+    }
+
+    #[test]
+    fn signature_fallback_scoped_palette_and_target_cache() {
+        let home = TempDir::new("signature-home");
+        home.write(".impeccable/signature.json", r##"{"invariants":{"color":{"value":"#FD4E5A"},"type":{"content":"Source Serif 4","data":"monospace"}}}"##);
+        let d = TempDir::new("signature-scope");
+        d.write("mine/PRODUCT.md", "# Product");
+        d.mkdir("mine/src");
+        d.mkdir("stranger");
+        for order in [["mine/src/a.css", "stranger/a.css"], ["stranger/a.css", "mine/src/a.css"]] {
+            let mut cache = DesignSystemCache::new();
+            for target in order {
+                let loaded = load_design_system_for_target(&d.join(target), Some(&mut cache), "/", &home.path());
+                if target.starts_with("mine") {
+                    let ds = loaded.expect("PRODUCT.md must enable the signature fallback");
+                    assert!(is_allowed_color_raw("rgb(253, 78, 90)", Some(&ds)));
+                    assert!(!is_allowed_color_raw("#7CFC00", Some(&ds)));
+                    assert!(is_allowed_font("source serif 4", Some(&ds)));
+                    assert!(!is_allowed_font("comic sans ms", Some(&ds)));
+                    assert!(!ds.has_radii && !ds.has_font_sizes);
+                } else {
+                    assert!(loaded.is_none(), "unscoped target must not reuse a scoped cached system");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn signature_normalization_and_family_limits_match_js() {
+        let raw = serde_json::json!({"invariants": {
+            "prose": "#7CFC00", "array": ["#7CFC00"],
+            "palette": {"value": "#FD4E5A", "same": "rgb(253, 78, 90)", "note": "#7CFC00"},
+            "type": {"data": "monospace", "content": "Source Serif 4", "role": "Arial",
+                "long": "one two three four five six seven", "unicode": "Écriture", "sentence": "Avoid: Arial"}
+        }});
+        let ds = build_signature_design_system(&raw, "/signature.json").unwrap();
+        assert!(ds.from_signature);
+        assert_eq!(ds.allowed_color_keys.len(), 1);
+        assert_eq!(ds.allowed_fonts, ["source serif 4"]);
+        assert_eq!(ds.allowed_font_families, ["monospace"]);
+        assert!(is_allowed_font_stack("consolas", "Consolas, monospace", Some(&ds)));
+        assert!(is_allowed_font("ibm plex mono", Some(&ds)));
+        assert!(!is_allowed_font("menlo", Some(&ds)));
+        assert!(!ds.has_radii && !ds.has_font_sizes);
+        let family = build_signature_design_system(&serde_json::json!({"invariants":{"type":{"data":"ui-serif"}}}), "").unwrap();
+        assert!(family.has_fonts && family.allowed_fonts.is_empty());
+        assert!(is_allowed_font("source serif 4", Some(&family)));
+        assert!(!is_allowed_font("source sans serif", Some(&family)));
+        for raw in [serde_json::json!([]), serde_json::json!({"invariants": []}), serde_json::json!({"invariants":{"note":{"note":"quiet"}}})] {
+            assert!(build_signature_design_system(&raw, "").is_none());
+        }
+    }
+
+    #[test]
+    fn signature_cache_is_per_home_and_preserves_first_read() {
+        let home = TempDir::new("signature-cache");
+        home.write(".impeccable/signature.json", r##"{"invariants":{"color":{"value":"#FD4E5A"}}}"##);
+        let first = load_signature_design_system("/", &home.path()).unwrap();
+        home.write(".impeccable/signature.json", "null");
+        let second = load_signature_design_system("/", &home.path()).unwrap();
+        assert!(Rc::ptr_eq(&first, &second));
+        let absent = TempDir::new("signature-absent");
+        assert!(load_signature_design_system("/", &absent.path()).is_none());
     }
 
     #[test]
@@ -2526,5 +2697,3 @@ mod tests {
         assert_eq!(js_string(&parse_scalar("007")), "7");
     }
 }
-
-

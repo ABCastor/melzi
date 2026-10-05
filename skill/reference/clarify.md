@@ -91,4 +91,24 @@ Read the flow in context and test:
 
 The final copy is as short as it can be without removing meaning or recovery.
 
-When the language reads cleanly, hand off to `{{command_prefix}}impeccable polish` for the final pass.
+When the language reads cleanly, hand off to `{{command_prefix}}melzi polish` for the final pass.
+
+## Onboarding language and first-value states
+
+A typed `onboard` command loads this section and the onboarding flow in [new-work.md](new-work.md). Establish the user's experience level, motivation, available time, known alternatives, and the first action that proves value. Onboarding gets people to that action; it does not teach the whole product.
+
+Keep the welcome specific: what the product is, what the user will accomplish, the honest time required, and a visible skip path. Ask only for account information required now and explain a request only when its purpose is unclear. Introduce one to three core concepts through the real interface, show progress through a short flow, and end with a real success plus the next useful action.
+
+Teach at the point of use. A first-use empty state says what will appear, why it matters, and how to create or import the first item. Keep first-use, user-cleared, no-results, permissions, and load-failure states distinct:
+
+- **First use:** explain the value and offer a real first action or template. A useful shape is “No projects yet”, one sentence saying what projects enable, then `Create your first project` and `Start from template`.
+- **User cleared:** acknowledge the empty collection lightly and make recreation easy.
+- **No results:** name the search or filter state, suggest a better query, and offer to clear filters.
+- **No permission:** explain the access boundary and how to request access.
+- **Load failure:** name what failed and provide retry or another route.
+
+Contextual tips appear when the feature becomes relevant, point to the actual control, state one benefit, and can be dismissed permanently. Feature announcements say what changed and why it matters, then offer the real action. Help links sit near the difficult concept, use meaningful link text, and keep keyboard shortcuts visible where they save time.
+
+Tours teach a workflow rather than naming controls. Keep them to three to seven short steps, allow skip and replay, and let the user operate real controls. Interactive tutorials use sample data, a concrete objective, step validation, and a clear graduation into the actual product. A separate tutorial mode that does not behave like the product teaches the wrong system.
+
+Never patronize, repeat obvious labels, hide Skip, replay a dismissed tip, show the same initial onboarding to returning users, block the whole interface during a tour, or front-load advanced capability. Track seen and completed states and respect the record.

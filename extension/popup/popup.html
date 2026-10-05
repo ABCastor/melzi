@@ -13,7 +13,7 @@
         <path d="M22 1 L25 1 Q31 1 31 7 L31 25 Q31 31 25 31 L12 31 Z"/>
       </svg>
     </span>
-    <h1>Impeccable</h1>
+    <h1>Melzi</h1>
   </header>
 
   <div class="count-display" id="count-display">
@@ -28,8 +28,20 @@
 
   <p class="scan-error" id="scan-error" hidden></p>
 
+  <section class="design-lab-card" aria-labelledby="design-lab-title">
+    <div class="design-lab-head">
+      <h2 id="design-lab-title">Design Lab</h2>
+      <span class="design-lab-state" id="design-lab-state">Off</span>
+    </div>
+    <p>Comment, capture, and test palettes or font pairings on this page.</p>
+    <button class="btn btn-lab" id="btn-design-lab" type="button" aria-pressed="false">
+      Turn Design Lab on
+    </button>
+    <p class="scan-error design-lab-error" id="design-lab-error" hidden></p>
+  </section>
+
   <footer>
-    <a href="https://impeccable.style" id="link-site">impeccable.style</a>
+    <span id="link-site">Melzi</span>
   </footer>
 
   <script src="popup.js"></script>

@@ -60,7 +60,7 @@ export const REPO_PATH_ENV = 'IMPECCABLE_TEST_REPO_PATH';
 
 /**
  * A command line belonging to a live server. Matches the Node script
- * (`.../live-server.mjs`) and the engine verb (`.../impeccable live-server`).
+ * (`.../live-server.mjs`) and the engine verb (`.../melzi live-server`).
  */
 // `ps -E` prints every process's whole environment. On a laptop with a thousand
 // processes that passes Node's default 1 MiB `maxBuffer`, at which point
@@ -74,7 +74,7 @@ const LIVE_SERVER_RE = /(^|[\s/\\])live-server(\.mjs|\.exe)?(\s|$)/;
 /**
  * A stable, opaque id for one checkout: the first 16 hex characters of the
  * sha256 of its real path. Symlinked and `/private`-prefixed spellings of the
- * same directory resolve to the same marker; `/work/impeccable` and
+ * same directory resolve to the same marker; `/work/melzi` and
  * `/work/impeccable-copy` do not share a prefix.
  */
 export function repoMarker(repoRoot) {

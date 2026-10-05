@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { stageOpenAIPlugin } from '../scripts/lib/openai-plugin.js';
+import { buildCodexPluginManifest } from '../scripts/lib/codex-plugin.js';
 import { buildCodexPluginHooksManifest } from '../scripts/lib/transformers/hooks.js';
 
 function write(root, rel, contents) {
@@ -12,6 +13,37 @@ function write(root, rel, contents) {
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   fs.writeFileSync(abs, contents);
 }
+
+describe('buildCodexPluginManifest: optional homepage', () => {
+  const base = {
+    name: 'melzi',
+    version: '3.9.1',
+    repository: 'https://github.com/pbakaus/impeccable',
+  };
+
+  // This fork has no published site, so the root manifest carries no homepage.
+  // Every URL built from it must be dropped, never emitted as the literal
+  // string "undefined/privacy" into a store submission manifest.
+  it('omits homepage-derived URLs when there is no homepage', () => {
+    const m = buildCodexPluginManifest(base);
+    assert.equal('homepage' in m, false);
+    assert.equal('url' in m.author, false);
+    assert.equal('websiteURL' in m.interface, false);
+    assert.equal('privacyPolicyURL' in m.interface, false);
+    assert.doesNotMatch(JSON.stringify(m), /undefined/);
+    // Non-homepage fields still render.
+    assert.equal(m.interface.displayName, 'Melzi');
+    assert.match(m.interface.termsOfServiceURL, /^https:\/\/github\.com\//);
+  });
+
+  it('emits homepage-derived URLs when a homepage is present', () => {
+    const m = buildCodexPluginManifest({ ...base, homepage: 'https://example.invalid' });
+    assert.equal(m.homepage, 'https://example.invalid');
+    assert.equal(m.author.url, 'https://example.invalid');
+    assert.equal(m.interface.websiteURL, 'https://example.invalid');
+    assert.equal(m.interface.privacyPolicyURL, 'https://example.invalid/privacy');
+  });
+});
 
 describe('OpenAI plugin staging', () => {
   let root;
@@ -22,38 +54,40 @@ describe('OpenAI plugin staging', () => {
     dist = path.join(root, 'dist');
 
     write(root, '.claude-plugin/plugin.json', JSON.stringify({
-      name: 'impeccable',
+      name: 'melzi',
       version: '3.9.1',
       author: {
         name: 'Paul Bakaus',
         email: 'paul@example.com',
       },
-      homepage: 'https://impeccable.style',
+      homepage: 'https://example.invalid',
       repository: 'https://github.com/pbakaus/impeccable',
     }));
     write(root, 'scripts/lib/assets/plugin-icon.png', 'icon');
+    write(root, 'LICENSE', 'license');
+    write(root, 'NOTICE.md', 'upstream notice');
 
     write(
       root,
-      'dist/codex/.codex/skills/impeccable/SKILL.md',
-      '---\nname: impeccable\n---\n\nUse $impeccable. Run .codex/skills/impeccable/scripts/context.mjs.\n',
+      'dist/codex/.codex/skills/melzi/SKILL.md',
+      '---\nname: melzi\n---\n\nUse $melzi. Run .codex/skills/melzi/scripts/context.mjs.\n',
     );
     write(
       root,
-      'dist/codex/.codex/skills/impeccable/agents/openai.yaml',
+      'dist/codex/.codex/skills/melzi/agents/openai.yaml',
       'interface:\n  display_name: Impeccable\n',
     );
     write(
       root,
-      'dist/codex/.codex/skills/impeccable/agents/impeccable_asset_producer.toml',
+      'dist/codex/.codex/skills/melzi/agents/impeccable_asset_producer.toml',
       'name = "impeccable_asset_producer"\n',
     );
 
     // A Claude payload exists too. The OpenAI stage must never read it.
     write(
       root,
-      'dist/claude-code/.claude/skills/impeccable/SKILL.md',
-      '---\nname: impeccable\n---\n\nUse /impeccable. Run .claude/skills/impeccable/scripts/context.mjs.\n',
+      'dist/claude-code/.claude/skills/melzi/SKILL.md',
+      '---\nname: melzi\n---\n\nUse /melzi. Run .claude/skills/melzi/scripts/context.mjs.\n',
     );
   });
 
@@ -63,26 +97,26 @@ describe('OpenAI plugin staging', () => {
 
   it('packages the Codex skill, agents, manifest, icon, and compatible hook', () => {
     const pluginRoot = stageOpenAIPlugin(root, dist);
-    const skill = fs.readFileSync(path.join(pluginRoot, 'skills/impeccable/SKILL.md'), 'utf8');
+    const skill = fs.readFileSync(path.join(pluginRoot, 'skills/melzi/SKILL.md'), 'utf8');
     const manifest = JSON.parse(fs.readFileSync(path.join(pluginRoot, '.codex-plugin/plugin.json'), 'utf8'));
     const hooks = JSON.parse(fs.readFileSync(path.join(pluginRoot, 'hooks/hooks.json'), 'utf8'));
 
-    assert.match(skill, /\$impeccable/);
-    assert.match(skill, /\.codex\/skills\/impeccable/);
-    assert.doesNotMatch(skill, /(?:^|[\s`(])\/impeccable\b/m);
-    assert.doesNotMatch(skill, /\.claude\/skills\/impeccable/);
+    assert.match(skill, /\$melzi/);
+    assert.match(skill, /\.codex\/skills\/melzi/);
+    assert.doesNotMatch(skill, /(?:^|[\s`(])\/melzi\b/m);
+    assert.doesNotMatch(skill, /\.claude\/skills\/melzi/);
 
-    assert.ok(fs.existsSync(path.join(pluginRoot, 'skills/impeccable/agents/openai.yaml')));
+    assert.ok(fs.existsSync(path.join(pluginRoot, 'skills/melzi/agents/openai.yaml')));
     assert.ok(fs.existsSync(path.join(
       pluginRoot,
-      'skills/impeccable/agents/impeccable_asset_producer.toml',
+      'skills/melzi/agents/impeccable_asset_producer.toml',
     )));
     assert.ok(fs.existsSync(path.join(pluginRoot, 'assets/icon.png')));
 
     assert.equal(manifest.skills, './skills/');
     assert.deepEqual(manifest.author, {
       name: 'Renaissance Geek Inc',
-      url: 'https://impeccable.style',
+      url: 'https://example.invalid',
     });
     assert.equal('email' in manifest.author, false);
     assert.equal(manifest.interface.shortDescription, 'Design and refine interfaces');

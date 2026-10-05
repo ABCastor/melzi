@@ -1,0 +1,20 @@
+{
+  "attributes": [
+    { "id": "airy", "label": "generous whitespace" },
+    { "id": "dense", "label": "dense information" }
+  ],
+  "vectors": {
+    "airy-high": { "airy": 1, "dense": 0 },
+    "airy-low": { "airy": 0, "dense": 0 },
+    "dense-high": { "airy": 0, "dense": 1 },
+    "dense-low": { "airy": 0, "dense": 0 }
+  },
+  "comparisons": [
+    { "a": "airy-high", "b": "airy-low", "outcome": "a", "responseMs": 700, "weight": 1.1 },
+    { "a": "airy-high", "b": "airy-low", "outcome": "a", "responseMs": 800, "weight": 1.05 },
+    { "a": "airy-high", "b": "airy-low", "outcome": "a", "responseMs": 900, "weight": 1.02 },
+    { "a": "dense-high", "b": "dense-low", "outcome": "b", "responseMs": 3000, "weight": 0.75 },
+    { "a": "dense-high", "b": "dense-low", "outcome": "b", "responseMs": 4200, "weight": 0.7 },
+    { "a": "dense-high", "b": "dense-low", "outcome": "tie", "responseMs": 3000, "timedOut": true, "weight": 0.35 }
+  ]
+}

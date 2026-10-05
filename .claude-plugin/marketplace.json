@@ -1,25 +1,23 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "impeccable",
+  "name": "melzi",
   "metadata": {
-    "description": "Design fluency for AI harnesses. 1 skill, 24 commands, and curated anti-patterns for impeccable frontend design."
+    "description": "Design fluency for AI harnesses. 1 skill, 21 canonical commands, and curated anti-patterns for impeccable frontend design."
   },
   "owner": {
-    "name": "Paul Bakaus",
-    "email": "paul@paulbakaus.com"
+    "name": "Anneo22"
   },
   "plugins": [
     {
-      "name": "impeccable",
-      "description": "Design fluency for frontend development. 1 skill with 24 commands (/impeccable polish, /impeccable audit, /impeccable critique, etc.) and curated anti-pattern detection.",
+      "name": "melzi",
+      "description": "Design fluency for frontend development. 1 skill with 21 canonical commands (/melzi polish, /melzi audit, /melzi critique, etc.) and curated anti-pattern detection.",
       "version": "4.4.0",
       "author": {
-        "name": "Paul Bakaus",
-        "email": "paul@paulbakaus.com"
+        "name": "Anneo22"
       },
       "source": "./plugin",
       "category": "design",
-      "homepage": "https://impeccable.style",
+      "homepage": "https://github.com/ABCastor/melzi",
       "tags": [
         "design",
         "frontend",

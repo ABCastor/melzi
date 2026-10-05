@@ -1,0 +1,48 @@
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+
+# HTML pages: browser always revalidates, CDN caches 1h
+/*.html
+  Cache-Control: public, max-age=0, s-maxage=3600, stale-while-revalidate=600
+
+# Hashed JS/CSS bundles: immutable (filename changes on content change)
+/assets/*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.css
+  Cache-Control: public, max-age=31536000, immutable
+
+# Static images and logos: 1 week + 1 day stale
+/assets/*.png
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/assets/*.svg
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/assets/*.webp
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/antipattern-images/*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+# Root static assets (favicon, og-image, etc.)
+/favicon.svg
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/og-image.jpg
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/apple-touch-icon.png
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+# ZIP downloads: 1h cache
+/dist/*.zip
+  Cache-Control: public, max-age=3600, stale-while-revalidate=600
+
+# API routes: CDN caches 24h
+/api/*
+  Cache-Control: public, s-maxage=86400, stale-while-revalidate=3600
+
+/_data/api/*
+  Cache-Control: public, s-maxage=86400, stale-while-revalidate=3600

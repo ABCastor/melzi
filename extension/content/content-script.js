@@ -1,5 +1,5 @@
 /**
- * Impeccable DevTools Extension - Content Script
+ * Melzi DevTools Extension - Content Script
  *
  * Runs in the tab's isolated world with two generated companions injected
  * before it (detector/snapshot.js, detector/overlay.js). A scan is:

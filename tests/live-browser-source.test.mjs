@@ -347,7 +347,7 @@ describe('live-browser source contracts', () => {
   it('keeps sendEvent fire-and-forget by default while accept/discard opt into rejection', () => {
     assert.match(
       SOURCE,
-      /function sendEvent\(msg, opts\)[\s\S]*if \(opts && opts\.throwOnError\) \{[\s\S]*console\.error\('\[impeccable\] Failed to send event:', err\);[\s\S]*throw err;[\s\S]*\}[\s\S]*console\.debug\('\[impeccable\] Dropped optional live event:', err\);[\s\S]*return null;/,
+      /function sendEvent\(msg, opts\)[\s\S]*if \(opts && opts\.throwOnError\) \{[\s\S]*console\.error\('\[melzi\] Failed to send event:', err\);[\s\S]*throw err;[\s\S]*\}[\s\S]*console\.debug\('\[melzi\] Dropped optional live event:', err\);[\s\S]*return null;/,
       'event=live_browser.send_event_contract actor=browser operation=send_event_failure risk=fire_and_forget_callers_get_unhandled_rejections expected=default swallow with opt-in throw actual=missing',
     );
     assert.match(SOURCE, /if \(res\.ok\) return res;[\s\S]*const body = await res\.json\(\)\.catch\(\(\) => \(\{\}\)\);[\s\S]*handleFailure\(new Error\(body\.error \|\| \('HTTP ' \+ res\.status \+ ' ' \+ res\.statusText\)\)\)/);

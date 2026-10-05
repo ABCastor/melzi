@@ -35,7 +35,7 @@ fn usage() -> String {
     [
         "Usage: impeccable doctor [--json] [--fix] [--target <path>]",
         "",
-        "Report drift between this project's Impeccable artifacts and what the",
+        "Report drift between this project's Melzi artifacts and what the",
         "installed version reads: PRODUCT.md, DESIGN.md and its sidecar,",
         ".impeccable/config.json, surface briefs, and the design hook.",
         "",
@@ -172,7 +172,7 @@ fn apply_fixes(report: &Report) -> Fixes {
 fn render_text(report: &Report, fixes: Option<&Fixes>, cwd: &str, command: &str, self_cmd: &str) -> String {
     let mut lines: Vec<String> = Vec::new();
     let pr = rel(&report.project_root, cwd);
-    lines.push(format!("Impeccable doctor: {}", if pr.is_empty() { "." } else { &pr }));
+    lines.push(format!("Melzi doctor: {}", if pr.is_empty() { "." } else { &pr }));
     if report.ctx.is_monorepo {
         let rr = rel(&report.ctx.repo_root, cwd);
         lines.push(format!("Monorepo, repo root {}.", if rr.is_empty() { "." } else { &rr }));

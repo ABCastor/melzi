@@ -67,7 +67,7 @@ Do not make type decorative at the expense of comprehension, or introduce a seco
 
 Answer each item with rendered or source evidence, then rerun the scan. Do not substitute a bare “yes” for verification.
 
-When the hierarchy holds, hand off to `{{command_prefix}}impeccable polish`.
+When the hierarchy holds, hand off to `{{command_prefix}}melzi polish`.
 
 ## Live-mode signature params
 

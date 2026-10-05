@@ -76,7 +76,7 @@ async function scanWith({ browser, worker }, url, opts = {}) {
   await page.setViewport({ width: 1280, height: 800 });
   const errs = [];
   page.on('pageerror', (e) => errs.push(e.message));
-  page.on('console', (m) => { if (m.type() === 'error' || /impeccable/.test(m.text())) errs.push(`[console] ${m.text().slice(0, 200)}`); });
+  page.on('console', (m) => { if (m.type() === 'error' || /melzi/.test(m.text())) errs.push(`[console] ${m.text().slice(0, 200)}`); });
   await page.goto(url, { waitUntil: 'networkidle0', timeout: 90000 });
   await page.bringToFront();
   const t0 = Date.now();

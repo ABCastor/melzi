@@ -76,6 +76,91 @@ Respect autoplay and sound preferences. Any nonessential loop must stop when off
 
 Every web animation needs a `prefers-reduced-motion` path with an intentional alternative. Remove or reduce spatial movement while preserving opacity, color, and state transitions that carry meaning. Reduced motion means fewer and gentler animations, not disabling all motion; feedback that confirms an action should remain legible.
 
+## Capture existing motion
+
+Motion you did not write has to be recorded before it can be judged. The DOM, the computed styles, and a still screenshot all describe one instant: they prove a transition is declared and show where it lands, and they say nothing about how it got there. Write the shortest interaction script that reaches the behavior in question, then record it:
+
+```bash
+node {{scripts_path}}/motion-eyes.mjs \
+  --url <url-or-local-html> \
+  --do "scroll 0..100 over 4s; hover a.link for 1s; click [data-theme-toggle] then 1s" \
+  --name motion-review \
+  --output-dir .impeccable/motion
+```
+
+Interactions are semicolon-separated: `wait <duration>`, `scroll <start>..<end> over <duration>`, `hover <css-selector> [for <duration>]`, `click <css-selector> [then <duration>]`. Durations take `ms` or `s`; scroll positions are percentages of the document unless suffixed with `px`. `--help` carries the rest. Requires a Playwright install the script can resolve, and installs nothing itself.
+
+Read `motion-review-frames.png` first. Twelve stamped frames in one image show choreography: which elements entered and in what order, how far the scroll travelled, whether a reveal overshoots, whether the opening and closing states cohere. Then watch `motion-review.webm` before saying anything about smoothness, frame pacing, easing shape, perceived latency, interruption, or scroll coupling. A hitch that falls between two sampled frames leaves no trace on the sheet, so the sheet can confirm those properties but never rule a defect out.
+
+Check `uniqueFrameCount` in the JSON before trusting either artifact. Frames that are all identical mean the page never moved or the capture never saw it move, and the sheet then looks like evidence while carrying none.
+
+When the brief names a reference ("like the website", "as smooth as X"), record the reference with the same script, viewport and scroll distance, and read the two contact sheets side by side. A recording that is only consistent with itself proves nothing about matching the thing it was meant to match.
+
+Report the command, the viewport, the frame count, and any console errors next to the verdict. When the browser cannot launch or the target is unreachable, say the motion is unverified and name the blocker. A failed capture is missing evidence, never a verdict in either direction.
+
+## Technical ambition catalogue
+
+The `overdrive` alias loads this catalogue after [bolder.md](bolder.md) settles the direction. Choose by the job, not by novelty.
+
+### Cinematic transitions
+
+- **View Transitions API:** shared-element morphing within a document across current browsers; cross-document transitions still need a Firefox fallback. Use it for a list item expanding into detail or a trigger becoming a dialog.
+- **`@starting-style`:** animate entry from `display: none` with CSS, including entry keyframes.
+- **Spring physics:** use motion, GSAP, or a small solver when mass, tension, and damping express the material better than a cubic bezier.
+
+### Scroll-coupled motion
+
+- **Scroll-driven animations (`animation-timeline: scroll()`):** CSS-native parallax, progress, and reveal sequences in Chrome, Edge, and Safari. Firefox still needs a static fallback.
+
+### Rendering beyond CSS
+
+- **WebGL:** shader effects, post-processing, particles, and large custom scenes on all major browsers. Three.js, OGL, or regl are options when the project already justifies a library.
+- **WebGPU:** GPU compute and rendering where supported. Always provide WebGL2 or a complete static fallback.
+- **Canvas 2D and OffscreenCanvas:** pixel work or custom rendering, with heavy rendering moved to a Worker where necessary.
+- **SVG filter chains:** displacement, turbulence, and morphology when an authored vector effect is the right material. Keep the region bounded.
+
+### Data and large interfaces
+
+- **Virtual scrolling:** render only visible rows for very large tables and lists. A small implementation can be library-free; complex cases may justify TanStack Virtual.
+- **GPU charts:** use Canvas or WebGL when the dataset is too large for SVG or DOM rendering; deck.gl or a regl-based renderer may fit an existing stack.
+- **Animated data transitions:** morph states through D3 or View Transitions instead of replacing them without continuity. Force-directed graph layouts may settle naturally when the data relationship, not spectacle, calls for them.
+
+### Complex property animation
+
+- **`@property`:** register typed custom properties so gradients, colors, and other compound values interpolate.
+- **Web Animations API:** use composable, cancellable, reversible JavaScript-driven animation when CSS cannot express the sequence or interruption model.
+
+### Performance work
+
+- **Web Workers:** move expensive search, image processing, indexing, and other computation off the main thread.
+- **OffscreenCanvas:** keep custom rendering off the main thread when the browser supports it.
+- **WASM:** use near-native computation for work such as image processing, physics, or codecs only when profiling shows JavaScript is the bottleneck.
+
+### Device interaction
+
+- **Web Audio API:** audio-reactive work or sonic feedback, started only by a user gesture and with explicit consent.
+- **Device APIs:** orientation, ambient light, and geolocation only when the product needs them, with permission and a complete denied-permission path.
+
+The catalogue changes how an existing feature feels; collaboration, offline support, and new backend capability are product changes outside this command.
+
+### Progressive enhancement and performance
+
+Every technique degrades to a complete experience:
+
+```css
+@supports (animation-timeline: scroll()) {
+  .hero { animation-timeline: scroll(); }
+}
+```
+
+```javascript
+if ('gpu' in navigator) { /* WebGPU */ }
+else if (canvas.getContext('webgl2')) { /* WebGL2 fallback */ }
+/* The CSS-only result remains complete. */
+```
+
+Target 60fps and simplify when the experience drops below 50fps on representative hardware. Lazy-initialize WebGL, WASM, and other heavy resources near the viewport. Pause offscreen rendering. Test on real mid-range devices rather than treating a development machine as the audience.
+
 ## Verify
 
 - The focal motion is specific to the selected world and surface.
@@ -86,4 +171,4 @@ Every web animation needs a `prefers-reduced-motion` path with an intentional al
 - Expensive effects stay smooth on the target device.
 - Removing an animation would lose meaning or authored character, not merely decoration.
 
-When motion earns its place, hand off to `{{command_prefix}}impeccable polish` for the final pass.
+When motion earns its place, hand off to `{{command_prefix}}melzi polish` for the final pass.

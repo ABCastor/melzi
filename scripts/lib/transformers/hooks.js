@@ -1,9 +1,9 @@
 /**
- * Build-pipeline emitters for the Impeccable design hook.
+ * Build-pipeline emitters for the Melzi design hook.
  *
  * Two emission targets exist:
  *
- * 1. Project-local install (the `npx impeccable skills install` CLI path):
+ * 1. Project-local install (the `npx melzi skills install` CLI path):
  *      - Claude Code: `.claude/settings.json`   (${CLAUDE_PROJECT_DIR}-relative)
  *      - Codex:       `.codex/hooks.json`
  *      - Cursor:      `.cursor/hooks.json`
@@ -18,11 +18,11 @@
  *      - `hooks/hooks.json`                     (${PLUGIN_ROOT}-relative)
  *
  * The plugin variant resolves the hook script relative to the installed plugin
- * root rather than assuming a `.claude/skills/impeccable/` layout, so it stays
+ * root rather than assuming a `.claude/skills/melzi/` layout, so it stays
  * correct wherever Claude Code unpacks the plugin.
  */
 
-export const IMPECCABLE_HOOK_COMMAND_MARKER = 'skills/impeccable/scripts/impeccable';
+export const IMPECCABLE_HOOK_COMMAND_MARKER = 'skills/melzi/scripts/impeccable';
 
 const TIMEOUT_SECONDS = 5;
 const STATUS_MESSAGE = 'Checking UI changes';
@@ -75,21 +75,21 @@ function stopEntry(command, commandWindows) {
 const launcherIn = (scriptsDir) => `${scriptsDir}/${LAUNCHER_NAME}`;
 const launcherCmdIn = (scriptsDir) => `${scriptsDir}/${LAUNCHER_NAME_WINDOWS}`;
 
-const CLAUDE_PROJECT_SCRIPTS = '${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts';
-const CLAUDE_PLUGIN_SCRIPTS = '${CLAUDE_PLUGIN_ROOT}/skills/impeccable/scripts';
-const CODEX_PLUGIN_SCRIPTS = '${PLUGIN_ROOT}/skills/impeccable/scripts';
+const CLAUDE_PROJECT_SCRIPTS = '${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts';
+const CLAUDE_PLUGIN_SCRIPTS = '${CLAUDE_PLUGIN_ROOT}/skills/melzi/scripts';
+const CODEX_PLUGIN_SCRIPTS = '${PLUGIN_ROOT}/skills/melzi/scripts';
 // Codex reads project hooks from `.codex/hooks.json`, but the skill payload the
 // hook invokes lives under the install's own skills dir: a `.codex`-directory
 // install keeps it at `.codex/skills/...`, while a `.agents` (Codex repo-skills)
 // install keeps it at `.agents/skills/...`. Derive the path from the install dir
 // so each generated manifest points at its own payload rather than a hardcoded
 // `.agents`; otherwise the guarded hook silently no-ops on `.codex` installs.
-const codexProjectScripts = (skillDir) => `${skillDir}/skills/impeccable/scripts`;
-const CURSOR_SCRIPTS = '.cursor/skills/impeccable/scripts';
-const GITHUB_PROJECT_SCRIPTS = '$(git rev-parse --show-toplevel)/.github/skills/impeccable/scripts';
+const codexProjectScripts = (skillDir) => `${skillDir}/skills/melzi/scripts`;
+const CURSOR_SCRIPTS = '.cursor/skills/melzi/scripts';
+const GITHUB_PROJECT_SCRIPTS = '$(git rev-parse --show-toplevel)/.github/skills/melzi/scripts';
 // Grok project hooks are relative to the git/workspace root. Claude tool names
 // in the matcher (Edit|Write|MultiEdit) alias to Grok's search_replace family.
-const GROK_PROJECT_SCRIPTS = '.grok/skills/impeccable/scripts';
+const GROK_PROJECT_SCRIPTS = '.grok/skills/melzi/scripts';
 
 // `windows: true` adds the `commandWindows` sibling; only Codex-shaped
 // consumers honor it, and an unknown key would fail Codex's strict parser if
@@ -120,7 +120,7 @@ function buildClaudeCompatibleHooks(matcher, scriptsDir, { windows = false, sess
 
 export function buildClaudeSettingsManifest() {
   return {
-    description: 'Impeccable design detector: immediate-tier checks after Edit/Write on UI files, full-rule deep pass on Stop.',
+    description: 'Melzi design detector: immediate-tier checks after Edit/Write on UI files, full-rule deep pass on Stop.',
     hooks: buildClaudeCompatibleHooks('Edit|Write', CLAUDE_PROJECT_SCRIPTS, { sessionIdentity: true }),
   };
 }
@@ -215,7 +215,7 @@ export function buildGrokHooksManifest() {
 // There is no per-OS command field; a Windows install rewrites this to a
 // PowerShell form (crates/skills hook_manifest.rs).
 export function buildGeminiHooksManifest() {
-  const launcher = '$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable';
+  const launcher = '$GEMINI_PROJECT_DIR/.gemini/skills/melzi/scripts/impeccable';
   const command = `[ ! -f ${launcher} ] || ${launcher} hook`;
   return { hooks: {
     BeforeTool: [{ matcher: '^run_shell_command$', hooks: [{

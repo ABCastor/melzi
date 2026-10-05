@@ -33,6 +33,8 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { copyDistributionNotices } from './lib/distribution-notices.js';
+import { checkDistributionArchive } from './check-distribution-notices.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -122,6 +124,8 @@ if (missingRefs.length) {
 }
 console.log(`Checked ${referenced.length} referenced paths; all present in extension/`);
 
+copyDistributionNotices(ROOT, EXT_DIR);
+
 // --- 3. Zip packaging ---
 
 const DIST = path.join(ROOT, 'dist');
@@ -157,7 +161,7 @@ const firefoxManifest = {
   // Required by AMO for signing/distribution. Ignored by Chrome.
   browser_specific_settings: {
     gecko: {
-      id: 'impeccable@bakaus.com',
+      id: '{c86256be-f2ad-47f7-a3e2-5b5f2bfb9c49}',
       // `data_collection_permissions` (below) is required by AMO for new
       // submissions and is only honored on Firefox 140+. We set the floor to
       // 140 so the declared min version actually supports every key we ship;
@@ -188,6 +192,9 @@ console.log(`Staged ${path.relative(ROOT, ffStageDir)}/ (Firefox manifest)`);
 
 // STORE_LISTING.md is already filtered out of the stage dir above.
 packZip(path.join(DIST, 'extension-firefox.zip'), ffStageDir, ['*.DS_Store']);
+for (const name of ['extension.zip', 'extension-firefox.zip']) {
+  checkDistributionArchive(path.join(DIST, name), ROOT);
+}
 
 console.warn(
   'Warning: the Firefox package cannot scan yet. The rule core runs in an ' +

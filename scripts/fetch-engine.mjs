@@ -11,7 +11,7 @@
  *   node scripts/fetch-engine.mjs --lenient      # a target that cannot be fetched warns instead of failing
  *
  * Environment (same names the launcher honors):
- *   IMPECCABLE_DOWNLOAD_BASE  release channel root (default: the public repo's GitHub Releases)
+ *   IMPECCABLE_DOWNLOAD_BASE  explicit release channel root (no default for this unpublished fork)
  *   IMPECCABLE_BIN            copy this local binary for the current platform instead of downloading
  *
  * The URL scheme is the launcher's: <base>/engine-v<version>/impeccable-<os>-<arch>[.exe],
@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const DEFAULT_DOWNLOAD_BASE = 'https://github.com/pbakaus/impeccable/releases/download';
+export const DEFAULT_DOWNLOAD_BASE = '';
 export const ENGINE_TARGETS = ['darwin-arm64', 'darwin-x64', 'linux-x64', 'linux-arm64', 'windows-x64'];
 
 export function readEngineVersion(root = ROOT) {
@@ -42,6 +42,14 @@ export function binaryName(target) {
 }
 
 export function assetUrl(version, target, base = process.env.IMPECCABLE_DOWNLOAD_BASE || DEFAULT_DOWNLOAD_BASE) {
+  if (!base) {
+    throw new Error(
+      'no download endpoint is configured; this fork does not publish engine binaries. Refusing to download upstream\'s engine.\n'
+      + 'Build this checkout: cargo build --release -p impeccable\n'
+      + 'Set IMPECCABLE_BIN to target/release/impeccable (target/release/impeccable.exe on Windows), '
+      + 'or copy that binary to ~/.impeccable/bin/impeccable for the launcher. Set IMPECCABLE_DOWNLOAD_BASE to use an explicit release channel.',
+    );
+  }
   const asset = `impeccable-${target}${target.startsWith('windows-') ? '.exe' : ''}`;
   return `${base.replace(/\/$/, '')}/engine-v${version}/${asset}`;
 }

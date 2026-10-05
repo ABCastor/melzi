@@ -565,8 +565,8 @@ for (const modelId of resolveModelList()) {
       }
     });
 
-    it('scenario 13: teach alias with no PRODUCT.md diverts into init', async () => {
-      // `teach` is a deprecated alias for `init`, so it belongs to the same
+    it('scenario 13: teach with no PRODUCT.md uses the init playbook', async () => {
+      // `teach` is a first-class command backed by the init playbook, so it belongs to the same
       // missing-PRODUCT.md blocker path instead of the scoped-command path.
       const workspace = prepareWorkspace({ files: {} });
       try {

@@ -201,7 +201,7 @@ impl Sys {
     pub fn get_skills_version(&self, root: &str, scope: Option<Scope>) -> Option<String> {
         for d in PROVIDER_DIRS {
             for skills_dir in self.provider_skills_dir_candidates(root, d, scope) {
-                let skill_md = jsp::join(&[&skills_dir, "impeccable", "SKILL.md"]);
+                let skill_md = jsp::join(&[&skills_dir, "melzi", "SKILL.md"]);
                 if !util::exists(&skill_md) {
                     continue;
                 }
@@ -236,7 +236,7 @@ impl Sys {
             for skills_dir in self.existing_skills_dirs(root, d, scope) {
                 let Some(entries) = util::read_dir_names(&skills_dir) else { continue };
                 for name in entries {
-                    if name == "impeccable" || name == "teach-impeccable" {
+                    if name == "melzi" || name == "teach-impeccable" {
                         continue;
                     }
                     if !name.ends_with("-impeccable") {
@@ -245,7 +245,7 @@ impl Sys {
                     if !is_real_skill_dir(&skills_dir, &name) {
                         continue;
                     }
-                    let dest = jsp::join(&[&skills_dir, "impeccable"]);
+                    let dest = jsp::join(&[&skills_dir, "melzi"]);
                     util::rm_rf(&dest);
                     if util::rename(&jsp::join(&[&skills_dir, &name]), &dest).is_ok() {
                         migrated += 1;
@@ -295,7 +295,7 @@ impl Sys {
             .filter(|provider| {
                 self.provider_skills_dir_candidates(root, provider, scope)
                     .iter()
-                    .any(|skills_dir| util::is_symlink(&jsp::join(&[skills_dir, "impeccable"])))
+                    .any(|skills_dir| util::is_symlink(&jsp::join(&[skills_dir, "melzi"])))
             })
             .collect()
     }
@@ -518,7 +518,7 @@ fn unique_paths(paths: Vec<String>) -> Vec<String> {
 
 /// `e === 'impeccable' || e.endsWith('-impeccable') || e === 'teach-impeccable' || e.endsWith('-teach-impeccable')`
 fn is_impeccable_skill_name(e: &str) -> bool {
-    e == "impeccable" || e.ends_with("-impeccable") || e == "teach-impeccable" || e.ends_with("-teach-impeccable")
+    e == "melzi" || e.ends_with("-melzi") || e == "teach-impeccable" || e.ends_with("-teach-impeccable")
 }
 
 /// JS: isSkillDir(skillsDir, name)

@@ -11,7 +11,7 @@
 //!   `reference/ios.md` is found. `None` when neither works (source checkouts
 //!   running `target/debug/impeccable` need the env var).
 //! - **Provider id**: `IMPECCABLE_PROVIDER_ID` when set; otherwise derived from
-//!   the skill dir's harness folder (`<root>/.codex/skills/impeccable` ->
+//!   the skill dir's harness folder (`<root>/.codex/skills/melzi` ->
 //!   `codex`); otherwise `source`, exactly what the JS reads in a source
 //!   checkout. The command prefix is `$` for `codex`, `/` for everything else.
 //! - **Self command**: the text a directive prints where the JS printed
@@ -53,7 +53,7 @@ fn find_skill_dir_from(start: &str) -> Option<String> {
 }
 
 fn provider_from_skill_dir(skill_dir: &str) -> Option<&'static str> {
-    // <root>/<harness>/skills/impeccable
+    // <root>/<harness>/skills/melzi
     let skills = jsp::dirname(skill_dir);
     if jsp::basename(&skills) != "skills" {
         return None;
@@ -96,7 +96,7 @@ pub fn detect(env: &Env, cwd: &str) -> Provider {
             .to_string(),
     };
     let command_prefix = if id == "codex" { "$" } else { "/" }.to_string();
-    let command = format!("{}impeccable", command_prefix);
+    let command = format!("{}melzi", command_prefix);
     let self_cmd = match env.get("IMPECCABLE_SELF").filter(|v| !v.trim().is_empty()) {
         Some(v) => v.trim().to_string(),
         None => exe_path().unwrap_or_else(|| "impeccable".to_string()),

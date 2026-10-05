@@ -1,5 +1,5 @@
 #!/bin/sh
-# Impeccable launcher. Runs the platform binary shipped next to this script:
+# Melzi launcher. Runs the platform binary shipped next to this script:
 #   <this dir>/bin/<os>-<arch>/impeccable
 # Order: $IMPECCABLE_BIN, the sibling binary, ~/.impeccable/bin/impeccable,
 # the version-pinned cache, then `impeccable` on PATH. Never needs Node.
@@ -85,8 +85,8 @@ if [ -z "$probing" ] && command -v impeccable >/dev/null 2>&1 && probe_ok impecc
 fi
 
 # Last resort: fetch this version's binary for the current platform from the
-# public release channel into the user cache. Needs network; sandboxes without
-# egress preinstall the binary on PATH instead.
+# explicitly configured release channel into the user cache. This fork has
+# no default endpoint; install a local build when none is configured.
 setup_help() {
   echo "Engine $version setup needs network access and write permission to $cache_root/bin/$version." >&2
   echo "Run this launcher ($0) with engine-probe in a terminal that has those permissions, then retry the original command." >&2
@@ -118,8 +118,15 @@ if [ -n "$probing" ]; then
   # Inside another launcher's probe: no download, fail fast and quiet.
   exit 127
 fi
+if [ -z "${IMPECCABLE_DOWNLOAD_BASE:-}" ]; then
+  echo "impeccable: no download endpoint is configured; this fork does not publish engine binaries. Refusing to download upstream's engine." >&2
+  echo "Build this checkout: cargo build --release -p impeccable" >&2
+  echo 'Set IMPECCABLE_BIN to target/release/impeccable, or copy that binary to ~/.impeccable/bin/impeccable.' >&2
+  echo "To use an explicit release channel, set IMPECCABLE_DOWNLOAD_BASE." >&2
+  exit 127
+fi
 if [ -n "$version" ] && [ "$os" != unknown ] && [ "$arch" != unknown ]; then
-  base="${IMPECCABLE_DOWNLOAD_BASE:-https://github.com/pbakaus/impeccable/releases/download}"
+  base="$IMPECCABLE_DOWNLOAD_BASE"
   asset="impeccable-$os-$arch"
   [ "$os" = windows ] && asset="$asset.exe"
   url="$base/engine-v$version/$asset"
@@ -202,5 +209,5 @@ if [ -n "$version" ] && [ "$os" != unknown ] && [ "$arch" != unknown ]; then
 fi
 
 echo "impeccable: no engine binary for $os-$arch found (looked in $bin, $cached, PATH)." >&2
-echo "Download impeccable-$os-$arch from https://github.com/pbakaus/impeccable/releases (tag engine-v$version) into $cache_root/bin/$version/impeccable$exe (then chmod +x), or set IMPECCABLE_BIN to a preinstalled engine binary. Docs: https://impeccable.style" >&2
+echo "Build this checkout with cargo build --release -p impeccable, then set IMPECCABLE_BIN to the resulting binary." >&2
 exit 127

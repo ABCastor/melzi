@@ -14,7 +14,7 @@
 //! 2. Hook manifests are rewritten to invoke the launcher
 //!    (`"<skill>/scripts/impeccable" hook`, `impeccable.cmd` in the Codex
 //!    `commandWindows` sibling) instead of `node "<skill>/scripts/hook.mjs"`.
-//!    The command forms match what `impeccable hooks on`
+//!    The command forms match what `/melzi hooks on`
 //!    (`impeccable_hook::admin`) writes, and both paths recognize a manifest
 //!    entry as ours through `impeccable_context::hook_markers`, so the two
 //!    never drift on detection. See `hook_manifest`.
@@ -23,8 +23,10 @@
 //!    present. Explicit local bundle overrides remain unsigned development
 //!    inputs. See `bundle_signature` and docs/BUNDLE-SIGNING.md.
 //!
-//! Everything else (messages, exit codes, endpoints, flags, prompts, file
-//! layout) follows the JS byte for byte.
+//! Melzi departure: install/update/check require an explicit existing local
+//! IMPECCABLE_BUNDLE_PATH before prompts or writes. Remote distribution is
+//! unavailable; the inherited protocol and keyring remain unchanged. Help
+//! describes the local source build and installation boundary.
 
 pub mod bundle;
 mod bundle_signature;

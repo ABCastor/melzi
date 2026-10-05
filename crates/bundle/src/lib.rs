@@ -150,7 +150,7 @@ pub struct ExtensionPieces {
 pub fn extension_pieces(glue_js: &str, wasm: &[u8], registry_json: &str) -> ExtensionPieces {
     let piece = |parts: &[&str], exports: &str, what: &str| -> String {
         let mut p = format!(
-            "/**\n * Impeccable extension: {what}\n * Copyright (c) 2026 Paul Bakaus\n *\n * GENERATED -- do not edit. Source: browser-bundle/*.js (+ crates/core, crates/wasm for core.js).\n * Rebuild: cargo xtask bundle\n */\n"
+            "/**\n * Melzi extension: {what}\n * Copyright (c) 2026 Paul Bakaus\n *\n * GENERATED -- do not edit. Source: browser-bundle/*.js (+ crates/core, crates/wasm for core.js).\n * Rebuild: cargo xtask bundle\n */\n"
         );
         p.push_str("(function () {\n");
         for part in parts {
@@ -212,7 +212,7 @@ try {
 /// imports, so a call that would need a page fails loudly instead of with a
 /// ReferenceError.
 const EXT_CORE_LOADER: &str = r#"const __impeccableDom = new Proxy({}, {
-  get() { throw new Error('[impeccable] the offscreen document has no live page; load a snapshot first'); },
+  get() { throw new Error('[melzi] the offscreen document has no live page; load a snapshot first'); },
 });
 async function __impeccableLoadCore() {
   await wasm_bindgen({ module_or_path: chrome.runtime.getURL('detector/core_bg.wasm') });
@@ -407,7 +407,7 @@ mod tests {
     fn extension_pieces_are_iifes_over_their_sources() {
         let ext = extension_pieces("const glue = 1;\n", &[0, 97, 115, 109], "[]\n");
         for (what, js) in [("snapshot", &ext.snapshot_js), ("overlay", &ext.overlay_js), ("core", &ext.core_js)] {
-            assert!(js.starts_with("/**\n * Impeccable extension: "), "{what}");
+            assert!(js.starts_with("/**\n * Melzi extension: "), "{what}");
             assert!(js.contains("(function () {\n"), "{what}");
             assert!(js.ends_with("})();\n"), "{what}");
         }

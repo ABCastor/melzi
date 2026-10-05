@@ -127,9 +127,12 @@ describe('committed plugin subtree loads in a real Claude Code', { skip }, () =>
     assert.match(detailsOutput, /Component inventory/);
   });
 
-  it('parses and loads the impeccable skill', () => {
+  // FORK DELTA: this assertion reads OUR shipped plugin subtree, whose skill is
+  // named melzi. The synthetic marketplace above keeps upstream's name on
+  // purpose: it creates AND asserts its own fixture, so renaming it breaks it.
+  it('parses and loads the melzi skill', () => {
     assert.equal(componentCount('Skills'), 1);
-    assert.match(detailsOutput, /Skills\s+\(1\)\s+impeccable/);
+    assert.match(detailsOutput, /Skills\s+\(1\)\s+melzi/);
   });
 
   it('loads every shipped agent via auto-discovery (PR #494 regression)', () => {

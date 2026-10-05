@@ -44,13 +44,13 @@ Thumbs.db
 # Cloudflare
 .wrangler/
 
-# Impeccable-owned project files are split: generated sidecars/config may be
+# Melzi-owned project files are split: generated sidecars/config may be
 # tracked, but runtime recovery state and local assets should stay local.
 .impeccable/live/server.json
 .impeccable/live/codex-worker.json
 .impeccable/live/codex-worker.log
 # Ephemeral hook cache/state, at the project root and inside generated harness
-# skill dirs (**/skills/impeccable/scripts/.impeccable/). Anchored patterns
+# skill dirs (**/skills/melzi/scripts/.impeccable/). Anchored patterns
 # would miss the nested copies the build/hook writes.
 **/.impeccable/hook.cache.json
 .impeccable/live/sessions/
@@ -80,12 +80,18 @@ src/__impeccable_provider_smoke_*.html
 # Legacy live mode session file + annotation screenshots
 .impeccable-live.json
 .impeccable-live/
-src/lib/impeccable/ImpeccableLiveRoot.svelte
-src/lib/impeccable/__runtime.js
+src/lib/melzi/ImpeccableLiveRoot.svelte
+src/lib/melzi/__runtime.js
+# TanStack Start's managed component dir (skill/scripts/live/tanstack-adapter.mjs,
+# TANSTACK_COMPONENT_DIR). Upstream shipped the adapter without a matching ignore,
+# so live mode's own output was committable in any TanStack project.
+src/melzi/ImpeccableLiveRoot.tsx
+src/melzi/ImpeccableLiveRoot.jsx
+src/melzi/__runtime.js
 
 # Legacy per-project live mode injection config. New installs use
 # .impeccable/live/config.json in the project root instead.
-**/skills/impeccable/scripts/config.json
+**/skills/melzi/scripts/config.json
 
 # Extension build artifacts
 extension/detector/
@@ -93,7 +99,7 @@ extension/detector/
 # Engine binaries: fetched per platform (scripts/fetch-engine.mjs), never tracked.
 # The launcher next to them (skill/scripts/impeccable) is the tracked file.
 skill/scripts/bin/
-**/skills/impeccable/scripts/bin/
+**/skills/melzi/scripts/bin/
 
 # Legacy design context (pre-v3.1, auto-migrated to PRODUCT.md by load-context.mjs)
 .impeccable.md
@@ -141,3 +147,14 @@ tmp/
 # PNGs, the old card backup). The canonical generator is `bun run og-image`
 # (scripts/generate-og-image.js); this dir is throwaway and safe to delete.
 .og-build/
+
+# Provider-local generated output is distributed in release bundles.
+.claude/
+.cursor/
+.codex/
+
+# Also ignore a linked development dependency directory.
+node_modules
+
+# Temporary npm README substitution backup
+.npm-readme-backup

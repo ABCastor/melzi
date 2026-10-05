@@ -26,6 +26,10 @@ use crate::bundle_signature::{self, TrustedKeys, MAX_SIGNATURE_BYTES};
 /// longer stream unbounded bytes into memory or the staging dir.
 pub const MAX_DOWNLOAD_BYTES: u64 = 256 * 1024 * 1024;
 
+// Fork delta: API_BASE serves upstream's product, not this unpublished fork.
+// Enable only after configuring a fork-owned endpoint and signing keys.
+const FORK_PUBLISHES_BUNDLES: bool = false;
+
 /// Extraction caps for the bundle zip (triage C4). Sized for what a skill
 /// bundle legitimately holds - the tracked tree is thousands of small text
 /// files, and a self-contained (engine-bundled) local zip adds ~50 MB
@@ -292,10 +296,44 @@ fn extract_zip_from<R: Read + std::io::Seek>(reader: R, target_dir: &str, cwd: &
 /// both the zip and the extracted tree; any failure removes the whole
 /// staging dir before rethrowing. Returns the staging dir (caller removes).
 pub fn download_and_extract_bundle(sys: &Sys) -> Result<String, String> {
+    download_bundle_with(sys, std::env::current_exe().ok().as_deref(), &mut ureq_fetch)
+}
+
+fn download_bundle_with(
+    sys: &Sys,
+    executable: Option<&std::path::Path>,
+    fetch: &mut dyn FnMut(&str) -> Result<FetchResponse, String>,
+) -> Result<String, String> {
     if let Some(local) = sys.env.get("IMPECCABLE_BUNDLE_PATH").filter(|v| !v.is_empty()) {
         return copy_or_extract_local_bundle(sys, local);
     }
-    download_remote_bundle(sys, &mut ureq_fetch, bundle_signature::trusted_keys())
+    // JS-PARITY: downloadAndExtractBundle in the fork prefers its own
+    // checkout's dist/universal.zip after the explicit local override. Rust
+    // has no __dirname: anchor to the running executable, never install cwd
+    // or a build-machine path embedded by CARGO_MANIFEST_DIR.
+    let own_bundle = executable.and_then(own_checkout_bundle);
+    if let Some(bundle) = own_bundle.as_ref().filter(|p| p.exists()) {
+        return copy_or_extract_local_bundle(sys, &bundle.to_string_lossy());
+    }
+    if !FORK_PUBLISHES_BUNDLES {
+        let destination = own_bundle.map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "dist/universal.zip in this fork's checkout".into());
+        return Err(format!(
+            "ForkBundleUnavailable: no local bundle found, and this fork does not publish one.\n  Build it first: bun run build:release (writes {destination})\n  Or point at one: IMPECCABLE_BUNDLE_PATH=/path/to/universal.zip\n  Refusing to fall back to {API_BASE}, which serves the upstream project this was forked from, not this tool."
+        ));
+    }
+    download_remote_bundle(sys, fetch, bundle_signature::trusted_keys())
+}
+
+fn own_checkout_bundle(executable: &std::path::Path) -> Option<std::path::PathBuf> {
+    // Covers target/{debug,release}, custom Cargo target dirs inside the
+    // checkout, and skill/scripts/bin. A copied standalone binary cannot
+    // silently reach back into the machine on which it was compiled.
+    executable.ancestors().skip(1).find(|root| {
+        root.join("Cargo.toml").is_file()
+            && root.join("crates/skills/src/bundle.rs").is_file()
+            && root.join("skill/SKILL.src.md").is_file()
+    }).map(|root| root.join("dist/universal.zip"))
 }
 
 fn download_remote_bundle(
@@ -775,7 +813,7 @@ pub fn report_provider_agents(sys: &Sys, io: &mut Io, results: &[AgentResult]) {
                 sys.format_path_for_display(&result.user_dir),
                 result.shadowed.join(", ")
             ));
-            io.err("Run `npx impeccable update --user` to refresh them, or remove them so the project agents apply.\n");
+            io.err("Run `npx melzi update --user` to refresh them, or remove them so the project agents apply.\n");
         }
     }
 }
@@ -899,6 +937,52 @@ mod tests {
     }
 
     #[test]
+    fn fork_bundle_selection_prefers_override_then_own_checkout_and_refuses_remote() {
+        let root = tmp_dir("fork-checkout");
+        let cwd = tmp_dir("fork-install-target");
+        let sys = Sys::new(Default::default(), cwd.clone());
+        let executable = std::path::PathBuf::from(&root).join("target/release/impeccable");
+        for marker in ["Cargo.toml", "crates/skills/src/bundle.rs", "skill/SKILL.src.md"] {
+            let path = std::path::Path::new(&root).join(marker);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, "checkout marker").unwrap();
+        }
+        std::fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        std::fs::write(&executable, "engine").unwrap();
+        let own_bundle = format!("{root}/dist/universal.zip");
+        std::fs::create_dir_all(format!("{root}/dist")).unwrap();
+        std::fs::write(&own_bundle, zip_bytes(&[("origin.txt", b"own-checkout")])).unwrap();
+        std::fs::create_dir_all(format!("{cwd}/dist")).unwrap();
+        std::fs::write(format!("{cwd}/dist/universal.zip"), zip_bytes(&[("origin.txt", b"wrong-cwd")])).unwrap();
+        let mut fetch = |_: &str| -> Result<FetchResponse, String> {
+            panic!("The unpublished fork must never reach a remote endpoint");
+        };
+        let staging = download_bundle_with(&sys, Some(&executable), &mut fetch).unwrap();
+        assert_eq!(util::read_text(&format!("{staging}/origin.txt")).unwrap(), "own-checkout");
+        util::rm_rf(&staging);
+
+        let mut overridden = sys.clone();
+        overridden.env.insert("IMPECCABLE_BUNDLE_PATH".into(), "dist/universal.zip".into());
+        let staging = download_bundle_with(&overridden, Some(&executable), &mut fetch).unwrap();
+        assert_eq!(util::read_text(&format!("{staging}/origin.txt")).unwrap(), "wrong-cwd");
+        util::rm_rf(&staging);
+        overridden.env.insert("IMPECCABLE_BUNDLE_PATH".into(), "missing.zip".into());
+        let error = download_bundle_with(&overridden, Some(&executable), &mut fetch).unwrap_err();
+        assert!(error.starts_with("Local bundle not found:"), "{error}");
+
+        std::fs::remove_file(&own_bundle).unwrap();
+        for executable in [Some(executable.as_path()), None] {
+            let error = download_bundle_with(&sys, executable, &mut fetch).unwrap_err();
+            assert!(error.starts_with("ForkBundleUnavailable:"), "{error}");
+            assert!(error.contains("bun run build:release"), "{error}");
+            assert!(error.contains("IMPECCABLE_BUNDLE_PATH"), "{error}");
+            assert!(error.contains(API_BASE), "{error}");
+        }
+        util::rm_rf(&root);
+        util::rm_rf(&cwd);
+    }
+
+    #[test]
     fn extract_writes_normal_entries() {
         let dir = tmp_dir("ok");
         let bytes = zip_bytes(&[("a/x.txt", b"hello"), ("a/b/y.txt", b"world")]);
@@ -1014,7 +1098,7 @@ mod tests {
         let key = Ed25519KeyPair::from_seed_unchecked(&[7; 32]).unwrap();
         let hex = |bytes: &[u8]| bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
         let keys = [("test-only".into(), hex(key.public_key().as_ref()))].into();
-        let zip = zip_bytes(&[(".claude/skills/impeccable/SKILL.md", b"verified skill")]);
+        let zip = zip_bytes(&[(".claude/skills/melzi/SKILL.md", b"verified skill")]);
         let digest = format!("{:x}", Sha256::digest(&zip));
         let payload = format!("impeccable-skill-bundle-v1\ntest-only\nskill-v4.2.0\nuniversal.zip\n{}\n{digest}\n", zip.len());
         let signature = serde_json::to_vec(&serde_json::json!({
@@ -1056,7 +1140,7 @@ mod tests {
             let result = download_and_extract_signed_bundle(&sys, &mut fetch, &keys);
             if case == "valid" {
                 let staging = result.unwrap();
-                assert_eq!(std::fs::read_to_string(format!("{staging}/.claude/skills/impeccable/SKILL.md")).unwrap(), "verified skill");
+                assert_eq!(std::fs::read_to_string(format!("{staging}/.claude/skills/melzi/SKILL.md")).unwrap(), "verified skill");
                 assert!(!util::exists(&format!("{staging}/bundle.zip")));
                 assert!(!util::exists(&format!("{staging}/bundle.sig.json")));
                 util::rm_rf(&staging);

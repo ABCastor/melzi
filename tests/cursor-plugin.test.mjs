@@ -10,7 +10,7 @@ import { collectPluginVersions } from '../scripts/lib/validate-plugin-versions.j
 import { readSourceFiles } from '../scripts/lib/utils.js';
 import { createTransformer, PROVIDERS } from '../scripts/lib/transformers/index.js';
 
-const scripts = '.cursor/skills/impeccable/scripts';
+const scripts = '.cursor/skills/melzi/scripts';
 const sample = `---\nname: impeccable\ndescription: Design\n---\nRun \`${scripts}/impeccable context\`, and \`${scripts}\` is the fallback only when the runtime reports no base directory. Windows: \`${scripts}/impeccable.cmd context\`.\n`;
 
 describe('Cursor native plugin', () => {
@@ -26,10 +26,11 @@ describe('Cursor native plugin', () => {
     write('scripts/lib/assets/plugin-icon.png', 'icon');
     write('docs/CURSOR-PLUGIN.md', 'Readme');
     write('LICENSE', 'license');
-    write('dist/cursor/.cursor/skills/impeccable/SKILL.md', sample);
-    write('dist/cursor/.cursor/skills/impeccable/reference/polish.md', sample);
-    write('dist/cursor/.cursor/skills/impeccable/scripts/impeccable', '#!/bin/sh\nprintf "%s\\n" "$PWD" "$1"\ncat\nexit 2\n');
-    fs.chmodSync(path.join(root, 'dist/cursor/.cursor/skills/impeccable/scripts/impeccable'), 0o755);
+    write('NOTICE.md', 'upstream notice');
+    write('dist/cursor/.cursor/skills/melzi/SKILL.md', sample);
+    write('dist/cursor/.cursor/skills/melzi/reference/polish.md', sample);
+    write('dist/cursor/.cursor/skills/melzi/scripts/impeccable', '#!/bin/sh\nprintf "%s\\n" "$PWD" "$1"\ncat\nexit 2\n');
+    fs.chmodSync(path.join(root, 'dist/cursor/.cursor/skills/melzi/scripts/impeccable'), 0o755);
     write('dist/cursor/.cursor/agents/impeccable-asset-producer.md', sample);
   });
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -40,16 +41,16 @@ describe('Cursor native plugin', () => {
     assert.equal(manifest.version, '4.2.2');
     assert.equal(manifest.skills, './skills/');
     assert.equal(manifest.agents, './agents/');
-    for (const rel of [manifest.logo, manifest.hooks, 'README.md', 'LICENSE']) assert.ok(fs.existsSync(path.join(output, rel)));
-    for (const rel of ['skills/impeccable/SKILL.md', 'skills/impeccable/reference/polish.md', 'agents/impeccable-asset-producer.md']) {
+    for (const rel of [manifest.logo, manifest.hooks, 'README.md', 'LICENSE', 'NOTICE.md']) assert.ok(fs.existsSync(path.join(output, rel)));
+    for (const rel of ['skills/melzi/SKILL.md', 'skills/melzi/reference/polish.md', 'agents/impeccable-asset-producer.md']) {
       const text = fs.readFileSync(path.join(output, rel), 'utf8');
       assert.doesNotMatch(text, /\.cursor\/skills|fallback only/);
       assert.match(text, /"<skill-base-dir>\/scripts\/impeccable" context/);
       assert.match(text, /"<skill-base-dir>\/scripts\/impeccable\.cmd" context/);
     }
     assert.match(fs.readFileSync(path.join(output, 'agents/impeccable-asset-producer.md'), 'utf8'), /supplied in the handoff/);
-    assert.equal(fs.statSync(path.join(output, 'skills/impeccable/scripts/impeccable')).mode & 0o111, 0o111);
-    assert.equal(fs.readFileSync(path.join(root, 'dist/cursor/.cursor/skills/impeccable/SKILL.md'), 'utf8'), sample);
+    assert.equal(fs.statSync(path.join(output, 'skills/melzi/scripts/impeccable')).mode & 0o111, 0o111);
+    assert.equal(fs.readFileSync(path.join(root, 'dist/cursor/.cursor/skills/melzi/SKILL.md'), 'utf8'), sample);
     write('dist/cursor-plugin/stale.txt', 'stale');
     stageCursorPlugin(root, path.join(root, 'dist'));
     assert.equal(fs.existsSync(path.join(output, 'stale.txt')), false);
@@ -65,7 +66,7 @@ describe('Cursor native plugin', () => {
     const result = spawnSync('sh', ['-c', command], { cwd: root, input: '{"tool_name":"Edit"}\n', encoding: 'utf8' });
     assert.equal(result.status, 2, result.stderr);
     assert.equal(result.stdout, `${fs.realpathSync(root)}\nhook-before-edit\n{"tool_name":"Edit"}\n`);
-    assert.match(buildCursorHooksManifest().hooks.preToolUse[0].command, /\.cursor\/skills\/impeccable/);
+    assert.match(buildCursorHooksManifest().hooks.preToolUse[0].command, /\.cursor\/skills\/melzi/);
   });
 
   it('does not add path prose to agents that do not use scripts', () => {
@@ -75,7 +76,7 @@ describe('Cursor native plugin', () => {
   it('detects version drift in both staged and tracked Cursor artifacts', () => {
     for (const prefix of ['cursor-plugin', 'dist/cursor-plugin']) {
       write(`${prefix}/.cursor-plugin/plugin.json`, JSON.stringify({ version: '0.0.1' }));
-      write(`${prefix}/skills/impeccable/SKILL.md`, '---\nversion: 0.0.1\n---\n');
+      write(`${prefix}/skills/melzi/SKILL.md`, '---\nversion: 0.0.1\n---\n');
     }
     assert.equal(collectPluginVersions(root).mismatches.length, 4);
   });
@@ -84,6 +85,9 @@ describe('Cursor native plugin', () => {
     const repository = path.resolve(import.meta.dirname, '..');
     const marketplace = JSON.parse(fs.readFileSync(path.join(repository, '.cursor-plugin/marketplace.json')));
     assert.equal(marketplace.plugins[0].source, './cursor-plugin');
+    assert.equal(marketplace.name, 'melzi');
+    assert.equal(marketplace.owner.name, 'Anneo22');
+    assert.equal(marketplace.plugins[0].name, 'melzi');
     const workflow = fs.readFileSync(path.join(repository, '.github/workflows/sync-generated-output.yml'), 'utf8');
     assert.match(workflow, /\n    cursor-plugin\n/);
     assert.match(workflow, /docs\/CURSOR-PLUGIN\.md/);
@@ -98,12 +102,16 @@ describe('Cursor native plugin', () => {
     const dist = path.join(root, 'real-provider');
     createTransformer(PROVIDERS.cursor)(skills, dist, { skillsVersion: version });
     const output = stageCursorPlugin(repository, dist);
+    const manifest = JSON.parse(fs.readFileSync(path.join(output, '.cursor-plugin/plugin.json')));
+    assert.equal(manifest.name, 'melzi');
+    assert.equal(manifest.author.name, 'Anneo22');
+    assert.equal(manifest.repository, 'https://github.com/ABCastor/melzi');
     assert.equal(fs.readdirSync(path.join(output, 'agents')).length, 4);
     let links = 0;
     for (const rel of fs.readdirSync(output, { recursive: true }).filter(file => file.endsWith('.md'))) {
       const filename = path.join(output, rel);
       const text = fs.readFileSync(filename, 'utf8');
-      assert.doesNotMatch(text, /\.cursor\/skills\/impeccable\/scripts|\{\{scripts_path\}\}|fallback only when/);
+      assert.doesNotMatch(text, /\.cursor\/skills\/melzi\/scripts|\{\{scripts_path\}\}|fallback only when/);
       for (const match of text.matchAll(/\]\(([^)\s]+)\)/g)) {
         if (!/^(reference|scripts)\//.test(match[1])) continue;
         assert.ok(fs.existsSync(path.resolve(path.dirname(filename), match[1].split('#')[0])), `${rel}: ${match[1]}`);
@@ -111,8 +119,8 @@ describe('Cursor native plugin', () => {
       }
     }
     assert.ok(links > 20);
-    assert.equal(fs.existsSync(path.join(output, 'skills/impeccable/scripts/bin')), false);
-    const entrypoint = fs.readFileSync(path.join(output, 'skills/impeccable/SKILL.md'), 'utf8');
+    assert.equal(fs.existsSync(path.join(output, 'skills/melzi/scripts/bin')), false);
+    const entrypoint = fs.readFileSync(path.join(output, 'skills/melzi/SKILL.md'), 'utf8');
     assert.match(entrypoint, /Run `"<skill-base-dir>\/scripts\/impeccable" context` once per session/);
   });
 });

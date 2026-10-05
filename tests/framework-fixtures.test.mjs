@@ -120,9 +120,9 @@ for (const name of listFixtures()) {
           '.impeccable/live/accept-receipts/example.json',
           '.impeccable/live/locks/example.lock',
           '.impeccable/live/deferred-svelte-component-accepts.json',
-          'src/lib/impeccable/ImpeccableLiveRoot.svelte',
-          'src/lib/impeccable/__runtime.js',
-          'src/lib/impeccable/a4ac4e74/v3.svelte',
+          'src/lib/melzi/ImpeccableLiveRoot.svelte',
+          'src/lib/melzi/__runtime.js',
+          'src/lib/melzi/a4ac4e74/v3.svelte',
         ], { cwd: tmp, encoding: 'utf-8' });
         assert.match(ignored, /\.impeccable\/live\/server\.json/);
         assert.match(ignored, /\.impeccable\/live\/sessions\/example\.jsonl/);
@@ -131,13 +131,13 @@ for (const name of listFixtures()) {
         assert.match(ignored, /\.impeccable\/live\/accept-receipts\/example\.json/);
         assert.match(ignored, /\.impeccable\/live\/locks\/example\.lock/);
         assert.match(ignored, /\.impeccable\/live\/deferred-svelte-component-accepts\.json/);
-        assert.match(ignored, /src\/lib\/impeccable\/ImpeccableLiveRoot\.svelte/);
-        assert.match(ignored, /src\/lib\/impeccable\/__runtime\.js/);
-        assert.match(ignored, /src\/lib\/impeccable\/a4ac4e74\/v3\.svelte/);
+        assert.match(ignored, /src\/lib\/melzi\/ImpeccableLiveRoot\.svelte/);
+        assert.match(ignored, /src\/lib\/melzi\/__runtime\.js/);
+        assert.match(ignored, /src\/lib\/melzi\/a4ac4e74\/v3\.svelte/);
         if (result.adapter === 'sveltekit') {
           const layout = readFileSync(join(tmp, 'src/routes/+layout.svelte'), 'utf-8');
           const appHtml = readFileSync(join(tmp, 'src/app.html'), 'utf-8');
-          const root = readFileSync(join(tmp, 'src/lib/impeccable/ImpeccableLiveRoot.svelte'), 'utf-8');
+          const root = readFileSync(join(tmp, 'src/lib/melzi/ImpeccableLiveRoot.svelte'), 'utf-8');
           assert.match(layout, /impeccable-live-svelte-start/, 'SvelteKit layout got the adapter marker');
           assert.match(layout, /ImpeccableLiveRoot/, 'SvelteKit layout renders the adapter host');
           assert.doesNotMatch(appHtml, /impeccable-live-start/, 'SvelteKit app.html must remain untouched');
@@ -191,7 +191,7 @@ for (const name of listFixtures()) {
           assert.doesNotMatch(layout, /ImpeccableLiveRoot/);
           assert.doesNotMatch(layout, /impeccable-live-svelte-start/);
           assert.doesNotMatch(appHtml, /impeccable-live-start/);
-          assert.equal(existsSync(join(tmp, 'src/lib/impeccable/ImpeccableLiveRoot.svelte')), false);
+          assert.equal(existsSync(join(tmp, 'src/lib/melzi/ImpeccableLiveRoot.svelte')), false);
           return;
         }
         if (result.adapter === 'nuxt') {

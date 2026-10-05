@@ -93,6 +93,11 @@ fn print_answer(io: &mut Io, raw: &str) {
     io.out(&format!("ANSWER: {}\n", raw));
     let Ok(a) = serde_json::from_str::<Value>(raw) else { return };
     let truthy = |k: &str| a.get(k).map(crate::staleness::js_truthy).unwrap_or(false);
+    // JS-PARITY: printAnswer names the approved screen before the card directive.
+    if truthy("screen") {
+        io.out(&format!("CHOSEN SCREEN: {}\n", js_str(&a["screen"])));
+        io.out("That file is a rendered screen the user approved on sight: it IS the reference for this build and outranks any card, board or hero. Open it, read its markup, and carry its layout, type scale and spacing into the build instead of reinterpreting the world from card art.\n");
+    }
     if truthy("hero") || truthy("board") {
         io.out("CHOSEN CARD: open the chosen world's board and hero images now, before any code. When your harness only reads files, or runs sandboxed, download them INTO the workspace and open the relative path; a sandboxed viewer rejects absolute paths outside it. They set the craft bar the build must reach.\n");
     }
@@ -144,8 +149,9 @@ fn schema_json() -> Value {
       "question": "The roll assigned Fillmore Handbill. Keep it, take an alternate, or re-roll.",
       "options": [
         { "id": "assigned", "label": "Fillmore Handbill", "kicker": "THE ROLL", "lineage": "1966-71 Fillmore psychedelic handbills", "thesis": "The gig poster that treats every release like a one-night stand.", "palette": ["#e8452c", "#f5d64c", "#1b2a52", "#f3ead8"], "materials": ["letterpress", "split-fountain ink"], "viewport": "A full-bleed dated bill with the product name in warped display type.", "risk": "Reads nostalgic when the type is set timidly.", "raised": [{ "from": "challenger-microfiche", "raise": "The bill now owns its whole viewport as one continuous printed sheet." }], "comp": ".impeccable/mocks/decision/assigned.webp", "hero": "https://impeccable.style/worlds/cards/posters-covers-sleeves-fillmore-handbill-hero.webp", "board": "https://impeccable.style/worlds/cards/posters-covers-sleeves-fillmore-handbill.webp" },
-        { "id": "model-pick", "label": "The Broadside Ballad", "kicker": "IMPECCABLE’S PICK", "lineage": "street-sold ballad sheets", "thesis": "Every release printed as the day’s ballad sheet.", "palette": ["#1f1c18", "#efe5d0", "#a33327"], "materials": ["woodcut", "rag paper"], "viewport": "One tall sheet, the newest release as today’s ballad.", "risk": "Also the direction most runs in this category land on.", "comp": ".impeccable/mocks/decision/model-pick.webp" },
+        { "id": "model-pick", "label": "The Broadside Ballad", "kicker": "MELZI’S PICK", "lineage": "street-sold ballad sheets", "thesis": "Every release printed as the day’s ballad sheet.", "palette": ["#1f1c18", "#efe5d0", "#a33327"], "materials": ["woodcut", "rag paper"], "viewport": "One tall sheet, the newest release as today’s ballad.", "risk": "Also the direction most runs in this category land on.", "comp": ".impeccable/mocks/decision/model-pick.webp" },
         { "id": "challenger-teletext", "label": "Teletext Service", "verdict": "competitive", "lineage": "broadcast teletext magazines", "thesis": "The catalog as a broadcast index: pages, not sections.", "palette": ["#0000c0", "#ffff00", "#00c000", "#ffffff"], "materials": ["block mosaic", "phosphor glow"], "viewport": "P100 index page, releases as numbered rows.", "case": "Fuses cleanly: releases map to numbered pages; loses narrowly on clarity.", "risk": "Reads retro-novelty when the grid is not strict.", "comp": ".impeccable/mocks/decision/challenger-teletext.webp", "hero": "https://impeccable.style/worlds/cards/broadcast-programming-teletext-service-hero.webp" },
+        { "id": "challenger-built", "label": "Swiss Timetable", "verdict": "competitive", "lineage": "SBB departure boards", "thesis": "Built, not drawn: the real first viewport.", "screen": "/abs/path/swiss-timetable.html" },
         { "id": "challenger-microfiche", "label": "Microfiche Reader", "verdict": "declined", "lineage": "library microfiche stations", "palette": ["#101418", "#9fb4c0"], "materials": ["film grain", "backlit glass"], "case": "Fuses poorly: listeners do not identify with archival retrieval.", "kept": "Total environmental commitment.", "hero": "https://impeccable.style/worlds/cards/archives-microfiche-reader-hero.webp" }
       ],
       "reroll": { "registers": ["safer", "bolder"] },
@@ -156,7 +162,7 @@ fn schema_json() -> Value {
     })
 }
 
-const SCHEMA_NOTE: &str = "\nOption ids return verbatim in ANSWER; \"reroll\" and \"canon\" are reserved. hero/board/comp accept URLs or local paths; comp slots may point at files that do not exist yet (serve first, generate after; the page polls until they land, so never block serving on generation). hero on a challenger is the inspiration it draws from and renders picture-in-picture beside the comp, never as the promise of the build. verdict routes rendering: \"wins\" and \"competitive\" challengers keep full cards, \"declined\" ones render demoted after them (narrow, quiet, art as a labeled thumb, \"Adopt anyway\"), with their kept line on the front; the page reorders declined cards to the end on its own. raised on the assigned card renders each donation as a named raise line. Salience parity: when the assigned card declares no comp (no image generation this round), catalog art on every card demotes to a labeled thumb, so what looks important is the verdict’s call, never rendering luck. canonCard renders the standing exit as a subordinate card with the same anatomy; without it, canon stays a quiet footer action. Include canon only for visual-direction rounds; never present it as your own recommendation. The pick card is a kicker convention, not a field: kicker \"IMPECCABLE’S PICK\" on your top-ranked grounded candidate, one at most, never in the lead slot. Every card gets the full anatomy, challengers, canon, and declined included: thesis, palette, materials, viewport, risk; the seed already hands you each challenger’s system rules, so a card with no palette chips is an authoring gap, not a data gap. Keep thesis and each fact to one short sentence: the card front shows thesis, identity, and a two-line risk, while first viewport and the case read on the card back behind the Details chip, so long facts cost the reader a flip, not the page its scanability. A card with no imagery at all has no back; its full read renders on the front, so a text-only round loses nothing. A card may instead declare \"wireframe\" ({\"cols\":12,\"rows\":10,\"regions\":[{\"label\":\"nav rail\",\"x\":0,\"y\":0,\"w\":3,\"h\":10,\"accent\":true}]}): the page draws it as a layout schematic in the media slot; surface-scope rounds use it on code-led builds, it never counts toward salience, and the card keeps its full read on the front. The comp slot carries the card’s full-fidelity direction comp (the legacy key \"sketch\" is accepted as an alias). Comp aspect follows the surface: portrait at device viewport for native or mobile-first surfaces, landscape otherwise; the page adapts its cards to either. reroll accepts true or { \"registers\": [\"safer\", \"bolder\"] }: the register buttons steer the next hand along the familiar-to-bold axis, the answer carries \"register\", and you re-run concept-seed with --register <value> for the next round; offer the registers on direction rounds, and never pre-select one. buildPath rides the payload as { \"value\": \"comp\"|\"code\", \"toggle\": true }: the value is the recorded default (.impeccable/config.json buildPath, or .impeccable/config.local.json where one machine differs) and the toggle renders a footer switch whose flip binds that session only; the ANSWER then carries buildPath plus buildPathFlipped. On a code-led round each card still declares its comp path as a flip reserve: wireframes render, and a flip to comp makes --wait return once with BUILD PATH FLIPPED so you generate the comps into the declared slots while the round stays open; a flip back to code is free, and a comp that already landed stays as the critique reference. The toggle may only be offered when image generation exists: a harness with no image tool and no API key never sets toggle: true, so the choice never renders where comps cannot be made, and code-led simply rides as the untoggleable value. followup: true keeps the table open after a pick for a second round via --update; send the next payload immediately, the page is waiting on it.";
+const SCHEMA_NOTE: &str = "\nOption ids return verbatim in ANSWER; \"reroll\" and \"canon\" are reserved. hero/board/comp accept URLs or local paths; comp slots may point at files that do not exist yet (serve first, generate after; the page polls until they land, so never block serving on generation). hero on a challenger is the inspiration it draws from and renders picture-in-picture beside the comp, never as the promise of the build. verdict routes rendering: \"wins\" and \"competitive\" challengers keep full cards, \"declined\" ones render demoted after them (narrow, quiet, art as a labeled thumb, \"Adopt anyway\"), with their kept line on the front; the page reorders declined cards to the end on its own. raised on the assigned card renders each donation as a named raise line. Salience parity: when the assigned card declares no comp (no image generation this round), catalog art on every card demotes to a labeled thumb, so what looks important is the verdict’s call, never rendering luck. canonCard renders the standing exit as a subordinate card with the same anatomy; without it, canon stays a quiet footer action. Include canon only for visual-direction rounds; never present it as your own recommendation. The pick card is a kicker convention, not a field: kicker \"MELZI’S PICK\" on your top-ranked grounded candidate, one at most, never in the lead slot. Every card gets the full anatomy, challengers, canon, and declined included: thesis, palette, materials, viewport, risk; the seed already hands you each challenger’s system rules, so a card with no palette chips is an authoring gap, not a data gap. Keep thesis and each fact to one short sentence: the card front shows thesis, identity, and a two-line risk, while first viewport and the case read on the card back behind the Details chip, so long facts cost the reader a flip, not the page its scanability. A card with no imagery at all has no back; its full read renders on the front, so a text-only round loses nothing. A card may instead declare \"wireframe\" ({\"cols\":12,\"rows\":10,\"regions\":[{\"label\":\"nav rail\",\"x\":0,\"y\":0,\"w\":3,\"h\":10,\"accent\":true}]}): the page draws it as a layout schematic in the media slot; surface-scope rounds use it on code-led builds, it never counts toward salience, and the card keeps its full read on the front. The comp slot carries the card’s full-fidelity direction comp (the legacy key \"sketch\" is accepted as an alias). Comp aspect follows the surface: portrait at device viewport for native or mobile-first surfaces, landscape otherwise; the page adapts its cards to either. reroll accepts true or { \"registers\": [\"safer\", \"bolder\"] }: the register buttons steer the next hand along the familiar-to-bold axis, the answer carries \"register\", and you re-run concept-seed with --register <value> for the next round; offer the registers on direction rounds, and never pre-select one. buildPath rides the payload as { \"value\": \"comp\"|\"code\", \"toggle\": true }: the value is the recorded default (.impeccable/config.json buildPath, or .impeccable/config.local.json where one machine differs) and the toggle renders a footer switch whose flip binds that session only; the ANSWER then carries buildPath plus buildPathFlipped. On a code-led round each card still declares its comp path as a flip reserve: wireframes render, and a flip to comp makes --wait return once with BUILD PATH FLIPPED so you generate the comps into the declared slots while the round stays open; a flip back to code is free, and a comp that already landed stays as the critique reference. The toggle may only be offered when image generation exists: a harness with no image tool and no API key never sets toggle: true, so the choice never renders where comps cannot be made, and code-led simply rides as the untoggleable value. followup: true keeps the table open after a pick for a second round via --update; send the next payload immediately, the page is waiting on it.";
 
 /// JS: Number(arg('timeout','900')) etc.
 fn js_number_arg(a: &Args, name: &str, fallback: &str) -> f64 {
@@ -208,6 +214,7 @@ pub fn run(argv: &[String], io: &mut Io) -> i32 {
     if a.has("schema") {
         io.out(&format!("{}\n", json_pretty(&schema_json())));
         io.out(&format!("{}\n", SCHEMA_NOTE));
+        io.out("screen is an absolute path to a self-contained .html file. It renders live inside the card and wins the face over hero/board, and the chosen path returns in ANSWER as \"screen\": that rendered screen, not the card art, is what the build must match.\n");
         return 0;
     }
 
@@ -410,6 +417,14 @@ pub fn run(argv: &[String], io: &mut Io) -> i32 {
             return 1;
         }
     }
+    let nonce = match answer_nonce() {
+        Ok(nonce) => nonce,
+        Err(e) => {
+            io.err(&format!("serve-question: cannot create answer nonce: {}\n", e));
+            return 1;
+        }
+    };
+    state.lock().unwrap().answer_nonce = nonce;
     let port = if port_arg.is_finite() && port_arg >= 0.0 { port_arg as u16 } else { 0 };
     let server = match tiny_http::Server::http(("127.0.0.1", port)) {
         Ok(s) => s,
@@ -551,13 +566,38 @@ pub fn run(argv: &[String], io: &mut Io) -> i32 {
                         } else {
                             "image/jpeg"
                         };
-                        let bytes = std::fs::read(&abs).unwrap_or_default();
+                        let Ok(bytes) = std::fs::read(&abs) else {
+                            let _ = request.respond(tiny_http::Response::empty(404));
+                            continue;
+                        };
                         let resp = tiny_http::Response::from_data(bytes).with_header(tiny_http::Header::from_bytes("content-type", ty).unwrap());
                         let _ = request.respond(resp);
                     }
                     _ => {
                         let _ = request.respond(tiny_http::Response::empty(404));
                     }
+                }
+                continue;
+            }
+        }
+        // JS-PARITY: only the round's registered screen files are readable.
+        if method == "GET" && raw_url.starts_with("/screen/") {
+            let index = &raw_url[8..];
+            if !index.is_empty() && index.bytes().all(|b| b.is_ascii_digit()) {
+                let bytes = index.parse::<usize>().ok()
+                    .and_then(|i| st.local_screens.get(i))
+                    .and_then(|abs| std::fs::read(abs).ok());
+                if let Some(bytes) = bytes {
+                    // FORK DELTA (Melzi): a screen is untrusted page JS. The iframe sandbox
+                    // covers the framed copy; this header covers the same URL opened as a
+                    // top-level tab, where it would otherwise run with the decision page's
+                    // origin and could read the key and nonce and forge the answer.
+                    let resp = tiny_http::Response::from_data(bytes)
+                        .with_header(tiny_http::Header::from_bytes("content-type", "text/html; charset=utf-8").unwrap())
+                        .with_header(tiny_http::Header::from_bytes("content-security-policy", "sandbox allow-scripts").unwrap());
+                    let _ = request.respond(resp);
+                } else {
+                    let _ = request.respond(tiny_http::Response::empty(404));
                 }
                 continue;
             }
@@ -574,6 +614,13 @@ pub fn run(argv: &[String], io: &mut Io) -> i32 {
             let ok_resp = || tiny_http::Response::from_string("{\"ok\":true}")
                 .with_header(tiny_http::Header::from_bytes("content-type", "application/json").unwrap());
             if path == "/build-path" {
+                // FORK DELTA (Melzi): a screen round refuses a build-path flip without the
+                // page's nonce too, for the reason /answer does: a framed screen can POST.
+                let parsed = serde_json::from_str::<Value>(&body).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
+                if st.reject_answer_nonce(&parsed) {
+                    let _ = request.respond(tiny_http::Response::empty(403));
+                    continue;
+                }
                 let value = serde_json::from_str::<Value>(&body).ok().and_then(|v| v.get("value").and_then(|x| x.as_str()).map(|s| s.to_string()));
                 if let Some(value) = value.filter(|v| v == "comp" || v == "code") {
                     let was_comp = st.live_build_path.as_deref() == Some("comp");
@@ -594,13 +641,19 @@ pub fn run(argv: &[String], io: &mut Io) -> i32 {
                 let _ = request.respond(ok_resp());
                 continue;
             }
-            let _ = request.respond(ok_resp());
-            // /answer
+            // /answer: the upstream key/origin gate has already run.
             let parsed = serde_json::from_str::<Value>(&body).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
+            if st.reject_answer_nonce(&parsed) {
+                let _ = request.respond(tiny_http::Response::empty(403));
+                continue;
+            }
+            let _ = request.respond(ok_resp());
             let option_id = parsed.get("optionId").cloned().unwrap_or(Value::Null);
             let chosen = st.options.iter().find(|o| o.get("id") == Some(&option_id) && !option_id.is_null()).cloned();
             let is_reroll = option_id.as_str() == Some("reroll");
             let followup_open = st.detached_key.is_some() && st.payload.get("followup") == Some(&Value::Bool(true)) && !is_reroll;
+            // JS-PARITY: recordChoice keeps refusals, but may never cost an answer.
+            record_choice(&env, &st.cwd, &st.payload, &st.options, &parsed);
             let mut ans = Map::new();
             ans.insert("optionId".into(), if option_id.is_null() { Value::Null } else { option_id.clone() });
             ans.insert("steer".into(), parsed.get("steer").cloned().filter(|v| !v.is_null()).unwrap_or(Value::String(String::new())));
@@ -631,6 +684,9 @@ pub fn run(argv: &[String], io: &mut Io) -> i32 {
                     ans.insert("buildPath".into(), Value::String(lbp.clone()));
                     ans.insert("buildPathFlipped".into(), Value::Bool(Some(lbp.as_str()) != st.build_path_default.as_ref().map(|b| b.0.as_str())));
                 }
+            }
+            if let Some(screen) = chosen.as_ref().and_then(|c| c.get("screen")).filter(|v| crate::staleness::js_truthy(v)) {
+                ans.insert("screen".into(), screen.clone());
             }
             let answer = json_compact(&Value::Object(ans));
             let was_awaiting = st.awaiting_next;
@@ -804,6 +860,81 @@ pub fn open_system_browser(url: &str, env: &Env) -> bool {
 
 // ─── round state + page rendering ──────────────────────────────────────────
 
+/// JS: crypto.randomBytes(16).toString('hex'). Never fall back to a predictable nonce.
+fn answer_nonce() -> std::io::Result<String> {
+    let mut bytes = [0u8; 16];
+    #[cfg(unix)]
+    {
+        use std::io::Read;
+        std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+    }
+    #[cfg(windows)]
+    {
+        #[link(name = "bcrypt")]
+        extern "system" {
+            fn BCryptGenRandom(algorithm: *mut std::ffi::c_void, buffer: *mut u8, len: u32, flags: u32) -> i32;
+        }
+        // BCRYPT_USE_SYSTEM_PREFERRED_RNG, no provider handle needed.
+        let status = unsafe { BCryptGenRandom(std::ptr::null_mut(), bytes.as_mut_ptr(), bytes.len() as u32, 2) };
+        if status < 0 {
+            return Err(std::io::Error::other("system random generator failed"));
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    return Err(std::io::Error::other("system random generator unavailable"));
+    Ok(bytes.iter().map(|b| format!("{:02x}", b)).collect())
+}
+
+/// JS: melzi/taste-ledger.mjs#buildEntry, including field order and reserved actions.
+fn taste_entry(option_id: &Value, steer: Option<&Value>, options: &[Value], title: &Value, project: &str, at: &str) -> Value {
+    let reserved = |id: &Value| matches!(id.as_str(), Some("reroll" | "canon"));
+    let slim = |option: &Value| {
+        let mut out = Map::new();
+        out.insert("id".into(), option.get("id").cloned().unwrap_or(Value::Null));
+        out.insert("label".into(), option.get("label").cloned().unwrap_or(Value::Null));
+        for key in ["lineage", "screen"] {
+            if let Some(value) = option.get(key).filter(|v| crate::staleness::js_truthy(v)) {
+                out.insert(key.into(), value.clone());
+            }
+        }
+        Value::Object(out)
+    };
+    let chosen = if reserved(option_id) { None } else { options.iter().find(|o| o.get("id") == Some(option_id)) };
+    let refused: Vec<Value> = options.iter().filter(|o| {
+        let id = o.get("id").unwrap_or(&Value::Null);
+        !reserved(id) && id != option_id
+    }).map(slim).collect();
+    let mut entry = Map::new();
+    entry.insert("v".into(), json!(1));
+    entry.insert("at".into(), json!(at));
+    entry.insert("kind".into(), json!(match option_id.as_str() { Some("reroll") => "reroll", Some("canon") => "canon", _ => "pick" }));
+    entry.insert("project".into(), json!(project));
+    entry.insert("title".into(), title.clone());
+    entry.insert("chosen".into(), chosen.map(slim).unwrap_or(Value::Null));
+    entry.insert("refused".into(), Value::Array(refused));
+    if let Some(steer) = steer.and_then(Value::as_str).map(crate::util::js_trim).filter(|s| !s.is_empty()) {
+        entry.insert("steer".into(), json!(steer));
+    }
+    Value::Object(entry)
+}
+
+/// JS-PARITY: recordChoice skips any nonempty opt-out, ignores failures, and
+/// records even an empty hand when an option id exists (despite its JS comment).
+fn record_choice(env: &Env, project: &str, payload: &Value, options: &[Value], parsed: &Map<String, Value>) -> bool {
+    if env_set(env, "IMPECCABLE_NO_TASTE_LEDGER") {
+        return false;
+    }
+    let Some(id) = parsed.get("optionId").filter(|v| !v.is_null()) else { return false };
+    let entry = taste_entry(id, parsed.get("steer"), options, payload.get("title").unwrap_or(&Value::Null), project, &iso_now());
+    let dir = jsp::join(&[&crate::util::homedir(env), ".impeccable"]);
+    let write = || -> std::io::Result<()> {
+        std::fs::create_dir_all(&dir)?;
+        let mut file = std::fs::OpenOptions::new().create(true).append(true).open(jsp::join(&[&dir, "taste.jsonl"]))?;
+        file.write_all(format!("{}\n", json_compact(&entry)).as_bytes())
+    };
+    write().is_ok()
+}
+
 struct ServerState {
     cwd: String,
     qdir: String,
@@ -812,6 +943,8 @@ struct ServerState {
     payload: Value,
     options: Vec<Value>,
     local_images: Vec<String>,
+    local_screens: Vec<String>,
+    answer_nonce: String,
     build_path_default: Option<(String, bool)>,
     live_build_path: Option<String>,
     awaiting_next: bool,
@@ -854,6 +987,8 @@ impl ServerState {
             payload: Value::Null,
             options: vec![],
             local_images: vec![],
+            local_screens: vec![],
+            answer_nonce: String::new(),
             build_path_default: None,
             live_build_path: None,
             awaiting_next: false,
@@ -862,6 +997,11 @@ impl ServerState {
             last_beat_write: None,
             last_claim_at: 0.0,
         }
+    }
+
+    // JS-PARITY: screen-free rounds retain the upstream open answer contract.
+    fn reject_answer_nonce(&self, parsed: &Map<String, Value>) -> bool {
+        !self.local_screens.is_empty() && parsed.get("nonce").and_then(Value::as_str) != Some(self.answer_nonce.as_str())
     }
 
     fn next_file(&self) -> Option<String> {
@@ -876,6 +1016,7 @@ impl ServerState {
             return Err("payload needs an options array".into());
         }
         let mut local_images: Vec<String> = Vec::new();
+        let mut local_screens: Vec<String> = Vec::new();
         let cwd = self.cwd.clone();
         let is_url = |s: &str| s.starts_with("http://") || s.starts_with("https://");
         fn image_src(cwd: &str, local_images: &mut Vec<String>, value: Option<&Value>) -> Value {
@@ -914,6 +1055,15 @@ impl ServerState {
             m.insert("heroSrc".into(), hero);
             m.insert("boardSrc".into(), board);
             m.insert("compSrc".into(), comp);
+            // JS-PARITY: screenSrc resolves local paths and forgives missing files.
+            let screen = option.get("screen").filter(|v| crate::staleness::js_truthy(v))
+                .map(|v| jsp::resolve(&cwd, &[&js_str(v)]))
+                .filter(|abs| exists(abs));
+            let screen_src = screen.map(|abs| {
+                local_screens.push(abs);
+                Value::String(format!("/screen/{}", local_screens.len() - 1))
+            }).unwrap_or(Value::Null);
+            m.insert("screenSrc".into(), screen_src);
             Value::Object(m)
         };
         for o in &opts {
@@ -936,6 +1086,7 @@ impl ServerState {
         self.payload = parsed.clone();
         self.options = options;
         self.local_images = local_images;
+        self.local_screens = local_screens;
         self.build_path_default = parsed.get("buildPath").filter(|b| crate::staleness::js_truthy(b)).and_then(|b| {
             let v = b.get("value").and_then(|x| x.as_str())?;
             if v == "comp" || v == "code" {
@@ -1007,13 +1158,13 @@ impl ServerState {
                     .collect();
                 let raises_head = |count: usize| -> String {
                     format!(
-                        "<div class=\"raises-head\"><span class=\"fact-label\">Improved by Impeccable's worlds</span>{}</div>",
+                        "<div class=\"raises-head\"><span class=\"fact-label\">Improved by Melzi's worlds</span>{}</div>",
                         if count > 1 { format!("<span class=\"raises-count\" data-raises-count>1/{}</span>", count) } else { String::new() }
                     )
                 };
                 if raise_lines.len() > 1 {
                     rows.push(format!(
-                        "<div class=\"raises raises-cycle\" role=\"button\" tabindex=\"0\" title=\"Click or press Enter for the next improvement\" aria-label=\"How Impeccable's worlds improved this direction; activate to see the next improvement\">\n              {}\n              {}\n              <span class=\"sr-live\" aria-live=\"polite\"></span>\n            </div>",
+                        "<div class=\"raises raises-cycle\" role=\"button\" tabindex=\"0\" title=\"Click or press Enter for the next improvement\" aria-label=\"How Melzi's worlds improved this direction; activate to see the next improvement\">\n              {}\n              {}\n              <span class=\"sr-live\" aria-live=\"polite\"></span>\n            </div>",
                         raises_head(raise_lines.len()),
                         raise_lines.join("")
                     ));
@@ -1135,7 +1286,11 @@ impl ServerState {
             .map(|(index, o)| {
                 let media_html = media(o);
                 let wire_html = if media_html.is_empty() { wire(o) } else { String::new() };
-                let media_or_wire = if !media_html.is_empty() { media_html.clone() } else { wire_html.clone() };
+                let media_or_wire = if let Some(src) = str_of(o, "screenSrc") {
+                    format!("<div class=\"media screen\">\n            <iframe src=\"{}\" sandbox=\"allow-scripts\" title=\"{}\"></iframe>\n            <div class=\"chips\"><button type=\"button\" class=\"chip full\" data-src=\"{}\" aria-label=\"Open this screen full size\"><span>Full screen</span></button>{}</div>\n          </div>",
+                        esc_s(&src), esc(o.get("label").unwrap_or(&Value::Null)), esc_s(&src),
+                        if has(o, "boardSrc") && has(o, "heroSrc") { flip_chip("Board") } else { String::new() })
+                } else if !media_html.is_empty() { media_html.clone() } else { wire_html.clone() };
                 let id_esc = esc(o.get("id").unwrap_or(&Value::Null));
                 let kicker = if has(o, "kicker") {
                     format!("<span class=\"kicker\">{}</span>", esc(o.get("kicker").unwrap()))
@@ -1233,8 +1388,8 @@ impl ServerState {
         let await_next = if waiting { format!("awaitNextRound(false, {});", crate::util::js_number_to_string(wait_budget_ms)) } else { String::new() };
         // JS: const KEY = ${JSON.stringify(detachedKey || '')};
         let key_json = serde_json::to_string(self.detached_key.as_deref().unwrap_or("")).unwrap_or_else(|_| "\"\"".into());
-        let subs: [(&str, String); 15] = [
-            ("@@1@@", title_default("impeccable · decision")),
+        let subs: [(&str, String); 16] = [
+            ("@@1@@", title_default("Melzi · decision")),
             ("@@2@@", expand_chip.to_string()),
             ("@@3@@", bp_confirm),
             ("@@4@@", title_default("Choose a direction")),
@@ -1249,6 +1404,7 @@ impl ServerState {
             ("@@13@@", crate::util::js_number_to_string(self.idle_grace_ms)),
             ("@@14@@", await_next),
             ("@@15@@", key_json),
+            ("@@16@@", self.answer_nonce.clone()),
         ];
         let mut html = PAGE.to_string();
         // Replace higher numbers first so @@1@@ does not clobber @@10@@..@@15@@.
@@ -1271,9 +1427,108 @@ mod tests {
         assert!(!PAGE.contains("@font-face"));
         assert!(!PAGE.contains("/fonts/"));
         assert!(PAGE.contains("--ks-font: system-ui,"));
-        assert!(PAGE.contains("aria-label=\"Impeccable\""));
+        assert!(PAGE.contains("class=\"wordmark\""));
+        assert!(!PAGE.contains("M5 2.5 L13.5"));
+        assert!(!PAGE.contains("brand-logo"));
         assert!(PAGE.contains("color-scheme: light"));
         assert!(!PAGE.contains("color-scheme: dark"));
+    }
+
+    #[test]
+    fn screen_nonce_is_per_server_and_only_required_for_screen_rounds() {
+        let first = answer_nonce().unwrap();
+        let second = answer_nonce().unwrap();
+        assert_eq!(first.len(), 32);
+        assert!(first.bytes().all(|b| b.is_ascii_hexdigit()));
+        assert_ne!(first, second);
+        let mut state = ServerState::new("/tmp".into(), "/tmp/questions".into(), Some("sk".into()), 600000.0);
+        state.answer_nonce = first.clone();
+        let forged = json!({"optionId":"built"}).as_object().unwrap().clone();
+        assert!(!state.reject_answer_nonce(&forged));
+        state.local_screens.push("/tmp/screen.html".into());
+        assert!(state.reject_answer_nonce(&forged));
+        assert!(state.reject_answer_nonce(json!({"nonce":second}).as_object().unwrap()));
+        assert!(!state.reject_answer_nonce(json!({"nonce":first}).as_object().unwrap()));
+        assert!(state.page(false).contains(&format!("const NONCE = '{}';", first)));
+        state.load_round(r#"{"options":[{"id":"card","label":"Card"}]}"#).unwrap();
+        assert!(!state.reject_answer_nonce(&forged));
+        assert_eq!(state.answer_nonce, first);
+    }
+
+    #[test]
+    fn screen_round_renders_before_art_and_resets_registry_on_update() {
+        let root = std::env::temp_dir().join(format!("impeccable-screen-{}", answer_nonce().unwrap()));
+        std::fs::create_dir_all(&root).unwrap();
+        let screen = root.join("screen.html");
+        std::fs::write(&screen, "<!doctype html><h1>Departures</h1>").unwrap();
+        let mut state = ServerState::new(root.to_string_lossy().into_owned(), String::new(), None, 600000.0);
+        state.answer_nonce = answer_nonce().unwrap();
+        state.load_round(&json!({"options":[{"id":"built","label":"Built","screen":screen,"hero":"https://example.test/art.png"}]}).to_string()).unwrap();
+        assert_eq!(state.local_screens, vec![screen.to_string_lossy().into_owned()]);
+        let page = state.page(false);
+        assert!(page.contains("<iframe src=\"/screen/0\" sandbox=\"allow-scripts\" title=\"Built\"></iframe>"));
+        assert!(page.contains("aspect-ratio: 16/9"));
+        assert!(page.contains("width: 1280px; height: 720px"));
+        assert!(page.contains("String(w / 1280)"));
+        assert!(!page.contains("loading=\"lazy\""));
+        let face = page.split("class=\"face front").nth(1).unwrap().split("class=\"body\"").next().unwrap();
+        assert!(!face.contains("<img"));
+        assert!(face.contains("<iframe"));
+        std::fs::remove_file(&screen).unwrap();
+        state.load_round(&json!({"options":[{"id":"ghost","label":"Missing","screen":screen}]}).to_string()).unwrap();
+        assert!(state.local_screens.is_empty());
+        assert!(!state.page(false).contains("<iframe"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn taste_entry_matches_js_shape_for_pick_reroll_canon_and_unknown() {
+        let options = vec![
+            json!({"id":"a","label":"A","lineage":"Rail","screen":"/tmp/a.html","hero":"ignored"}),
+            json!({"id":"b","label":"B","lineage":""}),
+            json!({"id":"canon","label":"Standard"}),
+            json!({"id":"reroll","label":"Again"}),
+        ];
+        let pick = taste_entry(&json!("a"), Some(&json!("\u{feff} keep density \n")), &options, &json!("World"), "/project", "2026-09-14T00:00:00.000Z");
+        assert_eq!(json_compact(&pick), r#"{"v":1,"at":"2026-09-14T00:00:00.000Z","kind":"pick","project":"/project","title":"World","chosen":{"id":"a","label":"A","lineage":"Rail","screen":"/tmp/a.html"},"refused":[{"id":"b","label":"B"}],"steer":"keep density"}"#);
+        for id in ["reroll", "canon", "unknown"] {
+            let entry = taste_entry(&json!(id), Some(&json!(" \n")), &options, &Value::Null, "/project", "now");
+            assert_eq!(entry["chosen"], Value::Null);
+            assert_eq!(entry["refused"].as_array().unwrap().len(), 2);
+            assert_eq!(entry["kind"], if id == "unknown" { "pick" } else { id });
+            assert!(entry.get("steer").is_none());
+        }
+    }
+
+    #[test]
+    fn taste_record_appends_and_failure_or_opt_out_never_panics() {
+        let root = std::env::temp_dir().join(format!("impeccable-taste-{}", answer_nonce().unwrap()));
+        std::fs::create_dir_all(&root).unwrap();
+        let home = root.to_string_lossy().into_owned();
+        let mut env = Env::from([("HOME".into(), home.clone()), ("USERPROFILE".into(), home.clone())]);
+        let parsed = json!({"optionId":"a"}).as_object().unwrap().clone();
+        let options = vec![json!({"id":"a","label":"A"})];
+        assert!(record_choice(&env, "/project", &Value::Null, &options, &parsed));
+        assert!(record_choice(&env, "/project", &Value::Null, &options, &parsed));
+        let target = root.join(".impeccable/taste.jsonl");
+        let before = std::fs::read_to_string(&target).unwrap();
+        assert_eq!(before.lines().count(), 2);
+        for line in before.lines() {
+            let entry: Value = serde_json::from_str(line).unwrap();
+            assert_eq!(entry["chosen"], json!({"id":"a","label":"A"}));
+            assert!(entry["at"].as_str().unwrap().ends_with('Z'));
+        }
+        env.insert("IMPECCABLE_NO_TASTE_LEDGER".into(), "1".into());
+        assert!(!record_choice(&env, "/project", &Value::Null, &options, &parsed));
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), before);
+        env.remove("IMPECCABLE_NO_TASTE_LEDGER");
+        assert!(!record_choice(&env, "/project", &Value::Null, &options, &Map::new()));
+        let blocked_home = root.join("blocked");
+        std::fs::write(&blocked_home, "not a directory").unwrap();
+        env.insert("HOME".into(), blocked_home.to_string_lossy().into_owned());
+        env.insert("USERPROFILE".into(), blocked_home.to_string_lossy().into_owned());
+        assert!(!record_choice(&env, "/project", &Value::Null, &options, &parsed));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     // JS scenarios: tests/serve-question.test.mjs (public repo main,

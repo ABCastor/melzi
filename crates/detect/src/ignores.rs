@@ -230,7 +230,7 @@ fn list(cwd: &str) -> String {
     let shared = read_raw_detection_config(cwd, false);
     let local = read_raw_detection_config(cwd, true);
     [
-        "Impeccable detector ignores".to_string(),
+        "Melzi detector ignores".to_string(),
         format!("  shared file: {}", rel_or_abs(cwd, &get_config_path(cwd))),
         format!(
             "  local file:  {}",

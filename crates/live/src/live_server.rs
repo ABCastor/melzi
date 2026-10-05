@@ -213,7 +213,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
         let failed = deferred.get("failed").and_then(|v| v.as_u64()).unwrap_or(0);
         if applied > 0 || failed > 0 {
             io.out(&format!(
-                "[impeccable] applied legacy deferred Svelte component accepts: {}\n",
+                "[melzi] applied legacy deferred Svelte component accepts: {}\n",
                 serde_json::to_string(&deferred).unwrap_or_default()
             ));
         }
@@ -233,7 +233,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
             .unwrap_or(0);
         if removed_n > 0 || sweep.get("removedRoot") == Some(&Value::Bool(true)) {
             io.out(&format!(
-                "[impeccable] swept orphaned Svelte component sessions: {}\n",
+                "[melzi] swept orphaned Svelte component sessions: {}\n",
                 serde_json::to_string(&sweep).unwrap_or_default()
             ));
         }
@@ -259,7 +259,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
             }
             if removed > 0 {
                 io.out(&format!(
-                    "[impeccable] removed {} accept receipt(s) older than 14 days\n",
+                    "[melzi] removed {} accept receipt(s) older than 14 days\n",
                     removed
                 ));
             }
@@ -323,7 +323,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
         &json!({ "pid": std::process::id(), "port": port, "token": token }),
     );
     let url = format!("http://localhost:{}", port);
-    io.out(&format!("\nImpeccable live server running on {}\n", url));
+    io.out(&format!("\nMelzi live server running on {}\n", url));
     io.out(&format!("Token: {}\n\n", token));
     io.out(&format!("Script: {}/live.js\n", url));
     io.out("Inject: managed by impeccable live-inject; Astro source tags use is:inline automatically.\n");
@@ -1450,7 +1450,7 @@ fn session_file_metadata_from_poll_reply(file: Option<&Value>, cwd: &str) -> Map
     }
     if !normalized.contains(".impeccable/live/previews/")
         && !normalized.contains("node_modules/.impeccable-live/")
-        && !normalized.contains("src/lib/impeccable/")
+        && !normalized.contains("src/lib/melzi/")
         && !normalized.contains("/.impeccable-live/")
     {
         return base;

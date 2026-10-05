@@ -1,5 +1,5 @@
 /**
- * Browser-side resolution of project detector waivers for Impeccable live mode.
+ * Browser-side resolution of project detector waivers for Melzi live mode.
  *
  * The live server serializes `.impeccable/config.json` + `config.local.json`
  * detector ignores (plus the served-root prefixes from the inject config's

@@ -2,6 +2,8 @@ Run systematic **technical** quality checks on a native app (`ios` / `android` /
 
 This is a code-level audit, not a design critique. Audit from source (SwiftUI / UIKit / Compose / React Native / Flutter); no browser tooling or `impeccable detect` applies. Score against the platform reference(s): [ios.md](ios.md) / [android.md](android.md), both for `adaptive`. Read them before scoring if Setup hasn't already. The report skeleton mirrors [audit.md](audit.md); keep the two in sync when changing it.
 
+Read [rigor.md](rigor.md) before scoring. It is mandatory for this command: every finding carries the narrowest accurate evidence label, and the accessibility level you achieved must be named rather than implied. With no detector on this platform, an unproven claim is easier to make, not harder.
+
 ## Diagnostic Scan
 
 Run comprehensive checks across 5 dimensions. Score each dimension 0-4 using the criteria below.
@@ -121,13 +123,13 @@ List recommended commands in priority order (P0 first, then P1, then P2):
 1. **[P?] `{{command_prefix}}command-name`**: Brief description (specific context from audit findings)
 2. **[P?] `{{command_prefix}}command-name`**: Brief description (specific context)
 
-**Rules**: Only recommend commands from: {{available_commands}}. Map findings to the most appropriate command. End with `{{command_prefix}}impeccable polish` as the final step if any fixes were recommended.
+**Rules**: Only recommend commands from: {{available_commands}}. Map findings to the most appropriate command. End with `{{command_prefix}}melzi polish` as the final step if any fixes were recommended.
 
 After presenting the summary, tell the user:
 
 > You can ask me to run these one at a time, all at once, or in any order you prefer.
 >
-> Re-run `{{command_prefix}}impeccable audit` after fixes to see your score improve.
+> Re-run `{{command_prefix}}melzi audit` after fixes to see your score improve.
 
 **IMPORTANT**: Be thorough but actionable. Too many P3 issues creates noise. Focus on what actually matters.
 

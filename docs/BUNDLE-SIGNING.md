@@ -1,4 +1,6 @@
-# Skill bundle signatures
+# Inherited skill bundle signature contract
+
+This document describes Impeccable's retained verification protocol. Melzi does not operate its hosted endpoint, hold its signing key, or publish compatible signed bundles. Do not use the inherited release commands to publish Melzi. Install locally generated skill directories as described in the root README. A Melzi remote distribution needs its own reviewed endpoint and keyring first.
 
 `impeccable install`, `update`, and `check` authenticate a remote skill ZIP
 before extracting it. `universal.zip.sig.json` is an Ed25519 signature over

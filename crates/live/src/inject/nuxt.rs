@@ -109,7 +109,7 @@ pub fn apply_nuxt_live_adapter(
             return json!({
                 "file": project.plugin_file,
                 "error": "nuxt_plugin_conflict",
-                "hint": format!("{} already exists and is not managed by Impeccable Live", project.plugin_file),
+                "hint": format!("{} already exists and is not managed by Melzi Live", project.plugin_file),
             });
         }
     }
@@ -134,7 +134,7 @@ pub fn remove_nuxt_live_adapter(cwd: &str, project: &NuxtProject) -> Value {
             "file": project.plugin_file,
             "removed": false,
             "error": "nuxt_plugin_conflict",
-            "hint": format!("{} is not managed by Impeccable Live", project.plugin_file),
+            "hint": format!("{} is not managed by Melzi Live", project.plugin_file),
         });
     }
     let _ = std::fs::remove_file(&abs);

@@ -107,7 +107,10 @@ async function exercise(t, scenario) {
       res.end(scenario === 'empty-download' ? '' : PAYLOAD);
     }
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
   t.after(() => new Promise(resolve => server.close(resolve)));
   // Keep system tools, but exclude user/npm PATH candidates and all launcher
   // overrides so the test cannot accidentally execute an installed engine.
@@ -196,3 +199,135 @@ for (const scenario of ['removed', 'emptied', 'empty-download', 'no-sidecar', 'e
     }
   });
 }
+
+// These fork policy checks use no socket, so they also run in offline sandboxes.
+test('fork launcher refuses an unset endpoint before invoking a downloader', { skip: WINDOWS }, async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'impeccable-fork-launcher-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const launcher = path.join(root, 'impeccable');
+  fs.copyFileSync(path.join(ROOT, 'skill/scripts/impeccable'), launcher);
+  fs.writeFileSync(path.join(root, 'VERSION'), '0.0.0-test\n');
+  const tools = path.join(root, 'tools');
+  fs.mkdirSync(tools);
+  for (const tool of ['curl', 'wget']) {
+    fs.writeFileSync(path.join(tools, tool), '#!/bin/sh\necho called >> "$HOME/network-called"\nexit 1\n', { mode: 0o755 });
+  }
+  const env = { HOME: root, PATH: `${tools}:/usr/bin:/bin` };
+  const result = await new Promise((resolve, reject) => {
+    const child = spawn('/bin/sh', [launcher, 'engine-probe'], { env, cwd: root });
+    let stderr = '';
+    child.stderr.on('data', data => { stderr += data; });
+    child.on('error', reject);
+    child.on('close', status => resolve({ status, stderr }));
+  });
+  assert.equal(result.status, 127, result.stderr);
+  assert.match(result.stderr, /no download endpoint/i);
+  assert.match(result.stderr, /cargo build --release -p impeccable/);
+  assert.match(result.stderr, /IMPECCABLE_BIN/);
+  assert.match(result.stderr, /~\/\.impeccable\/bin\/impeccable/);
+  assert.equal(fs.existsSync(path.join(root, 'network-called')), false);
+  assert.equal(fs.existsSync(path.join(root, '.impeccable')), false);
+});
+
+test('fork Windows launcher refuses an unset endpoint before curl or cache setup', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'skill/scripts/impeccable.cmd'), 'utf8').replaceAll('\r\n', '\n');
+  const download = source.slice(source.indexOf('\n:download\n'));
+  const guard = download.indexOf('if not defined IMPECCABLE_DOWNLOAD_BASE goto no_download_endpoint');
+  assert.ok(guard >= 0);
+  assert.ok(guard < download.indexOf('where curl.exe'));
+  assert.ok(guard < download.indexOf('mkdir '));
+  assert.match(source, /cargo build --release -p impeccable/);
+  assert.doesNotMatch(source, /set "IMPECCABLE_DOWNLOAD_BASE=https:/);
+});
+
+test('fork engine fetch refuses no endpoint and preserves explicit endpoint URLs', async t => {
+  const { assetUrl, fetchEngine, currentTarget } = await import('../scripts/fetch-engine.mjs');
+  const previousFetch = globalThis.fetch;
+  const previousBin = process.env.IMPECCABLE_BIN;
+  delete process.env.IMPECCABLE_BIN;
+  t.after(() => {
+    if (previousBin === undefined) delete process.env.IMPECCABLE_BIN;
+    else process.env.IMPECCABLE_BIN = previousBin;
+  });
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; throw new Error('unexpected fetch'); };
+  t.after(() => { globalThis.fetch = previousFetch; });
+  await assert.rejects(fetchEngine(currentTarget(), { version: '0.0.0-test', base: '' }), /no download endpoint/i);
+  assert.equal(calls, 0);
+  assert.throws(() => assetUrl('1.2.3', 'linux-x64', ''), /cargo build --release -p impeccable/);
+  assert.equal(assetUrl('1.2.3', 'linux-x64', 'https://fork.invalid/releases/'),
+    'https://fork.invalid/releases/engine-v1.2.3/impeccable-linux-x64');
+});
+
+test('fork launcher still verifies and executes downloads from an explicit endpoint', { skip: WINDOWS }, async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'impeccable-explicit-launcher-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const launcher = path.join(root, 'impeccable');
+  fs.copyFileSync(path.join(ROOT, 'skill/scripts/impeccable'), launcher);
+  fs.writeFileSync(path.join(root, 'VERSION'), '0.0.0-test\n');
+  fs.writeFileSync(path.join(root, 'payload'), PAYLOAD);
+  fs.writeFileSync(path.join(root, 'checksum'), `${HASH}  engine\n`);
+  const tools = path.join(root, 'tools');
+  fs.mkdirSync(tools);
+  // Replace only transport: the real launcher still hashes, stages, caches,
+  // and executes the downloaded bytes. No TCP listener is needed.
+  fs.writeFileSync(path.join(tools, 'curl'), `#!/bin/sh
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) output=$2; shift 2 ;;
+    *) url=$1; shift ;;
+  esac
+done
+printf '%s\\n' "$url" >> "$HOME/requests"
+case "$url" in
+  *.sha256) cp "$HOME/checksum" "$output" ;;
+  *) cp "$HOME/payload" "$output" ;;
+esac
+`, { mode: 0o755 });
+  const env = { HOME: root, PATH: `${tools}:/usr/bin:/bin`, IMPECCABLE_DOWNLOAD_BASE: 'https://fork.invalid/releases' };
+  const result = await new Promise((resolve, reject) => {
+    const child = spawn('/bin/sh', [launcher], { env, cwd: root });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', data => { stdout += data; });
+    child.stderr.on('data', data => { stderr += data; });
+    child.on('error', reject);
+    child.on('close', status => resolve({ status, stdout, stderr }));
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /verified-engine/);
+  const requests = fs.readFileSync(path.join(root, 'requests'), 'utf8').trim().split('\n');
+  assert.equal(requests.length, 2);
+  assert.match(requests[0], /^https:\/\/fork\.invalid\/releases\/engine-v0\.0\.0-test\/impeccable-/);
+  assert.equal(requests[1], `${requests[0]}.sha256`);
+});
+
+test('fork engine fetch keeps the local override and explicit download paths', async t => {
+  const { fetchEngine, currentTarget } = await import('../scripts/fetch-engine.mjs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'impeccable-fetch-source-'));
+  const previousBin = process.env.IMPECCABLE_BIN;
+  const previousFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = previousFetch;
+    if (previousBin === undefined) delete process.env.IMPECCABLE_BIN;
+    else process.env.IMPECCABLE_BIN = previousBin;
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const local = path.join(root, 'local');
+  fs.writeFileSync(local, 'local engine');
+  process.env.IMPECCABLE_BIN = local;
+  globalThis.fetch = async () => { throw new Error('unexpected fetch'); };
+  const installed = await fetchEngine(currentTarget(), { version: 'test', dest: path.join(root, 'local-output'), base: '' });
+  assert.equal(fs.readFileSync(installed, 'utf8'), 'local engine');
+  delete process.env.IMPECCABLE_BIN;
+  const requests = [];
+  globalThis.fetch = async url => {
+    requests.push(url);
+    return new Response(url.endsWith('.sha256') ? `${HASH}  engine\n` : PAYLOAD);
+  };
+  const remote = await fetchEngine(currentTarget(), { version: 'test', dest: path.join(root, 'remote-output'), base: 'https://fork.invalid/releases' });
+  assert.deepEqual(fs.readFileSync(remote), PAYLOAD);
+  assert.equal(requests.length, 2);
+  assert.ok(requests[0].startsWith('https://fork.invalid/releases/engine-vtest/'));
+  assert.equal(requests[1], `${requests[0]}.sha256`);
+});

@@ -75,7 +75,7 @@ If a `DESIGN.md` already exists, **do not silently overwrite it**. Show the user
 - **Scan mode** (default): the project has design tokens, components, or rendered output. Extract, then confirm descriptive language. Use when there's code to analyze.
 - **Seed mode**: the project is pre-implementation. Ensure PRODUCT.md exists, then reuse new-work's visual-world workshop and write its directional DESIGN.md seed. Re-run in scan mode once there's code.
 
-Decide by scanning first (Scan mode Step 1). If the scan finds no tokens, no component files, and no rendered site, offer seed mode; don't silently switch. `/impeccable document --seed` requests new-work's world workshop, but it does not authorize replacing coherent code: when an incumbent system exists, offer scan mode or route an explicit identity-replacement request through new-work.
+Decide by scanning first (Scan mode Step 1). If the scan finds no tokens, no component files, and no rendered site, offer seed mode; don't silently switch. `/melzi document --seed` requests new-work's world workshop, but it does not authorize replacing coherent code: when an incumbent system exists, offer scan mode or route an explicit identity-replacement request through new-work.
 
 ## Scan mode (approach C: auto-extract, then confirm descriptive language)
 
@@ -366,7 +366,7 @@ Use the canonical section order from Scan mode. Populate the selected workshop d
 Lead the file with:
 
 ```markdown
-<!-- SEED: established with the user before implementation; re-run /impeccable document once there's code to capture the actual tokens and components. -->
+<!-- SEED: established with the user before implementation; re-run /melzi document once there's code to capture the actual tokens and components. -->
 ```
 
 Per-section guidance in seed mode:
@@ -385,7 +385,7 @@ Seed mode writes a minimal frontmatter with `name` and `description` only; no co
 ### Step 3: Confirm
 
 1. Show the seed DESIGN.md. Call out that it is a seed (the marker is the literal commitment).
-2. Tell the user: "Re-run `/impeccable document` once you have some code. That pass will extract real tokens and generate the sidecar."
+2. Tell the user: "Re-run `/melzi document` once you have some code. That pass will extract real tokens and generate the sidecar."
 
 Your own write is the freshest source; no reload needed.
 
@@ -414,3 +414,35 @@ Your own write is the freshest source; no reload needed.
 - Don't rename sections even slightly. "Colors" not "Color Palette & Roles". "Typography" not "Typography Rules". Tooling parsing depends on exact headers.
 - Don't duplicate token values between frontmatter and prose. If a color is in `colors.primary` as hex, the prose can name it and describe its role but should not reassert a different hex. The frontmatter is normative.
 - Don't invent frontmatter token groups outside Stitch's schema (no `motion:`, `breakpoints:`, `shadows:` at the top level). Stitch's Zod schema only accepts `colors`, `typography`, `rounded`, `spacing`, `components`. Anything else belongs in the sidecar's `extensions`.
+
+## Extract mode: consolidate the system in code
+
+A typed `extract` command enters here. Document mode records the system; Extract mode also consolidates repeated implementations into the system and migrates their callers.
+
+### Discover the existing system
+
+Find the design-system, component-library, shared-UI, and token directories. Read their organization, naming, token shape, exports, and import conventions. If no system exists, do not invent its location or structure. Ask where the project wants shared UI to live.
+
+### Identify patterns worth extracting
+
+Look for components used at least three times with the same intent; hard-coded colour, spacing, type, radius, shadow, and motion values that express one shared role; inconsistent implementations of one concept; repeated layout or interaction compositions; recurring type roles; and repeated easing, duration, or keyframes.
+
+Extract only behavior used three or more times for the same reason. Two things that happen to look alike can still carry different intent. Premature abstraction costs more than local duplication.
+
+### Plan the extraction
+
+Name the components, semantic tokens, necessary variants, project-native names, and migration path. Design systems grow from current use, not from every variation that might exist later.
+
+### Extract and enrich
+
+Give shared components a small, clear API with sound defaults, actual variants, accessibility built in, types where the stack supports them, and examples showing when to use each form. Separate primitive tokens from semantic roles and document where each semantic token belongs. Record composition patterns with their use boundary, not as universal wrappers.
+
+### Migrate every existing use
+
+Search for all instances, replace them systematically, and test visual and functional parity. Delete the superseded local implementations only after every caller uses the shared version. A component left beside its old copies is another fork, not a consolidation.
+
+### Record the result
+
+Update DESIGN.md, `.impeccable/design.json`, Storybook or the project's component catalogue, and any examples that teach the old API. Keep the documentation and code on the same names.
+
+Never extract a one-off without a stable generalization, create a component so generic that its props restate raw HTML or CSS, ignore the existing system's conventions, skip types or prop documentation where the codebase uses them, create a token for every literal value, or merge components whose intent differs.

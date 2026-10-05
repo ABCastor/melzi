@@ -123,9 +123,9 @@ Summarize captured and deliberately undecided facts. Do not offer DESIGN.md mere
 
 Recommend the next action from the actual project state:
 
-- Empty or early project: ask naturally for the surface to be built, or use `/impeccable shape <surface>` when the user wants a confirmed brief without implementation. New-work will establish a visual world only when the requested work needs one.
-- Existing coherent interface without DESIGN.md: `/impeccable document` if the user wants the incumbent system recorded independently of a new build.
+- Empty or early project: ask naturally for the surface to be built, or use `/melzi shape <surface>` when the user wants a confirmed brief without implementation. New-work will establish a visual world only when the requested work needs one.
+- Existing coherent interface without DESIGN.md: `/melzi document` if the user wants the incumbent system recorded independently of a new build.
 - Existing surface needing work: name the most relevant scoped command.
-- Web project ready for visual iteration: `/impeccable live` when configured.
+- Web project ready for visual iteration: `/melzi live` when configured.
 
 If init was invoked by another request, resume without rerunning `impeccable context`; the native reference above is the one thing that run could not have given you, and new-work owns later visual decisions.

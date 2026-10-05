@@ -81,7 +81,7 @@ impl Drop for Tmp {
 }
 
 fn rt(cwd: &str) -> Runtime<'static> {
-    Runtime::new(cwd.to_string(), HashMap::new(), "/impeccable".to_string(), "/opt/bin/impeccable", &HTML)
+    Runtime::new(cwd.to_string(), HashMap::new(), "/melzi".to_string(), "/opt/bin/impeccable", &HTML)
 }
 
 fn edit_event(cwd: &str, file: &str, session: &str) -> String {
@@ -230,7 +230,7 @@ fn no_footprint_noop_gate_holds_under_redirect() {
     let _g = EnvGuard::set(&[("IMPECCABLE_CACHE_ROOT", Some(&root.path()))]);
     let cwd = project.path();
     let r = rt(&cwd);
-    // A clean UI edit in a project with no Impeccable footprint must be a
+    // A clean UI edit in a project with no Melzi footprint must be a
     // no-op on disk (issues #344, #305), redirect or not.
     let clean = project.write("src/b.css", CLEAN_CSS);
     let res = hook::run_hook(&r, &edit_event(&cwd, &clean, "s1"));

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-20T10:00:00.000Z",
+  "title": "Design System: Declared Waivers Fixture",
+  "extensions": {
+    "motion": [
+      { "name": "ease-spring", "value": "cubic-bezier(.28, 1.35, .5, 1)", "purpose": "Overshoot on entrance, declared on purpose." },
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Default easing for state transitions." }
+    ]
+  }
+}

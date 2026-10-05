@@ -1,0 +1,97 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Design Lab behavioural harness</title>
+<!--
+  This is a CLAIM check, not a proxy check.
+
+  The suite that shipped with the Design Lab asserts that certain strings appear in the
+  source (assert.match(worker, /chrome\.tabs\.captureVisibleTab\(/)). That proves the text
+  exists, not that anything works — which is family 1 of the pain corpus, the largest one:
+  "the check measures a proxy, not the claim". So this loads the real content script into a
+  real page with a real shadow root and exercises the actual behaviour.
+-->
+<style>
+  body { font-family: Georgia, serif; margin: 2rem; background: #fff; color: #111; }
+  .card { border: 1px solid #ccc; padding: 1rem; margin: 1rem 0; }
+  h1 { color: var(--probe-ink, #111); }
+</style>
+
+<h1 id="title">Host page title</h1>
+<div class="card" id="target-card">
+  <p id="target-text">A paragraph the inspector should be able to anchor a comment to.</p>
+</div>
+<button id="host-button">A host button that must not fire while overlay is on</button>
+<div id="host-clicks">0</div>
+
+<script>
+  // --- host-page state, to prove the overlay swallows clicks -------------------
+  window.__hostClicks = 0;
+  document.getElementById('host-button').addEventListener('click', () => {
+    window.__hostClicks += 1;
+    document.getElementById('host-clicks').textContent = String(window.__hostClicks);
+  });
+
+  // --- minimal chrome API stub ------------------------------------------------
+  // Only what the content script actually touches. Storage is an in-memory map so
+  // persistence can be asserted without a browser profile.
+  const store = {};
+  const listeners = [];
+  window.__melziSent = [];
+  window.chrome = {
+    runtime: {
+      lastError: null,
+      onMessage: { addListener: (fn) => listeners.push(fn) },
+      sendMessage: (msg, cb) => {
+        window.__melziSent.push(msg);
+        let reply = { ok: true, enabled: false };
+        // Emulate what the service worker really does with chrome.scripting.insertCSS /
+        // removeCSS. Without this the content script's applyDesign() gets ok:true and
+        // nothing is injected — which would read as a product defect when it is a stub gap.
+        if (msg.action === 'apply-design-lab-theme') {
+          let tag = document.getElementById('__melzi_theme');
+          if (!tag) {
+            tag = document.createElement('style');
+            tag.id = '__melzi_theme';
+            document.head.appendChild(tag);
+          }
+          tag.textContent = msg.css || '';
+          reply = { ok: true };
+        }
+        if (msg.action === 'remove-design-lab-theme') {
+          const tag = document.getElementById('__melzi_theme');
+          if (tag) tag.remove();
+          reply = { ok: true };
+        }
+        if (msg.action === 'capture-design-lab-screenshot') {
+          reply = { ok: true, dataUrl: 'data:image/png;base64,iVBORw0KGgo=' };
+        }
+        if (cb) setTimeout(() => cb(reply), 0);
+      },
+    },
+    storage: {
+      local: {
+        get: (keys) => Promise.resolve(
+          Object.fromEntries((Array.isArray(keys) ? keys : [keys]).map((k) => [k, store[k]]))
+        ),
+        set: (obj) => { Object.assign(store, obj); return Promise.resolve(); },
+        remove: (k) => { delete store[k]; return Promise.resolve(); },
+      },
+      session: {
+        get: (k) => Promise.resolve({ [k]: store['s:' + k] }),
+        set: (o) => { for (const [k, v] of Object.entries(o)) store['s:' + k] = v; return Promise.resolve(); },
+      },
+    },
+  };
+  window.__melziStore = store;
+  // Deliver a message to the content script the way the service worker would.
+  window.__melziSend = (msg) => new Promise((resolve) => {
+    let answered = false;
+    for (const fn of listeners) {
+      const kept = fn(msg, {}, (resp) => { answered = true; resolve(resp); });
+      if (kept) return;
+    }
+    if (!answered) resolve(null);
+  });
+</script>
+<script src="./design-lab-options.js"></script>
+<script src="./design-lab.js"></script>

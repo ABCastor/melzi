@@ -471,7 +471,7 @@ Impeccable design instructions.`;
     expect(refNames).toEqual(['color', 'typography']);
   });
 
-  test('should fall back to "impeccable" when frontmatter has no name', () => {
+  test('should fall back to "melzi" when frontmatter has no name', () => {
     const skillDir = path.join(testRootDir, 'skill');
     ensureDir(skillDir);
     fs.writeFileSync(path.join(skillDir, 'SKILL.src.md'), 'Just body, no frontmatter.');
@@ -479,7 +479,7 @@ Impeccable design instructions.`;
     const { skills } = readSourceFiles(testRootDir);
 
     expect(skills).toHaveLength(1);
-    expect(skills[0].name).toBe('impeccable');
+    expect(skills[0].name).toBe('melzi');
   });
 
   test('should ignore non-md files in skill/reference', () => {
@@ -631,8 +631,8 @@ describe('replacePlaceholders', () => {
     expect(result).toBe('Commands: /audit, /polish, /optimize');
   });
 
-  test('should exclude impeccable from {{available_commands}}', () => {
-    const result = replacePlaceholders('Commands: {{available_commands}}', 'claude-code', ['audit', 'impeccable', 'polish']);
+  test('should exclude melzi from {{available_commands}}', () => {
+    const result = replacePlaceholders('Commands: {{available_commands}}', 'claude-code', ['audit', 'melzi', 'polish']);
     expect(result).toBe('Commands: /audit, /polish');
   });
 
@@ -641,13 +641,13 @@ describe('replacePlaceholders', () => {
     expect(result).toBe('Commands: /audit, /polish');
   });
 
-  test('lists /impeccable sub-commands for {{available_commands}} when no command names are passed', () => {
+  test('lists /melzi sub-commands for {{available_commands}} when no command names are passed', () => {
     // v3.0 single-skill architecture: with no command names, the list falls back
-    // to the IMPECCABLE_SUB_COMMANDS sub-commands rendered as `/impeccable <sub>`.
+    // to the MELZI_SUB_COMMANDS sub-commands rendered as `/melzi <sub>`.
     const result = replacePlaceholders('Commands: {{available_commands}}', 'claude-code', []);
-    expect(result.startsWith('Commands: /impeccable ')).toBe(true);
-    expect(result).toContain('/impeccable audit');
-    expect(result).toContain('/impeccable polish');
+    expect(result.startsWith('Commands: /melzi ')).toBe(true);
+    expect(result).toContain('/melzi audit');
+    expect(result).toContain('/melzi polish');
   });
 
   test('should replace multiple placeholders in the same string', () => {

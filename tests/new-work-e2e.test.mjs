@@ -74,7 +74,7 @@ function run(args, cwd) {
   return new Promise((resolve) => {
     const child = spawn(ENGINE_BIN, ['serve-question', ...args], {
       cwd,
-      env: engineEnv(ENGINE_BIN, { IMPECCABLE_QUESTION_FORCE: '1', IMPECCABLE_CATALOG_DIR: CATALOG_DIR }),
+      env: engineEnv(ENGINE_BIN, { HOME: cwd, USERPROFILE: cwd, IMPECCABLE_QUESTION_FORCE: '1', IMPECCABLE_CATALOG_DIR: CATALOG_DIR }),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let out = '';
@@ -171,7 +171,7 @@ describe('new-work-e2e: serve-question decision page', () => {
           family: getComputedStyle(document.body).fontFamily,
           scheme: getComputedStyle(document.documentElement).colorScheme,
           logoPaths: document.querySelectorAll('.brand svg path').length,
-          logoText: document.querySelectorAll('.brand svg text').length,
+          wordmark: document.querySelector('.brand .wordmark')?.textContent,
           kinpaku: tokenColor('--ks-kinpaku'),
           rule: tokenColor('--ks-rule'),
           leadBorder: getComputedStyle(document.querySelector('.face.lead')).borderTopColor,
@@ -182,14 +182,14 @@ describe('new-work-e2e: serve-question decision page', () => {
       assert.equal(appearance.fonts, 0, 'no custom font faces');
       assert.match(appearance.family, /^system-ui,/);
       assert.equal(appearance.scheme, 'light', 'picker stays light even with a dark OS preference');
-      assert.ok(appearance.logoPaths > 2, 'the brand mark and wordmark are vector outlines');
-      assert.equal(appearance.logoText, 0, 'the logo does not depend on a font');
+      assert.equal(appearance.logoPaths, 0, 'the borrowed logo outlines are absent');
+      assert.equal(appearance.wordmark, 'Melzi', 'the brand is a typographic wordmark');
       assert.equal(appearance.leadBorder, appearance.kinpaku, 'lead outline uses default Kinpaku');
       assert.equal(appearance.activeDot, appearance.kinpaku, 'active switch dot uses default Kinpaku');
       assert.equal(appearance.switchBorder, appearance.rule, 'switch track has a quiet border');
       await page.locator('.card').first().hover();
       assert.equal(await page.locator('.face.lead').evaluate((el) => getComputedStyle(el).borderTopColor), appearance.kinpaku, 'hover preserves the default Kinpaku outline');
-      await page.getByRole('img', { name: 'Impeccable', exact: true }).waitFor();
+      await page.locator('.brand .wordmark').waitFor();
       assert.deepEqual(externalRequests, [], 'dialog must not request third-party resources');
       assert.deepEqual(fontResponses, [], 'no bundled or remote font downloads');
     } finally {

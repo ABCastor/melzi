@@ -1,5 +1,5 @@
 /**
- * Anti-Pattern Browser Detector for Impeccable
+ * Anti-Pattern Browser Detector for Melzi
  * Copyright (c) 2026 Paul Bakaus
  *
  * GENERATED -- do not edit. Source: crates/core/src/browser (rules, WASM) +
@@ -3466,7 +3466,7 @@ if (IS_BROWSER && !__impeccable) {
   const reason = __impeccableInitError && __impeccableInitError.message
     ? __impeccableInitError.message
     : String(__impeccableInitError);
-  const message = `[impeccable] detector core unavailable: ${reason} (a Content-Security-Policy without 'wasm-unsafe-eval' blocks WebAssembly)`;
+  const message = `[melzi] detector core unavailable: ${reason} (a Content-Security-Policy without 'wasm-unsafe-eval' blocks WebAssembly)`;
   const fail = () => { throw new Error(message); };
   const _myScript = document.currentScript;
   const EXTENSION_MODE = (_myScript && _myScript.dataset.impeccableExtension === 'true')
@@ -3545,11 +3545,11 @@ if (IS_BROWSER && !__impeccable) {
 
   const printSummary = function(allFindings) {
     if (allFindings.length === 0) {
-      console.log('%c[impeccable] No anti-patterns found.', 'color: #22c55e; font-weight: bold');
+      console.log('%c[melzi] No anti-patterns found.', 'color: #22c55e; font-weight: bold');
       return;
     }
     console.group(
-      `%c[impeccable] ${allFindings.length} anti-pattern${allFindings.length === 1 ? '' : 's'} found`,
+      `%c[melzi] ${allFindings.length} anti-pattern${allFindings.length === 1 ? '' : 's'} found`,
       'color: oklch(84% 0.19 80.46); font-weight: bold'
     );
     for (const { el, findings } of allFindings) {
@@ -3660,7 +3660,7 @@ if (IS_BROWSER && !__impeccable) {
     if (EXTENSION_MODE) {
       postExtensionError(err);
     } else {
-      console.warn('[impeccable] visual contrast scan failed', err);
+      console.warn('[melzi] visual contrast scan failed', err);
     }
   }
 
@@ -3869,7 +3869,7 @@ if (IS_BROWSER && !__impeccable) {
         try {
           scan();
         } catch (err) {
-          console.warn('[impeccable] scan failed', err);
+          console.warn('[melzi] scan failed', err);
         }
       };
       if (document.readyState === 'loading') {

@@ -1,19 +1,19 @@
 /**
- * Impeccable DevTools Extension - DevTools Page
+ * Melzi DevTools Extension - DevTools Page
  *
- * Creates the Impeccable panel and triggers an auto-scan when DevTools opens.
+ * Creates the Melzi panel and triggers an auto-scan when DevTools opens.
  * This page lives for the entire DevTools session -- its port disconnect
  * is the canonical signal that DevTools has closed.
  */
 
 chrome.devtools.panels.create(
-  'Impeccable',
+  'Melzi',
   '/icons/icon-32.png',
   '/devtools/panel.html'
 );
 
 // Sidebar pane in the Elements panel: shows findings for the currently selected element
-chrome.devtools.panels.elements.createSidebarPane('Impeccable', (sidebar) => {
+chrome.devtools.panels.elements.createSidebarPane('Melzi', (sidebar) => {
   sidebar.setPage('/devtools/sidebar.html');
   sidebar.setHeight('200px');
 });
@@ -26,7 +26,7 @@ let firstConnect = true;
 function connectLifecycle() {
   lifecyclePort = chrome.runtime.connect({ name: portName });
   // On the very first connection, decide whether to auto-scan based on the user's setting.
-  // Default ('panel'): wait until the user opens the Impeccable panel or sidebar.
+  // Default ('panel'): wait until the user opens the Melzi panel or sidebar.
   // Opt-in ('devtools'): scan immediately when DevTools opens.
   if (firstConnect) {
     firstConnect = false;

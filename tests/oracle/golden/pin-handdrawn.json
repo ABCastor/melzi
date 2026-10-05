@@ -1,0 +1,15 @@
+{
+  "stdout": "  + <WS>/.claude/skills/handdrawn\n  + <WS>/.cursor/skills/handdrawn\n  + <WS>/.agents/skills/handdrawn\n\nPinned 'handdrawn' as a standalone shortcut in 3 location(s).\nUse the pinned command directly in each harness.\n",
+  "stderr": "",
+  "exit": 0,
+  "signal": null,
+  "files": {
+    ".agents/skills/handdrawn/SKILL.md": "---\nname: handdrawn\ndescription: \"Draw a mascot, spot illustration, annotation mark or sketch diagram as clean hand-authored SVG. Builds tapered filled paths with deliberate line-weight variation, checks the drawing at its actual display size, and supports draw-on animation and reduced motion. Uses image tools only for construction references and diagnosis; the delivered asset remains editable vector geometry.\"\nmetadata:\n  argument-hint: \"[target]\"\n---\n\n<!-- impeccable-pinned-skill -->\n\nThis is a pinned shortcut for `$melzi handdrawn`.\n\nInvoke $melzi handdrawn, passing along any arguments provided here, and follow its instructions.\n",
+    ".agents/skills/melzi/SKILL.md": "---\nname: melzi\ndescription: fixture\n---\n",
+    ".claude/skills/audit/SKILL.md": "---\nname: audit\ndescription: a user-authored audit skill\n---\nNot pinned.\n",
+    ".claude/skills/handdrawn/SKILL.md": "---\nname: handdrawn\ndescription: \"Draw a mascot, spot illustration, annotation mark or sketch diagram as clean hand-authored SVG. Builds tapered filled paths with deliberate line-weight variation, checks the drawing at its actual display size, and supports draw-on animation and reduced motion. Uses image tools only for construction references and diagnosis; the delivered asset remains editable vector geometry.\"\nargument-hint: \"[target]\"\nuser-invocable: true\n---\n\n<!-- impeccable-pinned-skill -->\n\nThis is a pinned shortcut for `/melzi handdrawn`.\n\nInvoke /melzi handdrawn, passing along any arguments provided here, and follow its instructions.\n",
+    ".claude/skills/melzi/SKILL.md": "---\nname: melzi\ndescription: fixture\n---\n",
+    ".cursor/skills/handdrawn/SKILL.md": "---\nname: handdrawn\ndescription: \"Draw a mascot, spot illustration, annotation mark or sketch diagram as clean hand-authored SVG. Builds tapered filled paths with deliberate line-weight variation, checks the drawing at its actual display size, and supports draw-on animation and reduced motion. Uses image tools only for construction references and diagnosis; the delivered asset remains editable vector geometry.\"\nargument-hint: \"[target]\"\nuser-invocable: true\n---\n\n<!-- impeccable-pinned-skill -->\n\nThis is a pinned shortcut for `/melzi handdrawn`.\n\nInvoke /melzi handdrawn, passing along any arguments provided here, and follow its instructions.\n",
+    ".cursor/skills/melzi/SKILL.md": "---\nname: melzi\ndescription: fixture\n---\n"
+  }
+}

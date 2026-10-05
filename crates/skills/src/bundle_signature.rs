@@ -27,7 +27,7 @@ pub(crate) fn release_version(location: &str) -> Result<String, String> {
         .and_then(|s| s.strip_suffix("/universal.zip"))
         .filter(|v| v.len() <= 128 && VERSION.is_match(v));
     version.map(str::to_string).ok_or_else(|| {
-        "Bundle download must redirect to a versioned Impeccable GitHub release".into()
+        "Bundle download must redirect to a versioned Melzi GitHub release".into()
     })
 }
 
@@ -79,7 +79,7 @@ pub(crate) fn verify_reader(
     }
     let public_key = keys
         .get(&envelope.key_id)
-        .ok_or("Unknown bundle signing key; update the Impeccable CLI and retry")?;
+        .ok_or("Unknown bundle signing key; update the Melzi CLI and retry")?;
     let public_key = decode_hex(public_key, 32)?;
     let signature = decode_hex(&envelope.signature, 64)?;
     decode_hex(&envelope.sha256, 32)?;
@@ -223,7 +223,7 @@ mod tests {
             format!("{prefix}skill-v4.2.0/universal.zip#x"),
             format!("{prefix}skill-v04.2.0/universal.zip"),
             "http://github.com/pbakaus/impeccable/releases/download/skill-v4.2.0/universal.zip".into(),
-            "https://github.com/attacker/impeccable/releases/download/skill-v4.2.0/universal.zip".into(),
+            "https://github.com/attacker/melzi/releases/download/skill-v4.2.0/universal.zip".into(),
             "https://github.com.evil.test/pbakaus/impeccable/releases/download/skill-v4.2.0/universal.zip".into(),
         ] {
             assert!(release_version(&bad).is_err(), "{bad}");

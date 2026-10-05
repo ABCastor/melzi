@@ -17,7 +17,7 @@ import {
 } from '../scripts/lib/validate-plugin-versions.js';
 
 function skillMd(version) {
-  return `---\nname: impeccable\nversion: ${version}\nuser-invocable: true\n---\n\nBody.\n`;
+  return `---\nname: melzi\nversion: ${version}\nuser-invocable: true\n---\n\nBody.\n`;
 }
 
 function writeFixture(root, { plugin, marketplace, subtreePlugin, codexPlugin, skill } = {}) {
@@ -27,19 +27,19 @@ function writeFixture(root, { plugin, marketplace, subtreePlugin, codexPlugin, s
     fs.writeFileSync(abs, contents);
   };
   if (plugin !== undefined) {
-    write('.claude-plugin/plugin.json', JSON.stringify({ name: 'impeccable', version: plugin }, null, 2));
+    write('.claude-plugin/plugin.json', JSON.stringify({ name: 'melzi', version: plugin }, null, 2));
   }
   if (marketplace !== undefined) {
-    write('.claude-plugin/marketplace.json', JSON.stringify({ plugins: [{ name: 'impeccable', version: marketplace }] }, null, 2));
+    write('.claude-plugin/marketplace.json', JSON.stringify({ plugins: [{ name: 'melzi', version: marketplace }] }, null, 2));
   }
   if (subtreePlugin !== undefined) {
-    write('plugin/.claude-plugin/plugin.json', JSON.stringify({ name: 'impeccable', version: subtreePlugin, skills: './skills/' }, null, 2));
+    write('plugin/.claude-plugin/plugin.json', JSON.stringify({ name: 'melzi', version: subtreePlugin, skills: './skills/' }, null, 2));
   }
   if (codexPlugin !== undefined) {
-    write('dist/openai/impeccable/.codex-plugin/plugin.json', JSON.stringify({ name: 'impeccable', version: codexPlugin, skills: './skills/' }, null, 2));
+    write('dist/openai/melzi/.codex-plugin/plugin.json', JSON.stringify({ name: 'melzi', version: codexPlugin, skills: './skills/' }, null, 2));
   }
   if (skill !== undefined) {
-    write('plugin/skills/impeccable/SKILL.md', skillMd(skill));
+    write('plugin/skills/melzi/SKILL.md', skillMd(skill));
   }
 }
 
@@ -79,7 +79,7 @@ describe('collectPluginVersions', () => {
     writeFixture(root, { plugin: '3.7.1', marketplace: '3.7.1', subtreePlugin: '3.7.1', codexPlugin: '3.6.0', skill: '3.7.1' });
     const { mismatches } = collectPluginVersions(root);
     expect(mismatches).toEqual([
-      { relPath: 'dist/openai/impeccable/.codex-plugin/plugin.json', found: '3.6.0', expected: '3.7.1' },
+      { relPath: 'dist/openai/melzi/.codex-plugin/plugin.json', found: '3.6.0', expected: '3.7.1' },
     ]);
   });
 
@@ -87,7 +87,7 @@ describe('collectPluginVersions', () => {
     writeFixture(root, { plugin: '3.7.1', marketplace: '3.7.1', subtreePlugin: '3.7.1', skill: '3.1.1' });
     const { mismatches } = collectPluginVersions(root);
     expect(mismatches).toEqual([
-      { relPath: 'plugin/skills/impeccable/SKILL.md', found: '3.1.1', expected: '3.7.1' },
+      { relPath: 'plugin/skills/melzi/SKILL.md', found: '3.1.1', expected: '3.7.1' },
     ]);
   });
 
@@ -97,7 +97,7 @@ describe('collectPluginVersions', () => {
     expect(mismatches.map((m) => m.relPath)).toEqual([
       '.claude-plugin/marketplace.json',
       'plugin/.claude-plugin/plugin.json',
-      'plugin/skills/impeccable/SKILL.md',
+      'plugin/skills/melzi/SKILL.md',
     ]);
   });
 
@@ -140,7 +140,7 @@ describe('collectPluginVersions', () => {
 
   test('flags a root plugin.json that exists but has no version field', () => {
     fs.mkdirSync(path.join(root, '.claude-plugin'), { recursive: true });
-    fs.writeFileSync(path.join(root, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'impeccable' }));
+    fs.writeFileSync(path.join(root, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'melzi' }));
     const { source, errors } = collectPluginVersions(root);
     // source stays null, but it is reported as an error rather than silently passing.
     expect(source).toBeNull();
@@ -172,7 +172,7 @@ describe('readSkillFrontmatterVersion', () => {
   });
 
   test('reads a version from CRLF-encoded frontmatter', () => {
-    const crlf = '---\r\nname: impeccable\r\nversion: 3.7.1\r\nuser-invocable: true\r\n---\r\n\r\nBody.\r\n';
+    const crlf = '---\r\nname: melzi\r\nversion: 3.7.1\r\nuser-invocable: true\r\n---\r\n\r\nBody.\r\n';
     expect(readSkillFrontmatterVersion(crlf)).toBe('3.7.1');
   });
 });
@@ -189,7 +189,7 @@ describe('collectPluginVersions with CRLF line endings', () => {
   test('a CRLF-saved SKILL.md at the right version is not a false mismatch', () => {
     writeFixture(root, { plugin: '3.7.1', marketplace: '3.7.1', subtreePlugin: '3.7.1', skill: '3.7.1' });
     // Re-save the bundled SKILL.md with CRLF line endings.
-    const skillPath = path.join(root, 'plugin/skills/impeccable/SKILL.md');
+    const skillPath = path.join(root, 'plugin/skills/melzi/SKILL.md');
     fs.writeFileSync(skillPath, fs.readFileSync(skillPath, 'utf-8').replace(/\n/g, '\r\n'));
     const { mismatches, errors } = collectPluginVersions(root);
     expect(mismatches).toEqual([]);

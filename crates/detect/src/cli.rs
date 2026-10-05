@@ -11,7 +11,10 @@ use serde_json::Value;
 use crate::config::{
     filter_detection_findings, read_detection_config, should_ignore_detection_file, DetectionConfig,
 };
-use crate::design_system::{load_design_system_for_target, DesignSystemCache};
+use crate::design_system::{
+    design_system_start_dir, find_design_root, load_design_system_for_target,
+    parse_frontmatter, resolve_design_md_path, DesignSystemCache,
+};
 use crate::detect_text::{detect_text, TextOptions};
 use crate::engines::{EngineError, Engines, ScanOptions};
 use crate::file_system::{
@@ -394,6 +397,39 @@ pub fn run_detect(args: &[String], io: &mut Io, engines: &Engines) -> i32 {
     }
 }
 
+// The surviving fork tools need the same target resolution and token parsing
+// as detection. Expose data through the binary instead of maintaining a second
+// JS resolver. This is inspection only; callers prove enforcement with detect.
+fn design_system_snapshot(target: &str, cwd: &str, home: &str) -> Value {
+    let start = design_system_start_dir(target, cwd);
+    let root = find_design_root(&start, cwd, home);
+    let md = root.as_ref().filter(|r| r.has_design)
+        .and_then(|r| resolve_design_md_path(&r.dir));
+    let frontmatter = md.as_ref().and_then(|md| std::fs::read_to_string(&md.path).ok())
+        .and_then(|text| parse_frontmatter(&text));
+    let ds = load_design_system_for_target(target, None, cwd, home);
+    serde_json::json!({
+        "hasDesign": md.is_some(),
+        "designPath": md.as_ref().map(|md| &md.path),
+        "frontmatter": frontmatter,
+        "designSystem": ds.as_ref().map(|ds| serde_json::json!({
+            "sourcePath": ds.source_path,
+            "fromSignature": ds.from_signature,
+            "hasColors": ds.has_colors,
+            "hasFontSizes": ds.has_font_sizes,
+            "hasFonts": ds.has_fonts,
+            "allowedColorKeys": ds.allowed_color_keys.iter().map(|(key, entry)| {
+                serde_json::json!([key, {"color": entry.color, "labels": entry.labels}])
+            }).collect::<Vec<_>>(),
+            "allowedFontSizes": ds.allowed_font_sizes.iter().map(|entry| {
+                serde_json::json!({"value": entry.value, "px": entry.px, "fluid": entry.fluid})
+            }).collect::<Vec<_>>(),
+            "allowedFonts": ds.allowed_fonts,
+            "allowedFontFamilies": ds.allowed_font_families,
+        })),
+    })
+}
+
 fn detect_cli(args_in: &[String], io: &mut Io, engines: &Engines) -> Result<i32, Exit> {
     let mut args: Vec<String> = args_in
         .iter()
@@ -529,6 +565,15 @@ fn detect_cli(args_in: &[String], io: &mut Io, engines: &Engines) -> Result<i32,
         .home()
         .map(|h| h.to_string_lossy().into_owned())
         .unwrap_or_default();
+    if has(&args, "--design-system-json") {
+        if targets.len() != 1 || URL_RE.is_match(&targets[0]) {
+            io.err("Error: --design-system-json requires exactly one local file or directory target.\n");
+            return Err(Exit(1));
+        }
+        let snapshot = design_system_snapshot(&targets[0], &cwd, &home);
+        io.out(&format!("{}\n", snapshot));
+        return Ok(0);
+    }
     let mut ctx = Ctx {
         io,
         engines,
@@ -708,7 +753,7 @@ fn scan_targets(
                     let probe = is_port_listening(fw.port, Some(fw.fingerprint));
                     let msg = if probe.listening && probe.matched {
                         format!(
-                            "\n{} dev server detected on localhost:{}.\nFor more accurate results, scan the running site:\n  npx impeccable detect http://localhost:{}\n\n",
+                            "\n{} dev server detected on localhost:{}.\nFor more accurate results, scan the running site:\n  npx melzi detect http://localhost:{}\n\n",
                             fw.name, fw.port, fw.port
                         )
                     } else if probe.listening && !probe.matched {
@@ -721,7 +766,7 @@ fn scan_targets(
                         )
                     } else {
                         format!(
-                            "\n{} project detected ({}).\nStart the dev server and scan via URL for best results:\n  npx impeccable detect http://localhost:{}\n\n",
+                            "\n{} project detected ({}).\nStart the dev server and scan via URL for best results:\n  npx melzi detect http://localhost:{}\n\n",
                             fw.name,
                             jsp::basename(&fw.config_path),
                             fw.port
@@ -846,5 +891,42 @@ fn stderr_is_tty() -> bool {
     #[cfg(not(unix))]
     {
         std::io::IsTerminal::is_terminal(&std::io::stderr())
+    }
+}
+
+#[cfg(test)]
+mod design_snapshot_tests {
+    use super::*;
+
+    #[test]
+    fn snapshot_distinguishes_missing_unreadable_and_normalized_design() {
+        let dir = std::env::temp_dir().join(format!(
+            "impeccable-design-snapshot-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        let cwd = dir.to_string_lossy();
+        let target = dir.join("src/canary.css").to_string_lossy().into_owned();
+        let home = dir.join("home").to_string_lossy().into_owned();
+        let before = design_system_snapshot(&target, &cwd, &home);
+        assert_eq!(before["hasDesign"], false);
+        assert!(before["designSystem"].is_null());
+
+        std::fs::write(dir.join("DESIGN.md"), "# No machine-readable frontmatter\n").unwrap();
+        let unreadable = design_system_snapshot(&target, &cwd, &home);
+        assert_eq!(unreadable["hasDesign"], true);
+        assert!(unreadable["frontmatter"].is_null());
+        assert!(unreadable["designSystem"].is_null());
+
+        let source = "---\ncolors:\n  ink: '#123456'\ntypography:\n  body:\n    fontFamily: Palatino\n---\n# Design\n";
+        std::fs::write(dir.join("DESIGN.md"), source).unwrap();
+        let parsed = design_system_snapshot(&target, &cwd, &home);
+        assert_eq!(parsed["frontmatter"]["colors"]["ink"], "#123456");
+        assert_eq!(parsed["designSystem"]["hasColors"], true);
+        assert_eq!(parsed["designSystem"]["hasFontSizes"], false);
+        assert_eq!(parsed["designSystem"]["allowedFonts"][0], "palatino");
+        assert_eq!(parsed["designSystem"]["allowedColorKeys"][0][1]["color"]["r"], 18.0);
+        assert_eq!(std::fs::read_to_string(dir.join("DESIGN.md")).unwrap(), source);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

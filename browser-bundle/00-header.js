@@ -1,5 +1,5 @@
 /**
- * Anti-Pattern Browser Detector for Impeccable
+ * Anti-Pattern Browser Detector for Melzi
  * Copyright (c) 2026 Paul Bakaus
  *
  * GENERATED -- do not edit. Source: crates/core/src/browser (rules, WASM) +

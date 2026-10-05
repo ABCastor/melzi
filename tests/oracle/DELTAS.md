@@ -1,5 +1,24 @@
 # Accepted deltas
 
+## Generate command adoption (2026-09-28)
+
+The canonical registry now has 21 commands: upstream's `generate` was adopted in the `cb56ed6c..9d715cc4f` sync and registered at every fork point. The accepted available-command differences below also include `generate`; nine compatibility aliases remain. `pin-generate` and `pin-generate-then-unpin` have dedicated goldens for the new shortcut's metadata and removal. Existing upstream goldens remain frozen.
+
+## Handdrawn command addition
+
+The canonical registry now has 20 commands. The accepted available-command differences below also include `handdrawn`; nine compatibility aliases remain. `pin-handdrawn` and `pin-handdrawn-then-unpin` have dedicated goldens for the new shortcut's metadata and removal. Existing upstream goldens remain frozen.
+
+## Reviewed 2026-09-14: Melzi commands and pinned shortcuts
+
+The fork restores its 19 canonical commands and nine compatibility aliases. These cases were compared in full against the rebuilt binary. Dollar-prefixed commands are brand-normalized by the rebrand transform and need no entry here; so is the approved OpenCode bridge rename (file name and loaded skill name), which the transform maps as well; the restored command set needs entries. Goldens remain unchanged. Each case has its own line because the runner reads only the first case identifier on a line.
+
+- `pin-usage-no-args`: the available-command line lists Melzi's 19 commands plus nine aliases and says "Available commands and aliases" (the fork's pinned command contract).
+- `pin-usage-one-arg`: the same restored command-and-alias list replaces upstream's 23-command list (usage and exit code otherwise match).
+- `pin-bad-command`: the rejection lists the restored Melzi command-and-alias set (the invalid command remains rejected).
+- `pin-bad-command-teach`: `teach` now pins successfully in the three installed harnesses, with exit 0 and no stderr (teach is a canonical Melzi command).
+- `pin-audit-skips-existing`: generated shortcuts use the canonical Melzi audit description, including its folded Optimize behavior (foreign skills are still skipped).
+- `question-schema`: adds one self-contained HTML screen example and the screen field's rendering/answer contract (required by U2; removing only that object and explanatory line reproduces every original output byte).
+
 Cases listed here differ from their JS golden on purpose. Each entry names the
 case id, what differs, and why it is an improvement. Nothing gets on this list
 without review.
@@ -229,3 +248,20 @@ should-flag. `detect-fixture-{json,text}-italic-serif-display-html` go from 7 to
 420. Every other finding, count, snippet and exit status is unchanged. Hidden
 heading descendants and sans-serif or small italics stay exempt; Rust
 regressions in `crates/html/tests/italic_heading.rs` pin both sides.
+
+## Reviewed 2026-10-05: local-only Melzi distribution help
+
+These seven help outputs now describe the actual local distribution boundary.
+The full old/new outputs were compared: all fields besides stdout are identical.
+Existing option flags, exit status, stderr and filesystem effects remain unchanged.
+Frozen goldens are retained. `crates/skills/tests/local_distribution_tests.rs`
+checks the fail-closed remote verbs, read-only subcommand help, and local build
+instructions; existing local bundle installation tests remain active.
+
+- `cli-help`: install/update/check describe explicit local bundles; root help states remote installation is unavailable and links the local build instructions.
+- `skills-install-help`: describes installation from a locally built bundle and requires an existing explicit IMPECCABLE_BUNDLE_PATH; remote installation is unavailable.
+- `skills-install-help-short`: the same local-only installation requirement through -h.
+- `skills-update-help`: describes refreshing from a locally built bundle, requires explicit IMPECCABLE_BUNDLE_PATH, and states remote updates are unavailable.
+- `skills-check-help`: describes comparison with a locally built bundle, requires explicit IMPECCABLE_BUNDLE_PATH, and states remote update checks are unavailable.
+- `skills-namespace-install-help`: the same local-only installation requirement through the legacy skills namespace.
+- `skills-namespace-check-help-short`: the same local-only comparison requirement through the legacy namespace and -h.

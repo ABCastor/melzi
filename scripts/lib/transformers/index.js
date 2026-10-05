@@ -1,6 +1,7 @@
+// Generated from index.ts. Edit the TypeScript source and run bun run build:typescript.
+// Modified from Impeccable: typed Melzi launcher and distribution contracts.
 import { createTransformer } from './factory.js';
 import { PROVIDERS } from './providers.js';
-
 // Named exports exist primarily as stable spy targets for the test suite
 // (build.test.js uses spyOn(transformers, 'transformCursor') etc.). build.js
 // itself uses createTransformer + PROVIDERS directly, not these.
@@ -20,5 +21,4 @@ export const transformGrok = createTransformer(PROVIDERS.grok);
 export const transformAntigravity = createTransformer(PROVIDERS.antigravity);
 export const transformHermes = createTransformer(PROVIDERS.hermes);
 export const transformVeto = createTransformer(PROVIDERS.veto);
-
 export { createTransformer, PROVIDERS };

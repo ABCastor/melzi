@@ -35,7 +35,10 @@ import {
 import { stageOpenAIPlugin } from './lib/openai-plugin.js';
 import { stageCursorPlugin } from './lib/cursor-plugin.js';
 import { stageVSCodeExtension } from './lib/vscode-extension.js';
+import { copyDistributionNotices } from './lib/distribution-notices.js';
+import { checkDistributions } from './check-distribution-notices.mjs';
 import { ENGINE_TARGETS, binaryName, main as fetchEngineMain, readEngineVersion } from './fetch-engine.mjs';
+import { buildReviewIsland } from './build-island.mjs';
 // Sub-page generation is now handled by Astro content collections.
 
 /**
@@ -44,8 +47,8 @@ import { ENGINE_TARGETS, binaryName, main as fetchEngineMain, readEngineVersion 
  */
 function generateCounts(rootDir, skills, buildDir) {
   // Count active commands. After the v3.0 consolidation, commands are sub-commands
-  // of /impeccable. Count them from the command router table in SKILL.md.
-  const impeccableSkill = skills.find(s => s.name === 'impeccable');
+  // of /melzi. Count them from the command router table in SKILL.md.
+  const impeccableSkill = skills.find(s => s.name === 'melzi');
   let commandCount;
   if (impeccableSkill) {
     // Count lines in the command table that start with | `...` | — tolerant
@@ -78,6 +81,7 @@ function generateCounts(rootDir, skills, buildDir) {
     'AGENTS.md',
     '.claude-plugin/plugin.json',
     '.claude-plugin/marketplace.json',
+    'extension/STORE_LISTING.md',
   ];
 
   let errors = 0;
@@ -105,10 +109,10 @@ function generateCounts(rootDir, skills, buildDir) {
     // "detector" as an infix ("60 deterministic detector rules") and
     // qualified "issues" both evaded the old pattern, which is how five
     // stale counts shipped while the validator reported clean.
-    const detectPattern = /\b(\d+)\s+(deterministic\s+)?(detector\s+)?(checks|patterns|rules|detections|issues)\b/gi;
+    const detectPattern = /\b(\d+)\s+(?:(?:deterministic|common)\s+)?(?:UI\s+)?(?:detector\s+)?(anti-patterns|checks|patterns|rules|detections|issues)\b/gi;
     for (const match of detectionCount == null ? [] : strippedContent.matchAll(detectPattern)) {
       const num = parseInt(match[1]);
-      if (match[4] === 'issues' && !match[2]) continue; // plain "issues" is prose, not a count claim
+      if (match[2] === 'issues' && !/deterministic/i.test(match[0])) continue; // plain "issues" is prose, not a count claim
       if (num !== detectionCount && num > 10) { // ignore small numbers like "3 patterns"
         console.error(`  ❌ ${relPath}: found "${match[0]}" but detection count is ${detectionCount}`);
         errors++;
@@ -571,7 +575,7 @@ async function stageEngineBinaries(rootDir, distDir) {
   }
   let copies = 0;
   for (const { provider, configDir } of Object.values(PROVIDERS)) {
-    const scriptsDir = path.join(distDir, provider, configDir, 'skills', 'impeccable', 'scripts');
+    const scriptsDir = path.join(distDir, provider, configDir, 'skills', 'melzi', 'scripts');
     if (!fs.existsSync(scriptsDir)) continue;
     for (const target of present) {
       const src = path.join(binRoot, target, binaryName(target));
@@ -636,8 +640,8 @@ function assembleUniversal(distDir) {
   // Add a visible README so macOS users don't see an empty folder
   // (all provider dirs are dotfiles, hidden by default in Finder)
   fs.writeFileSync(path.join(universalDir, 'README.txt'),
-`Impeccable. Design fluency for AI harnesses.
-https://impeccable.style
+`Melzi. Design review skills and interface checks for AI coding tools.
+https://github.com/ABCastor/melzi
 
 This folder contains skills for all supported tools:
 
@@ -666,6 +670,8 @@ For Codex, repo and user skill installs come from .agents/skills.
 These are hidden folders (dotfiles). Press Cmd+Shift+. in Finder to see them.
 `);
 
+  copyDistributionNotices(ROOT_DIR, universalDir);
+
   console.log(`✓ Assembled universal directory (${providerConfigs.length} providers)`);
 }
 
@@ -684,6 +690,9 @@ function copyDistToBuild(distDir, buildDir) {
  */
 async function build() {
   console.log('🔨 Building cross-provider design skills...\n');
+
+  const island = buildReviewIsland({ rootDir: ROOT_DIR });
+  console.log(`🏝️  Built Review Island: ${island.included.join(' -> ')}\n`);
 
   // Sub-page generation, HTML bundling, and static-asset copying are now
   // handled by Astro (bun run build:site). This script focuses on skills,
@@ -714,6 +723,11 @@ async function build() {
   for (const config of Object.values(PROVIDERS)) {
     const transform = createTransformer(config);
     transform(skills, DIST_DIR, { skillsVersion });
+    const providerRoot = path.join(DIST_DIR, config.provider);
+    copyDistributionNotices(ROOT_DIR, providerRoot);
+    for (const skill of skills) {
+      copyDistributionNotices(ROOT_DIR, path.join(providerRoot, config.configDir, 'skills', skill.name));
+    }
   }
 
   if (BUILD_OPTIONS.syncRootOutputs) {
@@ -771,7 +785,7 @@ async function build() {
     const deprecatedLocalSkills = [
       'frontend-design', 'teach-impeccable',
       'arrange', 'normalize', 'onboard', 'extract',
-      // v3.0 consolidation: standalone skills -> /impeccable sub-commands
+      // v3.0 consolidation: standalone skills -> /melzi sub-commands
       'adapt', 'animate', 'audit', 'bolder', 'clarify', 'colorize',
       'critique', 'delight', 'distill', 'harden', 'layout', 'optimize',
       'overdrive', 'polish', 'quieter', 'shape', 'typeset',
@@ -850,10 +864,10 @@ async function build() {
       JSON.stringify(grokPluginManifest, null, 2) + '\n',
     );
 
-    const claudeSkillsSrc = path.join(DIST_DIR, 'claude-code', '.claude', 'skills', 'impeccable');
+    const claudeSkillsSrc = path.join(DIST_DIR, 'claude-code', '.claude', 'skills', 'melzi');
     if (fs.existsSync(claudeSkillsSrc)) {
       fs.mkdirSync(pluginSkillsDir, { recursive: true });
-      copyDirSync(claudeSkillsSrc, path.join(pluginSkillsDir, 'impeccable'));
+      copyDirSync(claudeSkillsSrc, path.join(pluginSkillsDir, 'melzi'));
     }
 
     if (fs.existsSync(claudeAgentsSrc)) {
@@ -868,7 +882,7 @@ async function build() {
     // Agents get the plugin-root variable, not the skill-base-dir token:
     // a spawned agent never loads SKILL.md, so the token is undefined there.
     rewritePluginMarkdownTree(pluginAgentsDir, rewritePluginAgentMarkdown);
-    verifyPluginSkillRewrite(path.join(pluginSkillsDir, 'impeccable', 'SKILL.md'));
+    verifyPluginSkillRewrite(path.join(pluginSkillsDir, 'melzi', 'SKILL.md'));
     if (fs.existsSync(pluginAgentsDir)) {
       for (const agentFile of fs.readdirSync(pluginAgentsDir)) {
         if (agentFile.endsWith('.md')) verifyPluginAgentRewrite(path.join(pluginAgentsDir, agentFile));
@@ -886,6 +900,7 @@ async function build() {
       JSON.stringify(buildClaudePluginHooksManifest(), null, 2) + '\n',
     );
 
+    copyDistributionNotices(ROOT_DIR, pluginRoot);
     console.log('📦 Built Claude Code / Grok Build plugin subtree at ./plugin/');
   } else {
     console.log('📋 Skipped root harness and plugin sync (--skip-root-sync)');
@@ -925,6 +940,7 @@ async function build() {
 
   // Create ZIP bundles (universal)
   await createAllZips(DIST_DIR);
+  checkDistributions(ROOT_DIR, DIST_DIR);
 
   // Generate authoritative counts and validate references
   const countErrors = generateCounts(ROOT_DIR, skills, buildDir);

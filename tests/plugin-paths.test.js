@@ -3,7 +3,7 @@
  *
  * The ./plugin subtree copies the dist/claude-code output, whose
  * {{scripts_path}} resolves to the project-relative
- * `.claude/skills/impeccable/scripts`. Run from the plugin cache, that path
+ * `.claude/skills/melzi/scripts`. Run from the plugin cache, that path
  * points into the user's project: a plugin-only user gets MODULE_NOT_FOUND,
  * and a dual-install user silently runs the project's older skill copy. The
  * rewrite uses `${CLAUDE_SKILL_DIR}` only in SKILL.md; raw references keep
@@ -30,7 +30,7 @@ import {
 
 describe('rewritePluginMarkdown', () => {
   test('rewrites a script instruction to the quoted CLAUDE_SKILL_DIR form', () => {
-    const input = 'Run `node .claude/skills/impeccable/scripts/context.mjs` once per session.';
+    const input = 'Run `node .claude/skills/melzi/scripts/context.mjs` once per session.';
     expect(rewritePluginMarkdown(input)).toBe(
       'Run `node "${CLAUDE_SKILL_DIR}/scripts/context.mjs"` once per session.',
     );
@@ -38,8 +38,8 @@ describe('rewritePluginMarkdown', () => {
 
   test('rewrites every occurrence, quoting the script path but not the arguments', () => {
     const input = [
-      'node .claude/skills/impeccable/scripts/live.mjs',
-      'node .claude/skills/impeccable/scripts/live-poll.mjs --reply EVENT_ID done',
+      'node .claude/skills/melzi/scripts/live.mjs',
+      'node .claude/skills/melzi/scripts/live-poll.mjs --reply EVENT_ID done',
     ].join('\n');
     const output = rewritePluginMarkdown(input);
     expect(output).not.toContain(CLAUDE_PROJECT_SCRIPTS_PATH);
@@ -75,7 +75,7 @@ describe('rewritePluginMarkdown', () => {
       'name: impeccable',
       'allowed-tools:',
       '  - Bash(npx impeccable *)',
-      '  - Bash(.claude/skills/impeccable/scripts/impeccable *)',
+      '  - Bash(.claude/skills/melzi/scripts/impeccable *)',
       'license: Apache 2.0',
       '---',
       '',
@@ -93,8 +93,8 @@ describe('rewritePluginMarkdown', () => {
     const input =
       '1. Run `node <skill-base-dir>/scripts/context.mjs` once per session, where `<skill-base-dir>` is the ' +
       "loaded base directory the runtime reports for this skill; keep cwd at the user's project. " +
-      'That base directory resolves every `.claude/skills/impeccable/scripts/impeccable <verb>` command in this skill ' +
-      'and its references, and `.claude/skills/impeccable/scripts` is the fallback only when the runtime ' +
+      'That base directory resolves every `.claude/skills/melzi/scripts/impeccable <verb>` command in this skill ' +
+      'and its references, and `.claude/skills/melzi/scripts` is the fallback only when the runtime ' +
       'reports no base directory. Pass a named source file or route as `--target <path>`.';
     const output = rewritePluginMarkdown(input);
     expect(output).toContain(
@@ -115,7 +115,7 @@ describe('rewritePluginMarkdown', () => {
 describe('rewritePluginAgentMarkdown', () => {
   // The real source sentence shape: command, purpose clause, next sentence.
   const sourceStep =
-    'after every generation, run `node .claude/skills/impeccable/scripts/embed-prompt.mjs <asset> ' +
+    'after every generation, run `node .claude/skills/melzi/scripts/embed-prompt.mjs <asset> ' +
     '--prompt "<the prompt used>"` so the prompt lives inside the image itself. The build thread ' +
     'composes what you made.';
 
@@ -125,7 +125,7 @@ describe('rewritePluginAgentMarkdown', () => {
     // ${CLAUDE_PLUGIN_ROOT} inline in plugin agent content.
     const output = rewritePluginAgentMarkdown(sourceStep);
     expect(output).toContain(
-      'run `node "${CLAUDE_PLUGIN_ROOT}/skills/impeccable/scripts/embed-prompt.mjs" <asset> --prompt "<the prompt used>"`',
+      'run `node "${CLAUDE_PLUGIN_ROOT}/skills/melzi/scripts/embed-prompt.mjs" <asset> --prompt "<the prompt used>"`',
     );
   });
 
@@ -162,7 +162,7 @@ describe('verifyPluginAgentRewrite', () => {
   };
 
   const sourceStep =
-    'run `node .claude/skills/impeccable/scripts/embed-prompt.mjs <asset> --prompt "<p>"` ' +
+    'run `node .claude/skills/melzi/scripts/embed-prompt.mjs <asset> --prompt "<p>"` ' +
     'so the prompt lives inside the image itself. Next sentence.';
 
   test('accepts a correctly rewritten agent file', () => {
@@ -204,12 +204,12 @@ describe('rewritePluginMarkdownTree', () => {
       fs.mkdirSync(path.dirname(abs), { recursive: true });
       fs.writeFileSync(abs, contents);
     };
-    write('SKILL.md', 'Run `node .claude/skills/impeccable/scripts/context.mjs`.');
-    write('reference/live.md', 'node .claude/skills/impeccable/scripts/live.mjs');
+    write('SKILL.md', 'Run `node .claude/skills/melzi/scripts/context.mjs`.');
+    write('reference/live.md', 'node .claude/skills/melzi/scripts/live.mjs');
     // hook-admin.mjs installs project-scoped hooks; its project path is correct.
     write(
       'scripts/hook-admin.mjs',
-      'const cmd = \'node "${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs"\';',
+      'const cmd = \'node "${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/hook.mjs"\';',
     );
 
     rewritePluginMarkdownTree(root);
@@ -221,12 +221,12 @@ describe('rewritePluginMarkdownTree', () => {
       'node "<skill-base-dir>/scripts/live.mjs"',
     );
     expect(fs.readFileSync(path.join(root, 'scripts/hook-admin.mjs'), 'utf-8')).toContain(
-      '${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs',
+      '${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/hook.mjs',
     );
   });
 
   test('raw references retain an explicit base-directory placeholder, including Windows commands', () => {
-    const input = 'Run `.claude/skills/impeccable/scripts/impeccable context` or `<skill-base-dir>/scripts/impeccable.cmd context`.';
+    const input = 'Run `.claude/skills/melzi/scripts/impeccable context` or `<skill-base-dir>/scripts/impeccable.cmd context`.';
     const output = rewritePluginMarkdown(input, { isSkillEntrypoint: false });
     expect(output).toBe('Run `"<skill-base-dir>/scripts/impeccable" context` or `"<skill-base-dir>/scripts/impeccable.cmd" context`.');
     expect(output).not.toContain('${CLAUDE_SKILL_DIR}');
@@ -240,7 +240,7 @@ describe('rewritePluginMarkdownTree', () => {
     const env = { ...process.env };
     delete env.CLAUDE_SKILL_DIR;
     for (const isSkillEntrypoint of [true, false]) {
-      const command = rewritePluginMarkdown('node .claude/skills/impeccable/scripts/probe.mjs resolved', { isSkillEntrypoint })
+      const command = rewritePluginMarkdown('node .claude/skills/melzi/scripts/probe.mjs resolved', { isSkillEntrypoint })
         .replaceAll(isSkillEntrypoint ? '${CLAUDE_SKILL_DIR}' : '<skill-base-dir>', skillDir);
       expect(execFileSync('sh', ['-c', command], { env, encoding: 'utf8' }).trim()).toBe('resolved');
     }
@@ -251,13 +251,13 @@ describe('rewritePluginMarkdownTree', () => {
     fs.mkdirSync(agentsDir, { recursive: true });
     fs.writeFileSync(
       path.join(agentsDir, 'impeccable-asset-producer.md'),
-      'run `node .claude/skills/impeccable/scripts/embed-prompt.mjs <asset>`',
+      'run `node .claude/skills/melzi/scripts/embed-prompt.mjs <asset>`',
     );
 
     rewritePluginMarkdownTree(agentsDir, rewritePluginAgentMarkdown);
 
     expect(fs.readFileSync(path.join(agentsDir, 'impeccable-asset-producer.md'), 'utf-8')).toBe(
-      'run `node "${CLAUDE_PLUGIN_ROOT}/skills/impeccable/scripts/embed-prompt.mjs" <asset>`',
+      'run `node "${CLAUDE_PLUGIN_ROOT}/skills/melzi/scripts/embed-prompt.mjs" <asset>`',
     );
   });
 
@@ -286,8 +286,8 @@ describe('verifyPluginSkillRewrite', () => {
   const goodSkill = [
     '1. Run `<skill-base-dir>/scripts/impeccable context` once per session, where `<skill-base-dir>` is the ' +
       "loaded base directory the runtime reports for this skill; keep cwd at the user's project. " +
-      'That base directory resolves every `.claude/skills/impeccable/scripts/impeccable <verb>` command in this skill ' +
-      'and its references, and `.claude/skills/impeccable/scripts` is the fallback only when the runtime ' +
+      'That base directory resolves every `.claude/skills/melzi/scripts/impeccable <verb>` command in this skill ' +
+      'and its references, and `.claude/skills/melzi/scripts` is the fallback only when the runtime ' +
       'reports no base directory.',
   ].join('\n');
 
@@ -340,7 +340,7 @@ describe('verifyPluginSkillRewrite', () => {
     // still names the project scripts directory somewhere new.
     const p = writeSkill(
       rewritePluginMarkdown(goodSkill) +
-      '\nState lives next to `.claude/skills/impeccable/scripts` on disk.',
+      '\nState lives next to `.claude/skills/melzi/scripts` on disk.',
     );
     expect(() => verifyPluginSkillRewrite(p)).toThrow(/still contains the project-relative scripts path/);
   });

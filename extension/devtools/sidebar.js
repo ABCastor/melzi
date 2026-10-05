@@ -1,7 +1,7 @@
 /**
- * Impeccable DevTools Extension - Elements Sidebar Pane
+ * Melzi DevTools Extension - Elements Sidebar Pane
  *
- * Shows Impeccable findings for the currently selected element ($0) in the Elements panel.
+ * Shows Melzi findings for the currently selected element ($0) in the Elements panel.
  */
 
 if (chrome.devtools.panels.themeName === 'dark') {

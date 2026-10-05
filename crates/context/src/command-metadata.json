@@ -1,6 +1,6 @@
 {
   "craft": {
-    "description": "Deprecated compatibility alias for an ordinary Impeccable new-work request. It adds no behavior; natural build and redesign requests use the same flow.",
+    "description": "Deprecated compatibility alias for an ordinary Melzi new-work request. It adds no behavior; natural build and redesign requests use the same flow.",
     "argumentHint": "[feature description]"
   },
   "init": {

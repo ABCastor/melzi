@@ -83,7 +83,7 @@ fn has_coverage_value(v: Option<&Value>) -> bool {
     }
 }
 
-const SEED_MARKER_TAIL: &str = "impeccable document once there's code to capture the actual tokens and components. -->";
+const SEED_MARKER_TAIL: &str = "melzi document once there's code to capture the actual tokens and components. -->";
 
 /// JS: checkDesignCoverage
 pub fn check_design_coverage(design: Option<&str>, design_path: Option<&str>) -> Vec<Finding> {
@@ -279,7 +279,7 @@ pub fn check_hook_installation(project_root: &str, repo_root: Option<&str>, prov
                         ia,
                         broken.iter().map(|c| format!("`{}`", c)).collect::<Vec<_>>().join(", ")
                     ),
-                    "Reinstall with `impeccable hooks on`, which rewrites the manifest against the skill's current location.".to_string(),
+                    "Reinstall with `/melzi hooks on`, which rewrites the manifest against the skill's current location.".to_string(),
                 ));
             }
         }
@@ -301,7 +301,7 @@ pub fn check_hook_installation(project_root: &str, repo_root: Option<&str>, prov
                             "{} installs the design hook while this config sets `hook.enabled: false`, so the hook fires and then declines to scan.",
                             ia
                         ),
-                        "Ask which was intended: `impeccable hooks on` to enable, or `impeccable hooks off` to uninstall the manifest entry as well.".to_string(),
+                        "Ask which was intended: `/melzi hooks on` to enable, or `/melzi hooks off` to uninstall the manifest entry as well.".to_string(),
                     ));
                     return out;
                 }
@@ -467,11 +467,11 @@ mod tests {
     fn hook_script_missing_resolves_launcher_and_legacy_forms() {
         let root = tmp();
         // Launcher form pointing at a launcher that exists: no finding.
-        write(&root, ".claude/skills/impeccable/scripts/impeccable", "#!/bin/sh\n");
+        write(&root, ".claude/skills/melzi/scripts/impeccable", "#!/bin/sh\n");
         write(
             &root,
             ".claude/settings.local.json",
-            r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook"}]}]}}"#,
+            r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" hook"}]}]}}"#,
         );
         assert!(check_hook_installation(&root, None, "claude-code").is_empty());
 
@@ -479,7 +479,7 @@ mod tests {
         write(
             &root,
             ".claude/settings.local.json",
-            r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.other/skills/impeccable/scripts/impeccable\" hook"}]}]}}"#,
+            r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.other/skills/melzi/scripts/impeccable\" hook"}]}]}}"#,
         );
         let f = check_hook_installation(&root, None, "claude-code");
         assert_eq!(f.len(), 1, "{f:?}");
@@ -489,11 +489,11 @@ mod tests {
         write(
             &root,
             ".claude/settings.local.json",
-            r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\""}]}]}}"#,
+            r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"node \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/hook.mjs\""}]}]}}"#,
         );
         let f = check_hook_installation(&root, None, "claude-code");
         assert_eq!(f.len(), 1, "{f:?}");
-        write(&root, ".claude/skills/impeccable/scripts/hook.mjs", "");
+        write(&root, ".claude/skills/melzi/scripts/hook.mjs", "");
         assert!(check_hook_installation(&root, None, "claude-code").is_empty());
         let _ = std::fs::remove_dir_all(&root);
     }

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Review Island host-token decoys</title>
+  <style>
+    :root {
+      --rule: #010203;
+      --muted: #040506;
+      --ground: #f4efe5;
+      --surface: #fffaf0;
+      --ink: #1d1d1f;
+      --accent: #8b5d10;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 48px;
+      background: var(--ground);
+      color: var(--ink);
+      font: 17px/1.6 Georgia, serif;
+    }
+
+    #review-target {
+      width: 240px;
+      min-height: 72px;
+      border: 1px solid var(--rule);
+      background: var(--surface);
+      color: var(--ink);
+    }
+
+    iframe {
+      display: block;
+      width: 220px;
+      height: 90px;
+      margin-top: 24px;
+      border: 1px solid var(--rule);
+    }
+  </style>
+</head>
+<body>
+  <button id="review-target" type="button">Measured host target</button>
+  <iframe title="Embedded specimen" srcdoc="<!doctype html><p>Frame specimen</p>"></iframe>
+  <script src="../../../skill/scripts/review-layer.js" data-sizes="1280,834,390"></script>
+</body>
+</html>

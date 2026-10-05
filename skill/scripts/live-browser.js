@@ -1,5 +1,5 @@
 /**
- * Impeccable Live Variant Mode - Browser Script
+ * Melzi Live Variant Mode - Browser Script
  *
  * Injected into the user's page via <script src="http://localhost:PORT/live.js">.
  * The server prepends window.__IMPECCABLE_TOKEN__ and window.__IMPECCABLE_PORT__
@@ -67,7 +67,7 @@
     idFactory: () => crypto.randomUUID().replace(/-/g, '').slice(0, 8),
   });
   if (!sessionState) {
-    console.error('[impeccable] live-browser-session.js was not loaded. Live mode cannot start safely.');
+    console.error('[melzi] live-browser-session.js was not loaded. Live mode cannot start safely.');
     window.__IMPECCABLE_LIVE_INIT__ = false;
     return;
   }
@@ -276,7 +276,7 @@
     document,
   });
   if (!domHelpers) {
-    console.error('[impeccable] live-browser-dom.js was not loaded. Live mode cannot start safely.');
+    console.error('[melzi] live-browser-dom.js was not loaded. Live mode cannot start safely.');
     window.__IMPECCABLE_LIVE_INIT__ = false;
     return;
   }
@@ -3061,7 +3061,7 @@
     if (recoveringEmptyCycling) return;
     recoveringEmptyCycling = true;
     try {
-      console.warn('[impeccable] Refusing to render empty variant cycling state:', reason);
+      console.warn('[melzi] Refusing to render empty variant cycling state:', reason);
       const message = 'No variants were mounted. Please try again.';
       if (svelteComponentSession?.sessionId === currentSessionId) {
         resetSvelteComponentSession(currentSessionId, message);
@@ -3198,7 +3198,7 @@
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : [];
     } catch (err) {
-      console.warn('[impeccable] Invalid data-impeccable-params JSON:', err.message);
+      console.warn('[melzi] Invalid data-impeccable-params JSON:', err.message);
       return [];
     }
   }
@@ -3829,7 +3829,7 @@
       showAnnotOverlay(selectedElement);
       renderEditBadge('idle');
     } catch (err) {
-      console.error('[impeccable] manual edit stash failed:', err);
+      console.error('[melzi] manual edit stash failed:', err);
       const detail = String(err?.message || '');
       if (detail.includes('newText cannot contain') || detail.includes('newText cannot be empty')) {
         showToast('Save rejected: ' + detail.replace(/^manual_edits:\s*/, ''), 5500);
@@ -4128,7 +4128,7 @@
       const data = await res.json();
       updatePendingCounter(data.count || 0);
     } catch (err) {
-      console.warn('[impeccable] failed to fetch pending count:', err);
+      console.warn('[melzi] failed to fetch pending count:', err);
     }
   }
 
@@ -4157,19 +4157,19 @@
       const remaining = remainingManualEditCount(result);
       updatePendingCounter(remaining);
       if (result.failed && result.failed.length > 0) {
-        console.warn('[impeccable] some copy edits failed:', result.failed);
+        console.warn('[melzi] some copy edits failed:', result.failed);
         showToast('Applied ' + (result.applied?.length || 0) + ', ' + result.failed.length + ' failed - see console', 5000);
       } else {
         const n = Array.isArray(result.applied) ? result.applied.length : (result.cleared || 0);
         if (n > 0) {
           showToast('Applied ' + n + ' edit' + (n === 1 ? '' : 's'), 2500);
         } else {
-          console.warn('[impeccable] apply returned no verified edits:', result);
+          console.warn('[melzi] apply returned no verified edits:', result);
           showToast('No edits applied - see console', 4000);
         }
       }
     } catch (err) {
-      console.error('[impeccable] commit failed:', err);
+      console.error('[melzi] commit failed:', err);
       showToast('Apply failed - see console', 4000);
     } finally {
       if (waitForSseCompletion) return;
@@ -4199,7 +4199,7 @@
         showToast('Discarded ' + count + ' copy edit' + (count === 1 ? '' : 's'), 2500);
       }
     } catch (err) {
-      console.error('[impeccable] discard failed:', err);
+      console.error('[melzi] discard failed:', err);
       showToast('Discard failed - see console', 4000);
     }
   }
@@ -4243,7 +4243,7 @@
       if (pendingRollbackBtn) pendingRollbackBtn.style.display = 'none';
       if (pendingTrashBtn) pendingTrashBtn.style.display = 'inline-flex';
     } catch (err) {
-      console.error('[impeccable] repair retry failed:', err);
+      console.error('[melzi] repair retry failed:', err);
       showToast('Repair retry failed - see console', 4000);
       showManualApplyDecision({ remainingCount: count, repair: readStoredManualApplyState() });
     }
@@ -4267,7 +4267,7 @@
       updatePendingCounter(numberOrNull(result.remainingCount) || 0);
       showToast('Rolled back source; copy edits are still staged.', 3500);
     } catch (err) {
-      console.error('[impeccable] manual Apply rollback failed:', err);
+      console.error('[melzi] manual Apply rollback failed:', err);
       showToast('Rollback failed - see console', 4000);
     }
   }
@@ -4381,7 +4381,7 @@
       }
     }
     if (failures > 0) {
-      console.warn('[impeccable] skipped unsafe copy edit DOM restore for', failures, 'edit(s). Refresh to reset the page DOM.');
+      console.warn('[melzi] skipped unsafe copy edit DOM restore for', failures, 'edit(s). Refresh to reset the page DOM.');
     }
     return failures;
   }
@@ -5303,7 +5303,7 @@
   }
 
   function loadSvelteRuntime(runtimeModule, manifest) {
-    const modulePath = runtimeModule || '/src/lib/impeccable/__runtime.js';
+    const modulePath = runtimeModule || '/src/lib/melzi/__runtime.js';
     if (!svelteRuntimePromise) {
       const candidates = componentModuleCandidates(manifest, modulePath, manifest?.runtimeModuleAbs);
       svelteRuntimePromise = importFirstReachable(candidates, false).then((r) => r.mod);
@@ -5709,7 +5709,7 @@
       if (svelteComponentSession?.sessionId === sessionId) {
         svelteComponentSession.swapAnchor = null;
       }
-      console.error('[impeccable] Failed to mount component variant ' + variantNum + ' for ' + sessionId + ':', err);
+      console.error('[melzi] Failed to mount component variant ' + variantNum + ' for ' + sessionId + ':', err);
       reportVariantMountFailed(sessionId, variantNum, moduleUrl, err);
       // Every mount failure gets the card, so the variant-switch path (which
       // used to revert with no feedback whatsoever) says what broke too.
@@ -5852,7 +5852,7 @@
 
       const liveEl = findLiveElementForSvelteManifest(manifest);
       if (!liveEl?.parentElement) {
-        console.warn('[impeccable] Could not find original element in live DOM.');
+        console.warn('[melzi] Could not find original element in live DOM.');
         arrivedVariants = availableVariants;
         expectedVariants = Number(manifest.count) || expectedVariants || arrivedVariants;
         const saved = loadSession();
@@ -5935,9 +5935,9 @@
       positionBar();
       saveSession();
       completeParameterGenerationIfReady();
-      console.log('[impeccable] Mounted ' + arrivedVariants + ' ' + manifest.framework + ' component variants.');
+      console.log('[melzi] Mounted ' + arrivedVariants + ' ' + manifest.framework + ' component variants.');
     } catch (err) {
-      console.error('[impeccable] Failed to mount component-preview variants:', err);
+      console.error('[melzi] Failed to mount component-preview variants:', err);
       // Report the manifest PATH, never the fetch URL: that URL carries the
       // live helper token and this string is journaled.
       reportVariantMountFailed(sessionId, visibleVariant || 1, manifestPath, err);
@@ -6156,7 +6156,7 @@
         if (orphan) orphan.remove();
       }
     } catch (err) {
-      console.warn('[impeccable] Svelte component abort cleanup failed:', err);
+      console.warn('[melzi] Svelte component abort cleanup failed:', err);
     }
     hideShaderOverlay();
     if (pendingSvelteComponentRetryObserver) { pendingSvelteComponentRetryObserver.disconnect(); pendingSvelteComponentRetryObserver = null; }
@@ -6190,7 +6190,7 @@
         if (orphan) orphan.remove();
       }
     } catch (err) {
-      console.warn('[impeccable] Svelte component reset cleanup failed:', err);
+      console.warn('[melzi] Svelte component reset cleanup failed:', err);
     }
     hideShaderOverlay();
     if (variantObserver) { variantObserver.disconnect(); variantObserver = null; }
@@ -6231,7 +6231,7 @@
   function discardOrphanedSession(reason) {
     const sessionId = currentSessionId;
     if (!sessionId) return;
-    console.warn('[impeccable] Discarding orphaned session ' + sessionId + ': ' + reason);
+    console.warn('[melzi] Discarding orphaned session ' + sessionId + ': ' + reason);
     sendEvent({ type: 'discard', id: sessionId, orphaned: true }).catch(() => {});
     markSessionHandled();
     cleanup({ instantChrome: true });
@@ -6287,7 +6287,7 @@
     const onUnreadable = (detail) => {
       if (!stillActive()) return;
       if (attempt < COMPLETED_SOURCE_FALLBACK_RETRIES) { retryLater(); return; }
-      console.warn('[impeccable] Could not read source to check the variant wrapper; keeping the session: ' + detail);
+      console.warn('[melzi] Could not read source to check the variant wrapper; keeping the session: ' + detail);
       showToast('Could not read the source file to check this session; it stays open and is checked again on the next event.', 5500);
     };
     fetch(url)
@@ -6326,7 +6326,7 @@
         // in-flight generation; stay in GENERATING — the variant observer
         // is armed and the server re-delivers a missed `done`.
         if (!opts.generationCompleted) {
-          console.log('[impeccable] Source has scaffold but no variants yet; still generating.');
+          console.log('[melzi] Source has scaffold but no variants yet; still generating.');
           return;
         }
         // Generation finished, yet the read shows only the scaffold: the
@@ -6335,7 +6335,7 @@
         // here would strand the tab in GENERATING forever.
         const attempt = opts.attempt || 0;
         if (attempt < COMPLETED_SOURCE_FALLBACK_RETRIES) {
-          console.log('[impeccable] Generation is done but source shows no variants yet; retrying read ('
+          console.log('[melzi] Generation is done but source shows no variants yet; retrying read ('
             + (attempt + 1) + '/' + COMPLETED_SOURCE_FALLBACK_RETRIES + ').');
           setTimeout(() => {
             if (state !== 'GENERATING' || currentSessionId !== sessionId) return;
@@ -6366,7 +6366,7 @@
     positionBar();
     saveSession();
     completeParameterGenerationIfReady();
-    console.log('[impeccable] Injected ' + arrivedVariants + ' variants from source file.');
+    console.log('[melzi] Injected ' + arrivedVariants + ' variants from source file.');
   }
 
   /**
@@ -6436,7 +6436,7 @@
         const doc = parser.parseFromString(block, 'text/html');
         const srcWrapper = doc.querySelector('[data-impeccable-variants="' + sessionId + '"]');
         if (!srcWrapper) {
-          console.warn('[impeccable] Variant wrapper not found in source file.');
+          console.warn('[melzi] Variant wrapper not found in source file.');
           // A resumed cycling session whose wrapper is gone from source is an
           // ORPHAN: the file was edited or regenerated out from under it, so
           // no reload, HMR push, or server restart can ever complete it, and
@@ -6473,7 +6473,7 @@
 
         const liveEl = resolveLiveInjectionAnchor(origContent.outerHTML);
         if (!liveEl) {
-          console.warn('[impeccable] Could not find original element in live DOM.');
+          console.warn('[melzi] Could not find original element in live DOM.');
           enterRecoveryWaitingForAnchor({
             filePath,
             sessionId,
@@ -6488,7 +6488,7 @@
         completeSourceInjection(wrapper, sessionId, { ...opts, filePath });
       })
       .catch(err => {
-        console.error('[impeccable] Failed to fetch source:', err);
+        console.error('[melzi] Failed to fetch source:', err);
         showToast('Could not load variants. Try refreshing the page.', 5000);
       });
   }
@@ -7554,7 +7554,7 @@
           // The generate lane runs without PRODUCT.md by design and never
           // sends the user to init, so its quiet chrome skips this notice.
           if (!hasProjectContext && !liveBarHiddenByHelper) showToast(`No PRODUCT.md found. Variants will be brand-agnostic. Run ${IMPECCABLE_COMMAND} init to generate one.`, 7000);
-          console.log('[impeccable] Live mode connected.');
+          console.log('[melzi] Live mode connected.');
           syncAgentPollingUi(!!msg.agentPolling);
           startAgentStatusPoll();
           restoreFromActiveSessions(msg.activeSessions, 'sse_connected');
@@ -7706,7 +7706,7 @@
           // no hint their variant was never written (issue #384).
           if (awaitingAcceptResult?.id && msg.id === awaitingAcceptResult.id) {
             awaitingAcceptResult = null;
-            console.error('[impeccable] Accept failed after teardown:', msg.message);
+            console.error('[melzi] Accept failed after teardown:', msg.message);
             // Hedged on purpose: a carbonize-phase failure raises this same
             // error after the source WAS promoted, so "was not saved" would
             // overclaim. Normalize the server message's terminal punctuation
@@ -7716,7 +7716,7 @@
             break;
           }
           if (maybeCompleteSteer(msg)) break;
-          console.error('[impeccable] Error:', msg.message);
+          console.error('[melzi] Error:', msg.message);
           showToast('Error: ' + msg.message, 5000);
           // An agent error reply is terminal for the session it names: tear
           // it down exactly like 'discarded' (cleanup includes clearSession),
@@ -7741,11 +7741,11 @@
     evtSource.onerror = () => {
       sseRetries++;
       if (sseRetries <= SSE_MAX_RETRIES) {
-        console.log('[impeccable] SSE connection lost. Retry ' + sseRetries + '/' + SSE_MAX_RETRIES + '...');
+        console.log('[melzi] SSE connection lost. Retry ' + sseRetries + '/' + SSE_MAX_RETRIES + '...');
         return; // EventSource auto-reconnects
       }
       // Server is gone. Clean up gracefully.
-      console.log('[impeccable] Live server unreachable. Cleaning up UI.');
+      console.log('[melzi] Live server unreachable. Cleaning up UI.');
       evtSource.close();
       evtSource = null;
       handleServerLost();
@@ -7786,10 +7786,10 @@
     msg.token = TOKEN;
     function handleFailure(err) {
       if (opts && opts.throwOnError) {
-        console.error('[impeccable] Failed to send event:', err);
+        console.error('[melzi] Failed to send event:', err);
         throw err;
       }
-      console.debug('[impeccable] Dropped optional live event:', err);
+      console.debug('[melzi] Dropped optional live event:', err);
       return null;
     }
     // Token in the query string as well as the body: the URL token is what
@@ -7834,7 +7834,7 @@
 
   function abandonSupersededGo(sessionId) {
     if (sessionId !== currentSessionId) return;
-    console.warn('[impeccable] The helper already answered this agent target; clearing session ' + sessionId + '.');
+    console.warn('[melzi] The helper already answered this agent target; clearing session ' + sessionId + '.');
     markSessionHandled();
     cleanup({ instantChrome: true });
     showToast('The helper already answered this request, so this session was cleared. Pick an element to start fresh.', 6000);
@@ -7844,7 +7844,7 @@
   function abandonForeignSession(sessionId) {
     if (abandonedForeignSessionId === sessionId || sessionId !== currentSessionId) return;
     abandonedForeignSessionId = sessionId;
-    console.warn('[impeccable] The live server has no record of session ' + sessionId + '; clearing stale local state.');
+    console.warn('[melzi] The live server has no record of session ' + sessionId + '; clearing stale local state.');
     markSessionHandled();
     cleanup({ instantChrome: true });
     showToast('A saved live session belonged to a different project, so it was cleared. Pick an element to start fresh.', 6000);
@@ -8650,7 +8650,7 @@
         try {
           return await hideCaptureChromeForShaderProxy(() => captureElementFromRenderedAncestor(ms, el, opts));
         } catch (err) {
-          console.warn('[impeccable] Svelte ancestor crop capture failed, falling back to element capture:', err);
+          console.warn('[melzi] Svelte ancestor crop capture failed, falling back to element capture:', err);
         }
       }
       const bg = resolveCanvasBackground(el);
@@ -8714,7 +8714,7 @@
     try {
       ({ blob, paper } = await captureElementToBlob(el, snapshot, rect));
     } catch (err) {
-      console.warn('[impeccable] capture failed, proceeding without screenshot:', err);
+      console.warn('[melzi] capture failed, proceeding without screenshot:', err);
     }
     // Light up the shader overlay the moment capture is ready - no reason to
     // wait for the upload to complete before the user sees something alive.
@@ -8736,10 +8736,10 @@
           const { path: p } = await uploadRes.json();
           screenshotPath = p;
         } else {
-          console.warn('[impeccable] annotation upload failed:', uploadRes.status);
+          console.warn('[melzi] annotation upload failed:', uploadRes.status);
         }
       } catch (err) {
-        console.warn('[impeccable] annotation upload failed:', err);
+        console.warn('[melzi] annotation upload failed:', err);
       }
     }
     // Annotated requests must wait for capture + upload because the screenshot
@@ -9104,7 +9104,7 @@ void main() {
       gl.enableVertexAttribArray(uvLoc);
       gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 16, 8);
     } catch (err) {
-      console.warn('[impeccable] shader setup failed:', err);
+      console.warn('[melzi] shader setup failed:', err);
       canvas.remove();
       return;
     }
@@ -9115,7 +9115,7 @@ void main() {
     try {
       bitmap = await createImageBitmap(blob);
     } catch (err) {
-      console.warn('[impeccable] shader bitmap decode failed:', err);
+      console.warn('[melzi] shader bitmap decode failed:', err);
       if (abandoned(canvas, gl)) return;
       const lose = gl.getExtension?.('WEBGL_lose_context');
       try { lose?.loseContext(); } catch {}
@@ -9667,7 +9667,7 @@ void main() {
       ? currentPreviewFile
       : (summary.sourceFile || summary.previewFile || currentSourceFile || currentPreviewFile);
     if (!file) return;
-    console.log('[impeccable] Reconnected after generation completed; recovering variants from source.');
+    console.log('[melzi] Reconnected after generation completed; recovering variants from source.');
     setTimeout(() => {
       if (sessionId !== currentSessionId || state !== 'GENERATING') return;
       if (arrivedVariants > 0 && arrivedVariants >= expectedVariants) return;
@@ -9710,7 +9710,7 @@ void main() {
     // is that project's leftover, never a session this server can complete;
     // resuming it freezes the picker behind an unfinishable banner.
     if (saved?.appRoot && APP_ROOT && saved.appRoot !== APP_ROOT) {
-      console.warn('[impeccable] Ignoring saved live session from another project (' + saved.appRoot + ').');
+      console.warn('[melzi] Ignoring saved live session from another project (' + saved.appRoot + ').');
       sessionState.clearSession();
       return null;
     }
@@ -10163,7 +10163,7 @@ void main() {
               showShaderOverlay(shaderTarget, blob, rect, paper);
             }
           } catch (err) {
-            console.warn('[impeccable] shader resume failed:', err);
+            console.warn('[melzi] shader resume failed:', err);
           }
         })();
       }
@@ -10656,7 +10656,7 @@ void main() {
 
   function steerFocusLog(reason, extra) {
     if (!steerFocusDebugEnabled()) return;
-    console.log('[impeccable.steer]', reason, {
+    console.log('[melzi.steer]', reason, {
       state,
       pickActive,
       pageChatReady: !!pageChatInput,
@@ -11110,7 +11110,7 @@ void main() {
 
     rec.onerror = (event) => {
       const code = event.error || 'unknown';
-      console.warn('[impeccable.voice] recognition error:', code);
+      console.warn('[melzi.voice] recognition error:', code);
       const message = steerVoiceErrorMessage(code);
       stopVoice({ suppressSubmit: true, message: message || undefined });
     };
@@ -11124,7 +11124,7 @@ void main() {
     try {
       rec.start();
     } catch (err) {
-      console.warn('[impeccable.voice] start failed:', err);
+      console.warn('[melzi.voice] start failed:', err);
       stopVoice({
         suppressSubmit: true,
         message: err?.message?.includes('already started')
@@ -11441,7 +11441,7 @@ void main() {
     steerFocusLog('page-chat-mounted', {});
   }
 
-  // Impeccable mark - same paths as site/components/Header.astro + favicon.svg.
+  // Melzi mark - same paths as site/components/Header.astro + favicon.svg.
   function brandMarkSvg(color = C.brand, size = 18) {
     return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" aria-hidden="true">
       <path d="M5 2.5 L13.5 2.5 L5.5 21.5 L5 21.5 Q2.5 21.5 2.5 19 L2.5 5 Q2.5 2.5 5 2.5 Z"/>
@@ -11478,8 +11478,8 @@ void main() {
     // The tooltip is mouse-only, so carry the same distinction in the label or
     // screen-reader users are left with the vaguer of the two readings.
     globalBarBrandEl.setAttribute('aria-label', agentStatusMessage
-      ? 'Impeccable live mode - ' + (agentHasWorkInFlight() ? 'agent is working' : 'agent not polling')
-      : 'Impeccable live mode');
+      ? 'Melzi live mode - ' + (agentHasWorkInFlight() ? 'agent is working' : 'agent not polling')
+      : 'Melzi live mode');
     globalBarBrandEl.removeAttribute('title');
     globalBarBrandEl.style.cursor = agentStatusMessage ? 'help' : 'default';
     const mark = globalBarBrandEl.querySelector('[data-brand-mark]');
@@ -11635,7 +11635,7 @@ void main() {
       globalBarEl.dataset.liveBarDisplay = 'flex';
     }
 
-    // Brand mark - kinpaku Impeccable icon (site header / favicon paths).
+    // Brand mark - kinpaku Melzi icon (site header / favicon paths).
     const brand = el('span', {
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       alignSelf: 'stretch', position: 'relative',
@@ -11647,7 +11647,7 @@ void main() {
     brand.id = PREFIX + '-global-bar-brand';
     brand.dataset.agentConnected = 'false';
     brand.setAttribute('role', 'img');
-    brand.setAttribute('aria-label', 'Impeccable live mode - agent not polling');
+    brand.setAttribute('aria-label', 'Melzi live mode - agent not polling');
 
     const brandMark = el('span', {
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -12293,7 +12293,7 @@ void main() {
     document.getElementById(PICK_CURSOR_STYLE_ID)?.remove();
     removeVariantStateStylesheet();
     window.__IMPECCABLE_LIVE_INIT__ = false;
-    console.log('[impeccable] Live mode exited.');
+    console.log('[melzi] Live mode exited.');
   }
 
   //
@@ -12380,8 +12380,8 @@ void main() {
     }
   }
 
-  // Neutral panel palette - deliberately NOT Impeccable-branded. The panel is
-  // a viewer of the project's design system, not an Impeccable surface.
+  // Neutral panel palette - deliberately NOT Melzi-branded. The panel is
+  // a viewer of the project's design system, not an Melzi surface.
   const DP = {
     canvas:   'oklch(94% 0 0)',            // panel background
     tile:     'oklch(98.5% 0 0)',          // card-on-canvas
@@ -13475,9 +13475,9 @@ void main() {
     // Check for an active session to resume (variant wrapper already in DOM after HMR)
     const resumed = resumeSession();
     if (!resumed) {
-      console.log('[impeccable] Live variant mode ready. Hover over elements to pick one.');
+      console.log('[melzi] Live variant mode ready. Hover over elements to pick one.');
     } else {
-      console.log('[impeccable] Resumed active variant session ' + currentSessionId + ' (' + arrivedVariants + '/' + expectedVariants + ' variants).');
+      console.log('[melzi] Resumed active variant session ' + currentSessionId + ' (' + arrivedVariants + '/' + expectedVariants + ' variants).');
     }
 
     // SvelteKit, React, and other frameworks may restore a durable session
@@ -13491,7 +13491,7 @@ void main() {
         if (!wrapper) return;
         scout.disconnect();
         if (resumeSession(deferredResumeRevision, { reason: 'browser_resumed_deferred_wrapper' })) {
-          console.log('[impeccable] Resumed deferred session ' + currentSessionId + ' (post-hydration).');
+          console.log('[melzi] Resumed deferred session ' + currentSessionId + ' (post-hydration).');
         }
       });
       scout.observe(document.body, { childList: true, subtree: true });

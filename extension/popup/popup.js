@@ -1,5 +1,5 @@
 /**
- * Impeccable DevTools Extension - Popup
+ * Melzi DevTools Extension - Popup
  *
  * Quick controls: scan, toggle overlays, and see finding count.
  */
@@ -9,8 +9,12 @@ const countLabel = document.getElementById('count-label');
 const btnScan = document.getElementById('btn-scan');
 const btnToggle = document.getElementById('btn-toggle');
 const scanError = document.getElementById('scan-error');
+const btnDesignLab = document.getElementById('btn-design-lab');
+const designLabState = document.getElementById('design-lab-state');
+const designLabError = document.getElementById('design-lab-error');
 
 let overlaysVisible = true;
+let designLabEnabled = false;
 // The popup only ever reflects the active tab. Broadcasts from the service
 // worker carry a tabId, so we cache the active one and ignore updates meant
 // for other tabs (e.g. a DevTools-driven rescan failing on a background tab).
@@ -29,6 +33,15 @@ function updateFromState(state) {
   countLabel.textContent = count === 1 ? 'anti-pattern' : 'anti-patterns';
   overlaysVisible = state.overlaysVisible !== false;
   btnToggle.textContent = overlaysVisible ? 'Hide overlays' : 'Show overlays';
+  updateDesignLab(state.designLabEnabled === true);
+}
+
+function updateDesignLab(enabled) {
+  designLabEnabled = enabled;
+  btnDesignLab.setAttribute('aria-pressed', String(enabled));
+  btnDesignLab.textContent = enabled ? 'Turn Design Lab off' : 'Turn Design Lab on';
+  designLabState.textContent = enabled ? 'On' : 'Off';
+  designLabState.classList.toggle('is-active', enabled);
 }
 
 async function loadState() {
@@ -61,6 +74,17 @@ chrome.runtime.onMessage.addListener((msg) => {
     overlaysVisible = msg.visible;
     btnToggle.textContent = overlaysVisible ? 'Hide overlays' : 'Show overlays';
   }
+  if (msg.action === 'design-lab-state-broadcast') {
+    updateDesignLab(msg.enabled === true);
+    btnDesignLab.disabled = false;
+    designLabError.hidden = true;
+  }
+  if (msg.action === 'design-lab-failed') {
+    updateDesignLab(false);
+    btnDesignLab.disabled = false;
+    designLabError.textContent = msg.message || 'Couldn\u2019t open Design Lab on this page.';
+    designLabError.hidden = false;
+  }
 });
 
 btnScan.addEventListener('click', async () => {
@@ -79,6 +103,29 @@ btnToggle.addEventListener('click', async () => {
   chrome.runtime.sendMessage({ action: 'toggle-overlays', tabId });
   overlaysVisible = !overlaysVisible;
   btnToggle.textContent = overlaysVisible ? 'Hide overlays' : 'Show overlays';
+});
+
+btnDesignLab.addEventListener('click', async () => {
+  const tabId = await getActiveTabId();
+  if (!tabId) return;
+  activeTabId = tabId;
+  btnDesignLab.disabled = true;
+  designLabError.hidden = true;
+  chrome.runtime.sendMessage({
+    action: 'toggle-design-lab',
+    tabId,
+    enabled: !designLabEnabled,
+  }, (response) => {
+    if (chrome.runtime.lastError || response?.ok === false) {
+      updateDesignLab(false);
+      btnDesignLab.disabled = false;
+      designLabError.textContent = response?.error || chrome.runtime.lastError?.message || 'Couldn\u2019t open Design Lab on this page.';
+      designLabError.hidden = false;
+      return;
+    }
+    updateDesignLab(response.enabled === true);
+    btnDesignLab.disabled = false;
+  });
 });
 
 loadState();

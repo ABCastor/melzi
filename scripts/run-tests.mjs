@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_SUITES, OPT_IN_SUITES, SUITES, expandSuites } from './test-suites.mjs';
+import { exitCodeFor, formatSummary, isFailure } from './test-report.mjs';
 import { createGroupShutdown, trackChildExit } from './lib/process-group.mjs';
 import {
   REPO_ENV,
@@ -25,6 +26,8 @@ const REPO_ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DEFAULT_WALL_CLOCK_MS = Number(process.env.IMPECCABLE_TEST_WALL_CLOCK_MS) || 1_200_000;
 
 const args = process.argv.slice(2);
+const bail = args.includes('--bail');
+const results = [];
 
 if (args.includes('--help') || args.includes('-h')) {
   printHelp();
@@ -72,6 +75,8 @@ try {
 }
 
 await main();
+console.log(formatSummary(results, { bail }));
+process.exit(exitCodeFor(results));
 
 async function main() {
   for (const suiteName of suites) {
@@ -98,7 +103,7 @@ async function runCommand(command, suiteName) {
   const wallClockMs = command.wallClockMs ?? DEFAULT_WALL_CLOCK_MS;
 
   if (command.runner === 'bun') {
-    await runProcess('bun', ['test', ...command.files], { env, wallClockMs });
+    await runProcess(suiteName, 'bun', ['test', ...command.files], { env, wallClockMs });
   } else if (command.runner === 'node') {
     // One invocation for the whole file list: node --test runs each file in
     // its own child process regardless, so isolation is unchanged, but the
@@ -106,20 +111,35 @@ async function runCommand(command, suiteName) {
     // Measured on the live suite (38 files): 52s serial-per-file vs 18s
     // batched at concurrency 4. Suites can pin `concurrency: 1` if their
     // tests ever contend for a shared resource.
+    //
+    // FORK DELTA: suiteName stays threaded into runProcess so the aggregate
+    // summary can still group results per suite. Upstream's call drops it,
+    // because upstream exits on the first non-zero child and has no summary.
     const nodeArgs = ['--test', `--test-concurrency=${command.concurrency ?? 4}`];
     if (command.timeoutMs) nodeArgs.push(`--test-timeout=${command.timeoutMs}`);
     if (command.forceExit) nodeArgs.push('--test-force-exit');
     nodeArgs.push(...command.files);
-    await runProcess(process.execPath, nodeArgs, { env, wallClockMs });
+    await runProcess(suiteName, process.execPath, nodeArgs, { env, wallClockMs });
   } else {
     throw new Error(`Unsupported test runner "${command.runner}"`);
   }
 
+  // Runs after a failing, timed-out, or signalled process too: each of those
+  // is one of the ways servers are left behind.
   await assertNoLeakedServers(runId, suiteName);
 }
 
-function runProcess(cmd, args, { env, wallClockMs }) {
-  console.log(`$ ${formatCommand(cmd, args)}`);
+// FORK DELTA: a non-zero child, a spawn error, a wall-clock kill, and a signal
+// are each recorded as a failed result and the run continues, where upstream
+// calls process.exit on the first one. The process group, the wall-clock cap,
+// signal forwarding, and the leak check are upstream's and kept.
+function runProcess(suiteName, cmd, args, { env, wallClockMs }) {
+  const label = formatCommand(cmd, args);
+  if (bail && results.some(isFailure)) {
+    results.push({ suite: suiteName, command: label, skipped: true });
+    return Promise.resolve();
+  }
+  console.log(`$ ${label}`);
   return new Promise((resolve) => {
     const child = spawn(cmd, args, {
       // Own process group: the wall-clock cap and the shutdown handler can
@@ -141,7 +161,7 @@ function runProcess(cmd, args, { env, wallClockMs }) {
       ? setTimeout(() => {
           timedOut = true;
           console.error(
-            `\n[run-tests] wall-clock cap of ${wallClockMs}ms exceeded for "${formatCommand(cmd, args)}"; ` +
+            `\n[run-tests] wall-clock cap of ${wallClockMs}ms exceeded for "${label}"; ` +
             'killing the process group (SIGKILL).',
           );
           // A test blocked in a synchronous spawnSync cannot be reached by
@@ -152,34 +172,34 @@ function runProcess(cmd, args, { env, wallClockMs }) {
         }, wallClockMs)
       : null;
 
+    let settled = false;
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
+      results.push({ suite: suiteName, command: label, ...result });
+      resolve();
+    };
+
     child.on('error', (err) => {
       if (timer) clearTimeout(timer);
       shutdown.release();
       console.error(err.message);
-      process.exit(1);
+      settle({ status: null, error: err.message });
     });
     child.on('exit', (code, signal) => {
       if (timer) clearTimeout(timer);
       shutdown.release();
       if (shutdown.shuttingDown) return;
       if (timedOut) {
-        // A wedged suite is one of the ways servers are left behind, so sweep
-        // before reporting rather than walking away from them.
-        assertNoLeakedServers(env[RUN_ID_ENV], null).finally(() => process.exit(1));
+        settle({ status: 1, error: `wall-clock cap of ${wallClockMs}ms exceeded` });
         return;
       }
       if (signal) {
-        console.error(`[run-tests] "${formatCommand(cmd, args)}" killed by signal ${signal}`);
-        assertNoLeakedServers(env[RUN_ID_ENV], null).finally(() => process.exit(1));
+        console.error(`[run-tests] "${label}" killed by signal ${signal}`);
+        settle({ status: 1, error: `killed by signal ${signal}` });
         return;
       }
-      if (code !== 0) {
-        // Leaked servers are still worth reporting on a failing suite: a
-        // failure before teardown is one of the ways they are left behind.
-        assertNoLeakedServers(env[RUN_ID_ENV], null).finally(() => process.exit(code || 1));
-        return;
-      }
-      resolve();
+      settle({ status: code ?? 1 });
     });
   });
 }
@@ -188,9 +208,10 @@ function runProcess(cmd, args, { env, wallClockMs }) {
  * Fail the run when a suite left live servers behind.
  *
  * The whole point of the guard is that a leak shows up in the run that caused
- * it rather than as a wedged port days later, so it is an error, not a warning.
+ * it rather than as a wedged port days later, so it is a failure, not a warning.
  * The leaked servers are killed either way, so the next suite still gets its
- * ports.
+ * ports. Recorded as a failed result rather than an exit (fork delta above), so
+ * the summary still reports every suite.
  */
 async function assertNoLeakedServers(runId, suiteName) {
   if (!runId || process.env.IMPECCABLE_SKIP_LEAK_CHECK === '1') return;
@@ -209,7 +230,12 @@ async function assertNoLeakedServers(runId, suiteName) {
   console.error('They have been killed. A live server outliving its suite means a teardown path');
   console.error('was skipped; see tests/lib/live-servers.mjs for how servers are meant to be tracked.');
   console.error('Set IMPECCABLE_SKIP_LEAK_CHECK=1 to bypass this check.');
-  process.exit(1);
+  results.push({
+    suite: suiteName,
+    command: 'live-server leak check',
+    status: 1,
+    error: `${leaked.length} leaked live server(s)`,
+  });
 }
 
 /**
@@ -243,12 +269,16 @@ function formatCommand(cmd, args) {
 }
 
 function printHelp() {
-  console.log(`Usage: node scripts/run-tests.mjs [suite...]
+  console.log(`Usage: node scripts/run-tests.mjs [suite...] [--bail]
 
 Aliases:
   default     ${DEFAULT_SUITES.join(', ')}
   all-local   ${DEFAULT_SUITES.join(', ')}
   all         ${[...DEFAULT_SUITES, ...OPT_IN_SUITES].join(', ')}
+
+Every requested suite runs and the summary reports all of them; the exit code
+is non-zero if any failed. Pass --bail to stop at the first failing process
+instead, for a tight local edit loop. The summary then names what did not run.
 
 Run with --list to see suite contents.
 Run with --cleanup to kill live servers a previous run left behind.`);

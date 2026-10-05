@@ -1,10 +1,10 @@
 ---
-name: impeccable
-description: "Use when the user wants to design, redesign, shape, critique, audit, polish, clarify, distill, harden, optimize, adapt, animate, colorize, extract, or otherwise improve a frontend interface. Covers websites, landing pages, dashboards, product UI, app shells, components, forms, settings, onboarding, and empty states. Handles UX review, visual hierarchy, information architecture, cognitive load, accessibility, performance, responsive behavior, theming, anti-patterns, typography, fonts, spacing, layout, alignment, color, motion, micro-interactions, UX copy, error states, edge cases, i18n, and reusable design systems or tokens. Also use for bland designs that need to become bolder or more delightful, loud designs that should become quieter, live browser iteration on UI elements, or ambitious visual effects that should feel technically extraordinary. Not for backend-only or non-UI tasks."
+name: melzi
+description: "Use when the user wants to design, redesign, shape, critique, audit, polish, clarify, distill, harden, optimize, adapt, animate, colorize, extract, or otherwise improve a frontend interface. Covers websites, landing pages, dashboards, product UI, app shells, components, forms, settings, onboarding, and empty states. Handles UX review, visual hierarchy, information architecture, cognitive load, accessibility, performance, responsive behavior, theming, anti-patterns, typography, fonts, spacing, layout, alignment, color, motion, micro-interactions, UX copy, error states, edge cases, i18n, and reusable design systems or tokens. Also use for bland designs that need to become bolder or more delightful, loud designs that should become quieter, live browser iteration on UI elements, or ambitious visual effects that should feel technically extraordinary. Also use for hand-drawn SVG mascots, spot illustrations, annotation marks, and sketch diagrams. Not for backend-only or other non-design tasks."
 argument-hint: "[{{command_hint}}] [target]"
 user-invocable: true
 allowed-tools:
-  - Bash(npx impeccable *)
+  - Bash(npx melzi *)
   - Bash({{scripts_path}}/impeccable *)
 license: Apache 2.0
 ---
@@ -14,6 +14,10 @@ This skill gives you the tools and permission to create design that earns to be 
 Core principles:
 - Go all out. No hedging, no shortcuts. The deliverable must be complete (except assets the user must provide).
 - Dream big and bold. Distinct, beautiful, outstanding and highly inspiring work.
+- Motion claims need motion evidence. The DOM, computed styles, and stills establish structure and a sampled state, never timing or smoothness. Before judging existing animation, hover, transition, scroll-linked behavior, reveal choreography, or jank on the web, record it with the capture procedure in [reference/animate.md](reference/animate.md). If the capture fails, name the missing evidence instead of ruling from stills.
+- **Never throw an option, always show it working.** A swatch, a hex, a font name or a one-line description is not an option, it is a label, and the user cannot judge it. Every alternative you put in front of them is rendered on the real surface at real size, on every ground it will live on, doing the job it would really do. A colour appears as type, a rule, a field and a mark; a typeface appears set in the actual words; a mark appears at the sizes it will ship at. If you cannot show it working, it is not ready to be offered.
+- **Bring unasked options, sparingly and only when earned.** Once in a while, alongside the requested work, include a couple of genuinely different directions the brief did not ask for, because a decider who only ever sees what they asked for cannot discover what they would have preferred. Two rules govern it: each one must be a real answer to what they actually said, never a demonstration of range; and each arrives fully worked, under the rule above. If nothing clears that bar this round, bring nothing. Forced variety reads as noise and costs trust.
+- **It should feel like magic to them and be laborious for you.** The work behind an option (the measurement, the research, the rejected attempts, the physical or historical grounding) stays underneath. What surfaces is the smallest set of things they can actually judge, already legible, already verified, already honest about its risk. Hidden effort is the point: they should feel presented with something considered, never handed a search space to explore on your behalf.
 - Verify in bounded passes, not a loop, and the ceiling covers the whole cycle: screenshots, defect scans, micro-edits, and rebuilds alike. Build fully, inspect once with a batched round (desktop and mobile together on the web; the shipped device classes on a native platform), fix everything it shows in one batch, confirm with at most one more round, and stop polishing. Open-ended self-QA burns the user's money doing worse what the finish handoffs do better.
 
 ## Setup
@@ -45,30 +49,27 @@ Choose the mode from the requested surface, not the product, and persist it only
 
 | Command | Category | Description | Reference |
 |---|---|---|---|
-| `craft [feature]` | Build | Deprecated alias for an ordinary new-work request | [reference/craft.md](reference/craft.md) |
-| `shape [feature]` | Build | Plan UX/UI before writing code | [reference/shape.md](reference/shape.md) |
-| `init` | Build | Capture durable product context in PRODUCT.md | [reference/init.md](reference/init.md) |
-| `document` | Build | Generate DESIGN.md from existing project code | [reference/document.md](reference/document.md) |
-| `extract [target]` | Build | Pull reusable tokens and components into design system | [reference/extract.md](reference/extract.md) |
+| `shape [feature]` | Create | Plan UX/UI before writing code | [reference/shape.md](reference/shape.md) |
+| `handdrawn [target]` | Create | Draw a mascot, spot illustration or annotation mark that reads as drawn by a person and stays a clean vector | [reference/handdrawn.md](reference/handdrawn.md) · generating references, editing and diagnosis: [reference/imagegen.md](reference/imagegen.md) |
 | `critique [target]` | Evaluate | UX design review with heuristic scoring | [reference/critique.md](reference/critique.md) |
 | `audit [target]` | Evaluate | Technical quality checks (a11y, perf, responsive) | [reference/audit.md](reference/audit.md) · native: [reference/audit.native.md](reference/audit.native.md) |
-| `polish [target]` | Refine | Final quality pass before shipping | [reference/polish.md](reference/polish.md) |
+| `explore [target]` | Evaluate | Live UI testing: drives the running app and independently verifies each defect | [reference/explore.md](reference/explore.md) |
 | `bolder [target]` | Refine | Amplify safe or bland designs | [reference/bolder.md](reference/bolder.md) |
 | `quieter [target]` | Refine | Tone down aggressive or overstimulating designs | [reference/quieter.md](reference/quieter.md) |
-| `distill [target]` | Refine | Strip to essence, remove complexity | [reference/distill.md](reference/distill.md) |
-| `harden [target]` | Refine | Production-ready: errors, i18n, edge cases | [reference/harden.md](reference/harden.md) |
-| `onboard [target]` | Refine | Design first-run flows, empty states, activation | [reference/onboard.md](reference/onboard.md) |
-| `animate [target]` | Enhance | Add purposeful animations and motion | [reference/animate.md](reference/animate.md) |
-| `colorize [target]` | Enhance | Add strategic color to monochromatic UIs | [reference/colorize.md](reference/colorize.md) |
-| `typeset [target]` | Enhance | Improve typography hierarchy and fonts | [reference/typeset.md](reference/typeset.md) |
-| `layout [target]` | Enhance | Fix spacing, rhythm, and visual hierarchy | [reference/layout.md](reference/layout.md) |
-| `delight [target]` | Enhance | Add personality and memorable touches | [reference/delight.md](reference/delight.md) |
-| `overdrive [target]` | Enhance | Push past conventional limits | [reference/overdrive.md](reference/overdrive.md) |
-| `clarify [target]` | Fix | Improve UX copy, labels, and error messages | [reference/clarify.md](reference/clarify.md) |
-| `adapt [target]` | Fix | Adapt for different devices and screen sizes | [reference/adapt.md](reference/adapt.md) · native: [reference/adapt.native.md](reference/adapt.native.md) |
-| `optimize [target]` | Fix | Diagnose and fix UI performance | [reference/optimize.md](reference/optimize.md) |
-| `live` | Iterate | Visual variant mode: pick elements in the browser, iterate on alternatives | [reference/live.md](reference/live.md) |
-| `generate [n] [action] [element]` | Iterate | Variants, versions, or alternatives of a named element to choose from in the live browser; no manual picking | [reference/generate.md](reference/generate.md) |
+| `animate [target]` | Refine | Add purposeful animations and motion | [reference/animate.md](reference/animate.md) |
+| `colorize [target]` | Refine | Add strategic color to monochromatic UIs | [reference/colorize.md](reference/colorize.md) |
+| `typeset [target]` | Refine | Improve typography hierarchy and fonts | [reference/typeset.md](reference/typeset.md) |
+| `layout [target]` | Refine | Fix spacing, rhythm, and visual hierarchy | [reference/layout.md](reference/layout.md) |
+| `clarify [target]` | Simplify | Improve UX copy, labels, error messages, and first-value guidance | [reference/clarify.md](reference/clarify.md) |
+| `polish [target]` | Harden | Final quality pass before shipping | [reference/polish.md](reference/polish.md) |
+| `harden [target]` | Harden | Production-ready: errors, i18n, edge cases | [reference/harden.md](reference/harden.md) |
+| `init` | System | Capture durable product context in PRODUCT.md | [reference/init.md](reference/init.md) |
+| `teach` | System | Explain and establish the product context Melzi needs | [reference/init.md](reference/init.md) |
+| `document` | System | Generate DESIGN.md and consolidate a reusable system from existing code | [reference/document.md](reference/document.md) |
+| `study [url or image]` | System | Read a design the user admires and name its DNA | [reference/study.md](reference/study.md) |
+| `identity [project]` | System | Build a personal visual system and its production identity mark | [reference/identity.md](reference/identity.md) |
+| `live` | System | Visual variant mode: pick elements in the browser, generate alternatives | [reference/live.md](reference/live.md) |
+| `generate [n] [action] [element]` | System | Variants of a named element to choose from in the live browser; no manual picking | [reference/generate.md](reference/generate.md) |
 
 Routing: <!-- rule:skill-routing -->
 
@@ -76,14 +77,26 @@ Routing: <!-- rule:skill-routing -->
 - **Explicit or clearly implied request to run a command:** load its reference (native variant on native platforms) and follow it. Ask once if two commands fit.
 - **Workflow or command-selection question:** read [Workflow questions](reference/routing.md#workflow-questions).
 - **Otherwise:** treat the request as general design work. Missing PRODUCT.md routes a new surface or replacement world through init, then new-work; a narrow refinement of existing code proceeds on the incumbent implementation as `impeccable context` directs, offering init afterward rather than blocking on it.
-- `teach` aliases `init`. `craft` is a deprecated alias for ordinary new-work and adds nothing. `shape` owns task discovery, then enters new-work only for visual-world and surface-concept decisions.
+- **Compatibility aliases:** every name below remains accepted and pinnable. Load the named destination rather than looking for a deleted reference file.
+  - `logo` → the Mark phase in [identity.md](reference/identity.md).
+  - `delight` → the Earned delight phase in [bolder.md](reference/bolder.md); authored motion still loads [animate.md](reference/animate.md).
+  - `distill` → the Distill phase in [quieter.md](reference/quieter.md).
+  - `extract` → Extract mode in [document.md](reference/document.md).
+  - `overdrive` → the Overdrive phase in [bolder.md](reference/bolder.md) plus the technical catalogue in [animate.md](reference/animate.md).
+  - `optimize` → Optimize mode in [audit.md](reference/audit.md).
+  - `onboard` → the onboarding sections in [clarify.md](reference/clarify.md) and [new-work.md](reference/new-work.md).
+  - `adapt` → on the web, the adaptation sections in [audit.md](reference/audit.md) and [polish.md](reference/polish.md); on `ios`, `android`, or `adaptive`, load [adapt.native.md](reference/adapt.native.md) instead.
+  - `craft` → ordinary [new-work.md](reference/new-work.md) routing after init when PRODUCT.md is missing.
+- `teach` is a first-class command that uses the init playbook. `shape` owns task discovery, then enters new-work only for visual-world and surface-concept decisions.
 
 After init writes PRODUCT.md, resume without rerunning `impeccable context`; init loads the native platform reference itself when the platform it recorded is `ios`, `android`, or `adaptive`.
 
 **Pin / Unpin:** `{{scripts_path}}/impeccable pin <pin|unpin> <command>` creates or removes a standalone `{{command_prefix}}<command>` shortcut. Report the script's result concisely; relay stderr verbatim on error.
 
-**Hooks:** `{{command_prefix}}impeccable hooks <on|off|status|ignore-rule|ignore-file|ignore-value|reset>` manages the design detector hook for this project (auto-runs the detector after UI file edits and surfaces findings). Load [reference/hooks.md](reference/hooks.md) when the user invokes it with any argument.
+**Hooks:** `{{command_prefix}}melzi hooks <on|off|status|ignore-rule|ignore-file|ignore-value|reset>` manages the design detector hook for this project (auto-runs the detector after UI file edits and surfaces findings). Load [reference/hooks.md](reference/hooks.md) when the user invokes it with any argument.
 
-**Doctor:** `{{command_prefix}}impeccable doctor` reports and repairs drift between this project's Impeccable artifacts (PRODUCT.md, DESIGN.md and its sidecar, config, surface briefs, the hook) and what this version reads. Load [reference/doctor.md](reference/doctor.md) when the user invokes it, or when they ask what is out of date, stale, or needs refreshing. A `CONTEXT_STALE` directive in Setup's output is the cheap subset of the same report; act on it there per its own instructions rather than running doctor unasked. <!-- rule:skill-doctor-route -->
+**Doctor:** `{{command_prefix}}melzi doctor` reports and repairs drift between this project's Melzi artifacts (PRODUCT.md, DESIGN.md and its sidecar, config, surface briefs, the hook) and what this version reads. Load [reference/doctor.md](reference/doctor.md) when the user invokes it, or when they ask what is out of date, stale, or needs refreshing. A `CONTEXT_STALE` directive in Setup's output is the cheap subset of the same report; act on it there per its own instructions rather than running doctor unasked. <!-- rule:skill-doctor-route -->
+
+**Review island:** Before an HTML prototype goes to the user to look at, inject the review island so their judgement comes back attached to the thing it is about: a note on the page as a whole or pinned to an element, and the colours and typefaces they tried on the real page rather than described. Declare the project's own candidates and its retired list, or the island falls back to a neutral starter set. Load [reference/review-layer.md](reference/review-layer.md) at that handoff, and again when reading a round back. A round carries an `unresolved` list you must read first, and a memory of what they have already rejected. <!-- rule:skill-review-layer -->
 
 **Never repair drift as a side effect of a design task.** A `CONTEXT_STALE` finding is reported, not acted on, unless the user asks. The one exception is a finding marked `auto`, which the next write to that file performs anyway. <!-- rule:skill-drift-not-a-side-quest -->

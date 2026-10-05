@@ -16,7 +16,9 @@ use impeccable_detect::config::{
     normalize_ignore_rule, normalize_ignore_value, normalize_ignore_value_entries, DetectionConfig,
     IgnoreValueEntry,
 };
-use impeccable_detect::design_system::{load_design_system_for_cwd, resolve_design_md_path, DesignSystem};
+use impeccable_detect::design_system::{
+    load_design_system_for_cwd, load_design_system_for_target, resolve_design_md_path, DesignSystem,
+};
 use impeccable_detect::detect_text::{detect_text, TextOptions};
 use impeccable_detect::engines::{HtmlEngine, ScanOptions};
 use once_cell::sync::Lazy;
@@ -28,7 +30,7 @@ use crate::util::{
     safe_read_json, slice_prefix, slice_utf16, str_field, truthy_value, utf16_len,
 };
 
-pub const ENVELOPE_PREFIX: &str = "[impeccable@1]";
+pub const ENVELOPE_PREFIX: &str = "[melzi@1]";
 
 pub const ALLOWED_EXTS: &[&str] = &[
     ".tsx", ".jsx", ".html", ".htm", ".vue", ".svelte", ".astro", ".css", ".scss", ".sass",
@@ -129,7 +131,7 @@ const CACHE_MAX_SESSIONS: usize = 8;
 pub const EDIT_COUNT_THRESHOLD: u64 = 6;
 pub const MAX_SCAN_TARGETS: usize = 6;
 pub const STOP_MAX_FILES: usize = 20;
-const STEER_LINE: &str = "That does not mean the design is good: keep following the project design system and the impeccable skill guidance.";
+const STEER_LINE: &str = "That does not mean the design is good: keep following the project design system and the melzi skill guidance.";
 
 // ── paths ─────────────────────────────────────────────────────────────────
 
@@ -212,7 +214,7 @@ pub fn get_pending_path(cwd: &str) -> String {
 pub struct Runtime<'a> {
     pub proc_cwd: String,
     pub env: HashMap<String, String>,
-    /// `IMPECCABLE_COMMAND` (`/impeccable` or `$impeccable`).
+    /// `IMPECCABLE_COMMAND` (`/melzi` or `$melzi`).
     pub impeccable_command: String,
     /// The `HOOK_ADMIN_COMMAND` printed in the full footer
     /// (JS: `node '<abs>/hook-admin.mjs'`; here `'<self>' hooks`).
@@ -1669,7 +1671,16 @@ pub fn design_system_options_for_file(
     } else {
         &project.repo_root
     };
-    design_system_options(config, root)
+    if resolve_design_md_path(root).is_some() {
+        return design_system_options(config, root);
+    }
+    // Preserve the hook's project DESIGN resolution above. In its absence,
+    // resolve signature scope from the edited file: choosing repo_root would
+    // skip an app's PRODUCT.md or enroll an unrelated nested package.
+    HookScanOptions {
+        design_system: load_design_system_for_target(file_path, None, project_cwd, &rt.homedir())
+            .filter(|ds| ds.from_signature),
+    }
 }
 
 /// The detector the hook drives: the regex engine from `impeccable-detect`

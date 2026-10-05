@@ -1,8 +1,8 @@
 {
-  "name": "impeccable",
+  "name": "melzi",
   "version": "4.1.0",
-  "author": "Paul Bakaus",
-  "description": "Design skills, commands, and anti-pattern detection for AI coding agents",
+  "author": "Anneo22",
+  "description": "Design review skills and interface checks for AI coding tools",
   "keywords": [
     "design",
     "frontend",
@@ -18,25 +18,27 @@
     "ci-cd"
   ],
   "license": "Apache-2.0",
-  "homepage": "https://impeccable.style",
+  "homepage": "https://github.com/ABCastor/melzi",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pbakaus/impeccable.git"
+    "url": "git+https://github.com/ABCastor/melzi.git"
   },
   "engines": {
     "node": ">=22.18.0"
   },
   "type": "module",
   "bin": {
-    "impeccable": "cli/bin/cli.js"
+    "melzi": "cli/bin/cli.js"
   },
   "files": [
     "cli/bin/",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE.md",
+    "docs/OFL-literata.txt"
   ],
   "scripts": {
-    "build:skills": "bun run scripts/build.js --skip-root-sync",
-    "build:skills:release": "bun run scripts/build.js",
+    "build:skills": "bun run build:typescript && bun run scripts/build.js --skip-root-sync",
+    "build:skills:release": "bun run build:typescript && bun run scripts/build.js",
     "build": "bun run build:skills && mkdir -p build/_data && rm -rf build/_data/dist && cp -R dist build/_data/dist",
     "build:release": "bun run build:skills:release && mkdir -p build/_data && rm -rf build/_data/dist && cp -R dist build/_data/dist",
     "build:extension": "node scripts/build-extension.js",
@@ -63,22 +65,19 @@
     "test:live-svelte-adapter-deepseek": "node scripts/run-tests.mjs live-svelte-adapter-deepseek",
     "smoke:hooks": "node scripts/smoke-provider-hooks.mjs",
     "audit": "bun audit --audit-level=moderate",
-    "prepack": "cp README.md README.repo.md && cp README.npm.md README.md",
-    "postpack": "cp README.repo.md README.md && rm README.repo.md",
+    "prepack": "bun run check:typescript && cp README.md .npm-readme-backup && cp README.npm.md README.md",
+    "postpack": "cp .npm-readme-backup README.md && rm .npm-readme-backup",
     "release:skill": "node scripts/release.mjs skill",
     "release:cli": "node scripts/release.mjs cli",
     "release:ext": "node scripts/release.mjs extension",
     "release:engine": "node scripts/release.mjs engine",
     "release:platform-packages": "node scripts/publish-platform-packages.mjs",
     "check:engine-release": "node scripts/check-engine-release.mjs",
-    "build:component-review": "bun scripts/build-component-review.mjs"
-  },
-  "optionalDependencies": {
-    "@impeccable/cli-darwin-arm64": "0.1.6",
-    "@impeccable/cli-darwin-x64": "0.1.6",
-    "@impeccable/cli-linux-x64": "0.1.6",
-    "@impeccable/cli-linux-arm64": "0.1.6",
-    "@impeccable/cli-windows-x64": "0.1.6"
+    "build:component-review": "bun scripts/build-component-review.mjs",
+    "typecheck": "tsc --noEmit",
+    "build:typescript": "node scripts/build-typescript.mjs",
+    "check:typescript": "node scripts/build-typescript.mjs --check",
+    "check:notices": "node scripts/check-distribution-notices.mjs"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^4.0.7",
@@ -87,11 +86,19 @@
     "@anthropic-ai/claude-agent-sdk": "^0.3.165",
     "@anthropic-ai/sdk": "^0.126.0",
     "@babel/parser": "^8.0.4",
+    "@types/node": "26.6.4",
     "ai": "^7.0.14",
     "archiver": "^8.0.0",
+    "css-select": "^7.0.0",
+    "fflate": "0.8.3",
+    "htmlparser2": "^12.0.0",
     "playwright": "^1.59.1",
     "puppeteer": "^25.1.0",
     "svelte": "^5",
+    "typescript": "5.9.3",
     "zod": "^4.3.6"
+  },
+  "melziEngine": {
+    "version": "0.1.6"
   }
 }

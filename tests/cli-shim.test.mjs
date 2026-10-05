@@ -34,10 +34,10 @@ import { after, before, beforeEach, describe, it } from 'node:test';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PKG_PATH = path.join(REPO, 'package.json');
 const VERSION = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'))
-  .optionalDependencies['@impeccable/cli-darwin-arm64'];
+  .melziEngine.version;
 const TARGET = `${{ darwin: 'darwin', linux: 'linux', win32: 'windows' }[process.platform] || process.platform}`
   + `-${{ arm64: 'arm64', x64: 'x64' }[process.arch] || process.arch}`;
-const PLATFORM_PKG = `@impeccable/cli-${TARGET}`;
+const PLATFORM_PKG = `@test/melzi-${TARGET}`;
 const ASSET = `impeccable-${TARGET}${process.platform === 'win32' ? '.exe' : ''}`;
 const ASSET_PATH = `/engine-v${VERSION}/${ASSET}`;
 
@@ -53,35 +53,6 @@ let requests = [];
 let server;
 let base;
 
-before(async () => {
-  server = http.createServer((req, res) => {
-    requests.push(req.url);
-    if (req.url === `${ASSET_PATH}.sha256`) {
-      if (sidecar.status !== 200) {
-        res.writeHead(sidecar.status);
-        res.end('');
-        return;
-      }
-      res.writeHead(200, { 'content-type': 'text/plain' });
-      res.end(sidecar.body);
-      return;
-    }
-    if (req.url === ASSET_PATH) {
-      res.writeHead(200, { 'content-type': 'application/octet-stream' });
-      res.end(PAYLOAD);
-      return;
-    }
-    res.writeHead(404);
-    res.end('');
-  });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  base = `http://127.0.0.1:${server.address().port}`;
-});
-
-after(() => new Promise((resolve) => server.close(resolve)));
-
-beforeEach(() => { requests = []; });
-
 /**
  * A throwaway copy of the shim at `<tmp>/cli/bin/cli.js`, with the repo's
  * package.json where the shim reads it from (`../../package.json`) and no
@@ -90,7 +61,9 @@ beforeEach(() => { requests = []; });
 function stageShim() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'impeccable-shim-'));
   fs.mkdirSync(path.join(dir, 'cli', 'bin'), { recursive: true });
-  fs.copyFileSync(PKG_PATH, path.join(dir, 'package.json'));
+  const pkg = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'));
+  pkg.melziEngine.platformPackages = { [TARGET]: PLATFORM_PKG };
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg));
   fs.copyFileSync(path.join(REPO, 'cli', 'bin', 'cli.js'), path.join(dir, 'cli', 'bin', 'cli.js'));
   return { dir, shim: path.join(dir, 'cli', 'bin', 'cli.js') };
 }
@@ -136,6 +109,38 @@ function cacheEntries(home) {
 }
 
 describe('npm shim download verification', { skip: process.platform === 'win32' ? 'posix only' : false }, () => {
+  before(async () => {
+    server = http.createServer((req, res) => {
+      requests.push(req.url);
+      if (req.url === `${ASSET_PATH}.sha256`) {
+        if (sidecar.status !== 200) {
+          res.writeHead(sidecar.status);
+          res.end('');
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'text/plain' });
+        res.end(sidecar.body);
+        return;
+      }
+      if (req.url === ASSET_PATH) {
+        res.writeHead(200, { 'content-type': 'application/octet-stream' });
+        res.end(PAYLOAD);
+        return;
+      }
+      res.writeHead(404);
+      res.end('');
+    });
+    await new Promise((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    base = `http://127.0.0.1:${server.address().port}`;
+  });
+
+  after(() => new Promise((resolve) => server.close(resolve)));
+
+  beforeEach(() => { requests = []; });
+
   it('caches and runs a download whose sidecar matches', async () => {
     sidecar = { status: 200, body: `${DIGEST}  ${ASSET}\n` };
     const res = await runShim(['hello']);
@@ -225,4 +230,68 @@ describe('npm shim download verification', { skip: process.platform === 'win32' 
     assert.deepEqual(requests, []);
     assert.deepEqual(cacheEntries(dir), []);
   });
+});
+
+// Independent of the loopback server used by download verification above.
+it('fork npm shim refuses no endpoint without a fetch or cache write', async t => {
+  const { dir, shim } = stageShim();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const sentinel = path.join(dir, 'forbid-fetch.mjs');
+  fs.writeFileSync(sentinel, "globalThis.fetch = async () => { throw new Error('UNEXPECTED_NETWORK'); };\n");
+  const env = { ...process.env, IMPECCABLE_HOME: dir, IMPECCABLE_DOWNLOAD_BASE: '', NODE_OPTIONS: `--import=${sentinel}` };
+  delete env.IMPECCABLE_BIN;
+  const result = await run(shim, ['engine-probe'], env);
+  assert.equal(result.status, 127, result.stderr);
+  assert.match(result.stderr, /no download endpoint/i);
+  assert.match(result.stderr, /cargo build --release -p impeccable/);
+  assert.match(result.stderr, /IMPECCABLE_BIN/);
+  assert.doesNotMatch(result.stderr, /UNEXPECTED_NETWORK/);
+  assert.deepEqual(cacheEntries(dir), []);
+});
+
+it('fork npm shim keeps explicit downloads and earlier binary lookups', { skip: process.platform === 'win32' }, async t => {
+  const { dir, shim } = stageShim();
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const transport = path.join(dir, 'transport.mjs');
+  fs.writeFileSync(transport, `
+    import fs from 'node:fs';
+    globalThis.fetch = async url => {
+      fs.appendFileSync(${JSON.stringify(path.join(dir, 'requests'))}, url + '\\n');
+      return new Response(url.endsWith('.sha256') ? ${JSON.stringify(`${DIGEST}  ${ASSET}\n`)} : ${JSON.stringify(PAYLOAD.toString())});
+    };
+  `);
+  const env = { ...process.env, IMPECCABLE_HOME: dir, IMPECCABLE_DOWNLOAD_BASE: 'https://fork.invalid/releases', NODE_OPTIONS: `--import=${transport}` };
+  delete env.IMPECCABLE_BIN;
+  const downloaded = await run(shim, ['hello'], env);
+  assert.equal(downloaded.status, 0, downloaded.stderr);
+  assert.match(downloaded.stdout, /fake-engine hello/);
+  const requests = fs.readFileSync(path.join(dir, 'requests'), 'utf8').trim().split('\n');
+  assert.deepEqual(requests, [`https://fork.invalid/releases${ASSET_PATH}`, `https://fork.invalid/releases${ASSET_PATH}.sha256`]);
+  env.IMPECCABLE_DOWNLOAD_BASE = '';
+  const cached = await run(shim, ['cached'], env);
+  assert.equal(cached.status, 0, cached.stderr);
+  assert.match(cached.stdout, /fake-engine cached/);
+
+  const pkgDir = path.join(dir, 'node_modules', PLATFORM_PKG);
+  fs.mkdirSync(path.join(pkgDir, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ name: PLATFORM_PKG, version: VERSION }));
+  fs.writeFileSync(path.join(pkgDir, 'bin', 'impeccable'), '#!/bin/sh\necho platform-package\n', { mode: 0o755 });
+  const packaged = await run(shim, [], env);
+  assert.equal(packaged.status, 0, packaged.stderr);
+  assert.match(packaged.stdout, /platform-package/);
+
+  env.IMPECCABLE_BIN = path.join(dir, 'override');
+  fs.writeFileSync(env.IMPECCABLE_BIN, '#!/bin/sh\necho local-override\n', { mode: 0o755 });
+  const overridden = await run(shim, [], env);
+  assert.equal(overridden.status, 0, overridden.stderr);
+  assert.match(overridden.stdout, /local-override/);
+  assert.equal(fs.readFileSync(path.join(dir, 'requests'), 'utf8').trim().split('\n').length, 2);
+});
+
+// A fork install must not silently resolve an upstream platform binary.
+it('the package pins a Melzi engine without automatic upstream dependencies', () => {
+  const pkg = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'));
+  assert.equal(pkg.melziEngine.version, fs.readFileSync(path.join(REPO, 'ENGINE_VERSION'), 'utf8').trim());
+  assert.equal(pkg.optionalDependencies, undefined);
+  assert.equal(pkg.melziEngine.platformPackages, undefined);
 });

@@ -96,4 +96,38 @@ Ensure refinement maintains quality:
 - **Better reading**: Is text easier to read for extended periods?
 - **Restrained, not absent**: Does the POV survive the cuts?
 
-When the result feels right, hand off to `{{command_prefix}}impeccable polish` for the final pass.
+When the result feels right, hand off to `{{command_prefix}}melzi polish` for the final pass.
+
+## Distill phase
+
+A typed `distill` command enters here. Strip the design to its essence by removing obstacles, duplication, visual noise, and cosmetic complexity. Simplicity does not remove necessary features.
+
+### Assess the current state
+
+Find the actual sources of complexity: competing actions and redundant elements; uncontrolled variation in colours, faces, sizes, and styles; information shown before it is needed; borders, shadows, grounds, and decoration without a hierarchy job; unclear priority; and feature creep.
+
+Name the primary user goal, the necessary elements, what can be removed or combined, and what can wait behind progressive disclosure. If the codebase cannot answer these questions, ask instead of guessing.
+
+### Plan the simplification
+
+Write the one purpose, the elements required to achieve it, the complexity that can wait, and the related things that can become one. Good ideas still get cut when they block the essential job.
+
+### Simplify the system
+
+**Information architecture:** reduce secondary scope, keep one primary action, expose complexity through clear entry points, combine related actions, and say each piece of information once.
+
+**Visual system:** reduce colour and type variation to what the incumbent identity needs, remove decoration without a functional or hierarchical job, flatten unnecessary containers, never nest cards, replace card scaffolds with spacing and alignment, and use one spacing scale.
+
+**Layout:** prefer a legible linear flow where a complex grid adds no value; bring secondary content inline or behind a clear entry; use the available width without arbitrary columns; choose a stable alignment; and give distinct groups real separation.
+
+**Interaction:** reduce choices, use sound defaults, prefer inline work to an unnecessary modal, remove avoidable steps, and leave one obvious next action.
+
+**Content:** shorten without removing meaning, use active voice and plain language, structure for scanning, remove marketing filler and repeated explanations, and keep required legal or decision-making information.
+
+**Code:** remove dead CSS, components, and imports; flatten component trees; consolidate equivalent styles; and keep only the variants actual use cases need.
+
+Never remove functionality, accessibility, necessary decision information, or meaningful hierarchy. Do not make an interface mysterious, oversimplify a genuinely complex domain, or hide core work to make a screenshot cleaner.
+
+### Verify the distillation
+
+Check task completion time, cognitive load, complete feature access, hierarchy, and performance. Record anything removed, why it left, where equivalent or alternative access remains, and which user signal would justify restoring it.

@@ -26,10 +26,19 @@ describe('workflow execution boundaries', () => {
     }
   });
 
-  test('generated-output sync and sheriff retain their required write access', () => {
-    expect(workflows['sync-generated-output.yml'].permissions).toEqual({ contents: 'write' });
+  test('generated-output verification cannot push repository changes', () => {
+    const verify = workflows['sync-generated-output.yml'];
+    expect(verify.permissions).toEqual({ contents: 'read' });
+    expect(JSON.stringify(verify)).not.toMatch(/git push|git commit|SYNC_GENERATED_OUTPUT_TOKEN/);
+  });
+
+  test('triage preview cannot post comments or close contributions', () => {
     expect(workflows['sheriff.yml'].permissions).toEqual({
-      actions: 'read', checks: 'read', contents: 'read', issues: 'write', 'pull-requests': 'write',
+      actions: 'read', checks: 'read', contents: 'read', issues: 'read', 'pull-requests': 'read',
     });
+    const triage = workflows['sheriff.yml'];
+    expect(triage.on).toEqual({ workflow_dispatch: null });
+    expect(JSON.stringify(triage)).toContain('--dry-run');
+    expect(JSON.stringify(triage)).not.toMatch(/--apply|gh issue edit/);
   });
 });
