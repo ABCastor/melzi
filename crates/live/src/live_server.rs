@@ -330,8 +330,9 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
     io.out("Stop:   impeccable live-server stop\n");
     let _ = std::io::Write::flush(&mut io.stdout);
 
-    // Accept loop. Tickets are issued here, in accept order, so handlers can
-    // observe each other in arrival order (see `Turnstile`).
+    // One dispatcher assigns turns to started requests in accept order.
+    // Silent preconnections wait here without reserving a mutation turn;
+    // workers never race each other to issue tickets.
     let turnstile = Arc::new(Turnstile::default());
     // Defense in depth against a connection flood (slow-loris fan-out, fd/thread
     // exhaustion): cap concurrent in-flight handlers. Over the cap, the socket
@@ -339,6 +340,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
     // is generous; legitimate local tooling never approaches it.
     let active_connections = Arc::new(AtomicUsize::new(0));
     const MAX_CONCURRENT_CONNECTIONS: usize = 512;
+    let mut pending_connections: Vec<(TcpStream, Instant)> = Vec::new();
     loop {
         // Drain console output from worker threads.
         while let Ok((is_err, line)) = log_rx.try_recv() {
@@ -353,32 +355,45 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
         if SIGNALED.load(Ordering::SeqCst) || lock(&shared).shutting_down {
             break;
         }
-        match listener.accept() {
+        let accepted = match listener.accept() {
             Ok((stream, _)) => {
-                // Accepted sockets may inherit the listener's non-blocking
-                // flag (BSD/macOS); connection threads block on reads.
-                let _ = stream.set_nonblocking(false);
                 if active_connections.load(Ordering::SeqCst) >= MAX_CONCURRENT_CONNECTIONS {
-                    // Over the cap: drop before issuing a ticket, so a flood of
-                    // stalled sockets cannot enter (or wedge) the lane.
                     let _ = stream.shutdown(std::net::Shutdown::Both);
-                    continue;
+                } else if stream.set_nonblocking(true).is_ok() {
+                    active_connections.fetch_add(1, Ordering::SeqCst);
+                    pending_connections.push((stream, Instant::now()));
                 }
-                active_connections.fetch_add(1, Ordering::SeqCst);
-                let active = active_connections.clone();
-                let shared = shared.clone();
-                let ticket = turnstile.issue();
-                std::thread::spawn(move || {
-                    handle_connection(shared, stream, ticket);
-                    active.fetch_sub(1, Ordering::SeqCst);
-                });
+                true
             }
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                std::thread::sleep(Duration::from_millis(10));
+            Err(_) => false,
+        };
+        // Check retained sockets before assigning any newly accepted request
+        // its turn. A worker's wake order must never let a checkpoint overtake
+        // a generate whose first bytes are already waiting on an older socket.
+        let mut i = 0;
+        while i < pending_connections.len() {
+            let (stream, accepted_at) = &pending_connections[i];
+            let waiting = matches!(stream.peek(&mut [0u8; 1]), Err(e) if e.kind() == std::io::ErrorKind::WouldBlock);
+            if waiting && accepted_at.elapsed() < READ_REQUEST_DEADLINE {
+                i += 1;
+                continue;
             }
-            Err(_) => {
-                std::thread::sleep(Duration::from_millis(10));
+            let (stream, _) = pending_connections.remove(i);
+            let started = stream.peek(&mut [0u8; 1]).map(|n| n > 0).unwrap_or(false);
+            if !started || stream.set_nonblocking(false).is_err() {
+                active_connections.fetch_sub(1, Ordering::SeqCst);
+                continue;
             }
+            let ticket = turnstile.issue();
+            let active = active_connections.clone();
+            let shared = shared.clone();
+            std::thread::spawn(move || {
+                handle_connection(shared, stream, ticket);
+                active.fetch_sub(1, Ordering::SeqCst);
+            });
+        }
+        if !accepted {
+            std::thread::sleep(Duration::from_millis(10));
         }
     }
     shutdown(&shared);
@@ -609,7 +624,7 @@ fn text_res(status: u16, content_type: Option<&str>, body: &str) -> Response {
 fn handle_connection(shared: Shared, mut stream: TcpStream, mut ticket: Ticket) {
     set_header_timeout(&stream);
     // Read the whole request under a total wall-clock deadline. Without it a
-    // slow-drip or silent peer accepted first would pin its ticket here and
+    // started peer that stalls mid-request would pin its ticket here and
     // wedge every later mutation (Fable BLOCKER, triage D3); the deadline
     // force-drops such a connection and releases its ticket within the bound.
     let Some(req) = read_request_deadline(

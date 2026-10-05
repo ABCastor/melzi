@@ -10,6 +10,7 @@
 
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { connect } from 'node:net';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -480,6 +481,120 @@ describe('POST /agent-target', { skip: ENGINE_BIN ? false : ENGINE_MISSING_MESSA
     } finally {
       tabA.close();
       tabB.close();
+    }
+  });
+
+  it('serves a target claim while an earlier TCP preconnection is idle', async () => {
+    const tab = await openSseClient(server, { clientId: 'idle-rescuer' });
+    let idle;
+    let closeTimer;
+    try {
+      await tab.next((m) => m.type === 'connected');
+      const held = postJson(server, '/agent-target', {
+        token: server.token, selector: 'h1', action: 'bolder', count: 3,
+      });
+      const pushed = await tab.next((m) => m.type === 'agent_target');
+      idle = connect({ host: '127.0.0.1', port: server.port });
+      await new Promise((resolve, reject) => {
+        idle.once('connect', resolve);
+        idle.once('error', reject);
+      });
+      // The status request guarantees the accept loop has seen the idle
+      // connection. It carries no HTTP request and must hold no mutation turn.
+      await (await fetch(`http://localhost:${server.port}/status?token=${server.token}`)).json();
+      // End the negative control without waiting for the header deadline.
+      closeTimer = setTimeout(() => idle.destroy(), 600);
+      const claim = await (await postJson(server, '/agent-target-claim', {
+        token: server.token, targetId: pushed.targetId, clientId: 'idle-rescuer', eligible: true,
+      })).json();
+      assert.deepEqual(claim, { ok: true, granted: true, pending: true });
+      await postJson(server, '/agent-target-result', {
+        token: server.token, targetId: pushed.targetId, clientId: 'idle-rescuer', ok: true, matchCount: 1, sessionId: 'aabbccdd',
+      });
+      assert.equal((await (await held).json()).ok, true);
+    } finally {
+      clearTimeout(closeTimer);
+      idle?.destroy();
+      tab.close();
+    }
+  });
+
+  it('keeps a started slow generate ahead of its checkpoint', async () => {
+    const generate = connect({ host: '127.0.0.1', port: server.port });
+    try {
+      await new Promise((resolve, reject) => {
+        generate.once('connect', resolve);
+        generate.once('error', reject);
+      });
+      const body = JSON.stringify({
+        token: server.token, type: 'generate', id: 'fab123cd', action: 'bolder', count: 3, pageUrl: '/',
+        element: { tagName: 'h1', outerHTML: '<h1>Hero</h1>' }, pad: 'x'.repeat(4000),
+      });
+      const response = new Promise((resolve, reject) => {
+        let text = '';
+        generate.on('data', (chunk) => { text += chunk; });
+        generate.once('end', () => resolve(text));
+        generate.once('error', reject);
+      });
+      generate.write(`POST /events HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body.slice(0, 10)}`);
+      await (await fetch(`http://localhost:${server.port}/status?token=${server.token}`)).json();
+      let checkpointCompleted = false;
+      const checkpoint = postJson(server, '/events', {
+        token: server.token, type: 'checkpoint', id: 'fab123cd', revision: 0, reason: 'generate_started',
+      }).then((res) => { checkpointCompleted = true; return res; });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      assert.equal(checkpointCompleted, false, 'a checkpoint must wait for the earlier started request body');
+      generate.write(body.slice(10));
+      assert.match(await response, /^HTTP\/1\.1 200/);
+      const result = await checkpoint;
+      assert.equal(result.status, 200, await result.text());
+    } finally {
+      generate.destroy();
+    }
+  });
+
+  it('orders generate and checkpoint on sockets accepted before either request starts', async () => {
+    // Repeatedly exercise the empty-at-accept branch without a status barrier
+    // between generate and checkpoint. Both ready sockets take turns in their
+    // acceptance order, independently of worker scheduling.
+    for (let iteration = 0; iteration < 100; iteration++) {
+      const sockets = [];
+      try {
+        for (let n = 0; n < 2; n++) {
+          const socket = connect({ host: '127.0.0.1', port: server.port });
+          sockets.push(socket);
+          await new Promise((resolve, reject) => {
+            socket.once('connect', resolve);
+            socket.once('error', reject);
+          });
+        }
+        const responses = sockets.map((socket) => new Promise((resolve, reject) => {
+          let text = '';
+          socket.on('data', (chunk) => { text += chunk; });
+          socket.once('end', () => resolve(text));
+          socket.once('error', reject);
+        }));
+        // Ensure both connections were accepted while still empty.
+        await (await fetch(`http://localhost:${server.port}/status?token=${server.token}`)).json();
+        const id = (0xfe000000 + iteration).toString(16);
+        const generate = JSON.stringify({
+          token: server.token, type: 'generate', id, action: 'bolder', count: 3, pageUrl: '/',
+          element: { tagName: 'h1', outerHTML: '<h1>Hero</h1>' }, pad: 'x'.repeat(4000),
+        });
+        const checkpoint = JSON.stringify({
+          token: server.token, type: 'checkpoint', id, revision: 0, reason: 'generate_started',
+        });
+        const head = (body) => `POST /events HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n`;
+        sockets[0].write(head(generate) + generate.slice(0, 10));
+        sockets[1].write(head(checkpoint) + checkpoint);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        sockets[0].write(generate.slice(10));
+        const [generated, checkpointed] = await Promise.all(responses);
+        assert.match(generated, /^HTTP\/1\.1 200/, `generate iteration ${iteration}: ${generated}`);
+        assert.match(checkpointed, /^HTTP\/1\.1 200/, `checkpoint iteration ${iteration}: ${checkpointed}`);
+      } finally {
+        for (const socket of sockets) socket.destroy();
+      }
     }
   });
 

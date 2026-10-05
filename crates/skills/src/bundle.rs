@@ -940,7 +940,12 @@ mod tests {
     fn fork_bundle_selection_prefers_override_then_own_checkout_and_refuses_remote() {
         let root = tmp_dir("fork-checkout");
         let cwd = tmp_dir("fork-install-target");
-        let sys = Sys::new(Default::default(), cwd.clone());
+        // Sys uses its explicit environment, not the process TEMP/TMPDIR.
+        // Keep extraction in the test-owned directory on every platform.
+        let sys = Sys::new(
+            [("TMPDIR".into(), root.clone()), ("TEMP".into(), root.clone())].into(),
+            cwd.clone(),
+        );
         let executable = std::path::PathBuf::from(&root).join("target/release/impeccable");
         for marker in ["Cargo.toml", "crates/skills/src/bundle.rs", "skill/SKILL.src.md"] {
             let path = std::path::Path::new(&root).join(marker);
