@@ -312,7 +312,7 @@ export const SUITES = {
         runner: 'node',
         timeoutMs: 600000,
         forceExit: true,
-        files: ['tests/live-e2e.test.mjs'],
+        files: ['tests/live-e2e.test.mjs', 'tests/live-e2e/navigation-query.test.mjs', 'tests/live-e2e/source-module-evidence.test.mjs'],
       },
     ],
   },

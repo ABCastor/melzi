@@ -8,7 +8,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 fn browser_required() -> bool {
     std::env::var_os("CI").is_some() || std::env::var_os("IMPECCABLE_BROWSER").is_some()
@@ -188,6 +188,150 @@ fn response_capture_reads_original_bytes_and_preserves_repeated_url_ambiguity() 
     browser.close();
 }
 
+fn read_fixture_request_head(stream: &mut TcpStream) -> Option<Vec<u8>> {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let mut request = Vec::new();
+    while request.len() < 4096 {
+        let remaining = deadline.checked_duration_since(Instant::now())?;
+        stream.set_read_timeout(Some(remaining)).ok()?;
+        let mut chunk = [0; 512];
+        let capacity = chunk.len().min(4096 - request.len());
+        let n = match stream.read(&mut chunk[..capacity]) {
+            Ok(0) => return None,
+            Ok(n) => n,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return None,
+        };
+        request.extend_from_slice(&chunk[..n]);
+        if request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+            return Some(request);
+        }
+    }
+    None
+}
+
+fn serve_large_fixture(
+    listener: TcpListener,
+    served: Vec<u8>,
+    count: Arc<AtomicUsize>,
+) -> (std::thread::JoinHandle<()>, Receiver<()>) {
+    let (accepted, observed) = channel();
+    let server = std::thread::spawn(move || {
+        for mut stream in listener.incoming().flatten() {
+            let _ = accepted.send(());
+            // A canceled preconnection is not a document request. Keep the
+            // listener alive after EOF/read/write errors. Consume the full
+            // header so closing cannot reset a response over unread bytes.
+            // All fragments share one absolute read budget and a 4096-byte cap.
+            if stream
+                .set_write_timeout(Some(Duration::from_secs(15)))
+                .is_err()
+            {
+                continue;
+            }
+            let Some(request) = read_fixture_request_head(&mut stream) else {
+                continue;
+            };
+            if !request.starts_with(b"GET /index.html ") {
+                continue;
+            }
+            count.fetch_add(1, Ordering::SeqCst);
+            if write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", served.len()).is_err() {
+                continue;
+            }
+            if stream.write_all(&served).is_ok() {
+                break;
+            }
+        }
+    });
+    (server, observed)
+}
+
+#[test]
+fn large_document_fixture_ignores_a_disconnected_preconnection() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let body = vec![b'x'; 9 * 1024 * 1024];
+    let hits = Arc::new(AtomicUsize::new(0));
+    let (server, accepted) = serve_large_fixture(listener, body.clone(), hits.clone());
+    let idle = TcpStream::connect(address).unwrap();
+    accepted.recv_timeout(Duration::from_secs(1)).unwrap();
+    // Close an accepted socket without sending any HTTP request. A listener
+    // must survive this ordinary browser pool cancellation.
+    idle.shutdown(std::net::Shutdown::Both).unwrap();
+    drop(idle);
+    let mut request = TcpStream::connect(address).unwrap();
+    request
+        .set_read_timeout(Some(Duration::from_millis(300)))
+        .unwrap();
+    request
+        .write_all(b"GET /index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .unwrap();
+    let mut response = Vec::new();
+    request
+        .read_to_end(&mut response)
+        .expect("listener must survive a disconnected preconnection");
+    assert!(response.starts_with(b"HTTP/1.1 200 OK\r\n"));
+    assert!(response.ends_with(&body));
+    assert_eq!(
+        hits.load(Ordering::SeqCst),
+        1,
+        "an empty connection is not a document request"
+    );
+    server.join().unwrap();
+}
+
+#[test]
+fn large_document_fixture_accepts_a_fragmented_request_line() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let body = b"document".to_vec();
+    let hits = Arc::new(AtomicUsize::new(0));
+    let (server, accepted) = serve_large_fixture(listener, body.clone(), hits.clone());
+    let mut request = TcpStream::connect(address).unwrap();
+    accepted.recv_timeout(Duration::from_secs(1)).unwrap();
+    request
+        .set_read_timeout(Some(Duration::from_millis(300)))
+        .unwrap();
+    request.write_all(b"GET /in").unwrap();
+    std::thread::sleep(Duration::from_millis(20));
+    request
+        .write_all(b"dex.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .unwrap();
+    let mut response = Vec::new();
+    request.read_to_end(&mut response).unwrap();
+    assert!(
+        response.starts_with(b"HTTP/1.1 200 OK\r\n"),
+        "a fragmented document request must be served: {response:?}"
+    );
+    assert!(response.ends_with(&body));
+    assert_eq!(hits.load(Ordering::SeqCst), 1);
+    server.join().unwrap();
+}
+
+#[test]
+fn large_document_fixture_consumes_the_entire_request_head() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let body = vec![b'x'; 9 * 1024 * 1024];
+    let hits = Arc::new(AtomicUsize::new(0));
+    let (server, accepted) = serve_large_fixture(listener, body.clone(), hits.clone());
+    let mut request = TcpStream::connect(address).unwrap();
+    accepted.recv_timeout(Duration::from_secs(1)).unwrap();
+    request
+        .set_read_timeout(Some(Duration::from_millis(300)))
+        .unwrap();
+    write!(request, "GET /index.html HTTP/1.1\r\nHost: localhost\r\nX-Fixture-Pad: {}\r\nConnection: close\r\n\r\n", "x".repeat(2048)).unwrap();
+    let mut response = Vec::new();
+    request
+        .read_to_end(&mut response)
+        .expect("unread request headers must not reset the document response");
+    assert!(response.starts_with(b"HTTP/1.1 200 OK\r\n"));
+    assert!(response.ends_with(&body));
+    assert_eq!(hits.load(Ordering::SeqCst), 1);
+    server.join().unwrap();
+}
+
 #[test]
 fn large_utf8_document_retains_exact_bytes_without_refetch() {
     let Some(exe) = browser_executable() else { return; };
@@ -199,14 +343,7 @@ fn large_utf8_document_retains_exact_bytes_without_refetch() {
     let url = format!("http://127.0.0.1:{}/index.html", listener.local_addr().unwrap().port());
     let hits = Arc::new(AtomicUsize::new(0));
     let count = hits.clone();
-    let server = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        let mut request = [0; 4096];
-        stream.read(&mut request).unwrap();
-        count.fetch_add(1, Ordering::SeqCst);
-        write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", served.len()).unwrap();
-        stream.write_all(&served).unwrap();
-    });
+    let (server, _accepted) = serve_large_fixture(listener, served, count);
     let Some(mut browser) = launch(&exe) else { return; };
     let mut page = browser.new_page().unwrap();
     page.begin_response_capture().unwrap();

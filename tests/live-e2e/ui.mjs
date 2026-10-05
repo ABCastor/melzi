@@ -141,15 +141,15 @@ function installLiveQueryHelpersInPage() {
     const fromDoc = [...document.querySelectorAll(selector)];
     return [...new Set([...fromRoot, ...fromDoc])];
   };
+  return true;
 }
 
 export async function installLiveQueryHelpers(page, { timeout = 5_000 } = {}) {
   await page.addInitScript(installLiveQueryHelpersInPage).catch(() => {});
-  await withTimeout(
-    page.evaluate(installLiveQueryHelpersInPage),
-    timeout,
-    'install live query helpers',
-  );
+  // Framework HMR may navigate after the init script is registered.
+  // waitForFunction reinstalls in the new context within this same deadline.
+  const installed = await page.waitForFunction(installLiveQueryHelpersInPage, null, { timeout });
+  await installed.dispose();
 }
 
 function withTimeout(promise, timeout, label) {

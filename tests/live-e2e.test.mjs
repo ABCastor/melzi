@@ -929,6 +929,9 @@ for (const { name, fixture } of fixtures) {
             'dry-run': true,
           });
           assert.equal(post.ok, true, 'a new target resolves after accept');
+        } catch (error) {
+          await captureLiveE2eFailure({ name, fixture, session, error, log: (m) => t.diagnostic(m) });
+          throw error;
         } finally {
           await teardownAndResetBrowser(teardown);
         }
@@ -1246,6 +1249,9 @@ for (const { name, fixture } of fixtures) {
 
           // The regression that mattered: the picker must arm again.
           await pickElement(page, pickSelector, { position: fixture.runtime.pickPosition });
+        } catch (error) {
+          await captureLiveE2eFailure({ name, fixture, session, error, log: (m) => t.diagnostic(m) });
+          throw error;
         } finally {
           await teardownAndResetBrowser(teardown);
         }
@@ -1362,6 +1368,9 @@ for (const { name, fixture } of fixtures) {
               assert.equal(probeState?.malformedAckRejected, true, 'malformed manual Apply ack should fail loudly');
               assert.equal(probeState?.applyCalls, 1, 'manual_edit_apply event should not be redelivered after the correct ack');
             }
+          } catch (error) {
+            await captureLiveE2eFailure({ name, fixture, session, error, log: (m) => t.diagnostic(m) });
+            throw error;
           } finally {
             await teardownAndResetBrowser(teardown);
           }
@@ -1712,6 +1721,8 @@ async function captureLiveE2eFailure({ name, fixture, session, sourceFile, error
       'utf-8',
     );
     writeFileSync(join(dir, 'dev-server.log'), session.dev?.log?.() || '', 'utf-8');
+    const servedModules = await session.captureServedSourceModules?.() || [];
+    writeFileSync(join(dir, 'served-source-modules.json'), JSON.stringify(servedModules, null, 2), 'utf-8');
     writeCommandOutput(dir, 'git-status.txt', tmp, ['status', '--short']);
     writeCommandOutput(dir, 'git-diff.patch', tmp, ['diff', '--', '.']);
 

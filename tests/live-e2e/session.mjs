@@ -27,6 +27,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { runAgentLoop } from './agent.mjs';
+import { captureSourceModuleResponses, rememberSourceModuleResponse } from './source-module-evidence.mjs';
 import { ENGINE_MISSING_MESSAGE, engineEnv, findEngineBinary } from '../lib/engine-bin.mjs';
 import { armLiveServerReaper, trackServerChild } from '../lib/live-servers.mjs';
 
@@ -442,6 +443,7 @@ export async function bootFixtureSession({
     // assertions can key on the request URL rather than on Chromium's
     // URL-less "Failed to load resource" console string.
     const failedRequests = [];
+    const servedSourceModules = [];
     page.on('pageerror', (err) => {
       consoleErrors.push(`pageerror: ${err.message}\n${err.stack || ''}`);
     });
@@ -465,6 +467,8 @@ export async function bootFixtureSession({
     page.on('response', (res) => {
       const status = res.status();
       if (status >= 400) failedRequests.push({ url: res.url(), status, reason: `HTTP ${status}` });
+      // Retain recent response references; body reads happen only on failure.
+      if (process.env.IMPECCABLE_E2E_ARTIFACT_DIR) rememberSourceModuleResponse(servedSourceModules, res);
     });
     if (process.env.IMPECCABLE_E2E_CONSOLE) {
       page.on('framenavigated', (frame) => {
@@ -493,6 +497,7 @@ export async function bootFixtureSession({
       worker: externalWorker,
       consoleErrors,
       failedRequests,
+      captureServedSourceModules: () => captureSourceModuleResponses(servedSourceModules),
       stopLiveServer: stopLiveForDeferredWork,
       teardown,
     };
