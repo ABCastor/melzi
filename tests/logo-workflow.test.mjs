@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { chromium } from 'playwright';
+import { executablePath } from 'puppeteer';
 
 import { SKILL_CATEGORIES } from '../scripts/lib/skill-categories.js';
 import { MELZI_COMMAND_ALIASES, replacePlaceholders } from '../scripts/lib/utils.js';
@@ -248,7 +249,11 @@ describe('logo SVG validation', () => {
       const invalid = source.replace('0 0 24 24', invalidViewBox);
       assert.match(validateSvgSource(invalid).errors.join('\n'), /SVG decimal numbers/);
     }
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({
+      headless: true,
+      executablePath: await executablePath(),
+      args: process.env.CI ? ['--no-sandbox', '--disable-setuid-sandbox'] : [],
+    });
     try {
       const page = await browser.newPage();
       const encoded = `data:image/svg+xml,${encodeURIComponent(source)}`;
@@ -526,7 +531,11 @@ describe('logo campaign validation', () => {
     const { manifestPath } = makeCampaign();
     const campaign = loadAndValidateCampaign(manifestPath);
     assert.equal(campaign.candidates[0].renderParity, true);
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({
+      headless: true,
+      executablePath: await executablePath(),
+      args: process.env.CI ? ['--no-sandbox', '--disable-setuid-sandbox'] : [],
+    });
     try {
       const page = await browser.newPage({ deviceScaleFactor: 1 });
       for (const size of [96, 16]) {
@@ -572,7 +581,11 @@ describe('static proof sheet', () => {
   it('contains a 1024px proof in a scrollable row without cell overlap', async () => {
     const { manifestPath } = makeCampaign({ rules: { proofSizes: [1024] } });
     const html = renderProofSheet(loadAndValidateCampaign(manifestPath));
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({
+      headless: true,
+      executablePath: await executablePath(),
+      args: process.env.CI ? ['--no-sandbox', '--disable-setuid-sandbox'] : [],
+    });
     try {
       const page = await browser.newPage({ viewport: { width: 1480, height: 900 } });
       await page.setContent(html);

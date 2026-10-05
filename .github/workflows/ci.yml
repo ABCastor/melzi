@@ -83,12 +83,20 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      # Core assertions invoke native verbs and render SVG proofs on every PR.
+      - name: Install the pinned toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Build this checkout's engine
+        run: cargo build --release -p impeccable
+
+      - name: Install isolated Chrome for Testing
+        run: bunx puppeteer browsers install chrome
+
       - name: Run core tests
         run: bun run test:core
-
-      - name: Install Puppeteer browser
-        if: needs.changes.outputs.detector == 'true'
-        run: bunx puppeteer browsers install chrome
 
       - name: Run detector tests
         if: needs.changes.outputs.detector == 'true'
@@ -114,9 +122,6 @@ jobs:
       - name: Install the pinned toolchain
         if: needs.changes.outputs.detector == 'true'
         run: rustup show && rustup target add wasm32-unknown-unknown
-
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        if: needs.changes.outputs.detector == 'true'
 
       - name: Install wasm-pack
         if: needs.changes.outputs.detector == 'true'
@@ -254,36 +259,26 @@ jobs:
           IMPECCABLE_BIN: ${{ github.workspace }}/target/release/impeccable
         run: node tests/oracle/run.mjs
 
-  # Release-order guard (triage decision D4). Verifies that the engine release for
-  # the pinned ENGINE_VERSION is fully published — the five dist binaries + .sha256
-  # AND the five @impeccable/cli-<os>-<arch> npm platform packages — before a skill
-  # release/merge that depends on them. The launcher, npm shim, and
-  # `impeccable install` all dead-end without those assets.
-  #
-  # A hard gate since engine-v0.1.0 shipped: the assets for the pinned
-  # ENGINE_VERSION must exist before a skill/CLI release or a merge that bumps the
-  # pin, or the launcher, the npm shim and `impeccable install` dead-end.
-  # release.mjs hard-fails `release:skill`/`release:cli` on the same check.
-  engine-release-ready:
+  # This fork publishes source only. Test its own pinned engine rather than
+  # requiring upstream release assets or npm packages it does not publish.
+  engine-source-ready:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
+      - name: Install the pinned toolchain
+        run: rustup show
 
-      - name: Check engine release assets for pinned ENGINE_VERSION
-        id: check
-        run: node scripts/check-engine-release.mjs
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
-      - name: Annotate missing engine release
-        # Only when the check itself failed, so a checkout or setup failure keeps its own error.
-        if: failure() && steps.check.outcome == 'failure'
+      - name: Build this checkout's engine
+        run: cargo build --release -p impeccable
+
+      - name: Verify the engine matches ENGINE_VERSION
         run: |
-          echo "::error title=Engine release not ready::The engine release for v$(cat ENGINE_VERSION) is not fully published (engine-v$(cat ENGINE_VERSION) release assets and/or the @impeccable/cli-<os>-<arch> npm platform packages). Publish the engine (bun run release:engine) and the platform packages (bun run release:platform-packages) before bumping ENGINE_VERSION on main or releasing the skill/CLI."
+          target/release/impeccable engine-probe
+          test "$(target/release/impeccable engine-probe)" = "impeccable-engine $(cat ENGINE_VERSION)"
 
   test:
     runs-on: ubuntu-latest
@@ -671,8 +666,18 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Prepare engine for protocol tests
-        run: bun run fetch:engine
+      # With no provider credentials the suite reports per-provider skips.
+      # Prepare the source engine only when at least one scenario can execute.
+      - name: Install the pinned toolchain for protocol tests
+        if: env.ANTHROPIC_API_KEY != '' || env.OPENAI_API_KEY != '' || env.GOOGLE_CLOUD_API_KEY != ''
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        if: env.ANTHROPIC_API_KEY != '' || env.OPENAI_API_KEY != '' || env.GOOGLE_CLOUD_API_KEY != ''
+
+      - name: Build this checkout's engine for protocol tests
+        if: env.ANTHROPIC_API_KEY != '' || env.OPENAI_API_KEY != '' || env.GOOGLE_CLOUD_API_KEY != ''
+        run: cargo build --release -p impeccable
 
       - name: Run skill behavior tests
         run: bun run test:skill-behavior
@@ -699,10 +704,13 @@ jobs:
           bun-version-file: .bun-version
       - name: Install dependencies
         run: bun install --frozen-lockfile
+      - name: Install the pinned toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - name: Prepare engine and browser before billing
         run: |
           test -n "$ANTHROPIC_API_KEY" || { echo 'ANTHROPIC_API_KEY is required'; exit 1; }
-          bun run fetch:engine
+          cargo build --release -p impeccable
           bunx playwright install --with-deps chromium
       - name: Run completed skill workflows
         env:

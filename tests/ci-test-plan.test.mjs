@@ -14,13 +14,28 @@ describe('ci-test-plan', () => {
     const job = workflow.split('\n  skill-workflow:')[1];
     assert.doesNotMatch(job.split('\n    steps:')[0], /runner\./, 'runner context is unavailable at job-level env');
     assert.match(job, /if: github.event_name == 'workflow_dispatch' && inputs.skill_workflow/);
-    assert.ok(job.indexOf('bun run fetch:engine') < job.indexOf('bun run test:skill-workflow'));
+    assert.ok(job.indexOf('cargo build --release -p impeccable') < job.indexOf('bun run test:skill-workflow'));
     assert.ok(job.indexOf('playwright install --with-deps chromium') < job.indexOf('bun run test:skill-workflow'));
     const protocol = workflow.split('\n  skill-behavior:')[1].split('\n  skill-workflow:')[0];
-    assert.match(protocol, /bun run fetch:engine/);
+    assert.match(protocol, /cargo build --release -p impeccable/);
+    assert.doesNotMatch(protocol, /fetch:engine/);
+    assert.match(protocol, /if: env\.ANTHROPIC_API_KEY != '' \|\| env\.OPENAI_API_KEY != '' \|\| env\.GOOGLE_CLOUD_API_KEY != ''/);
     assert.doesNotMatch(protocol, /IMPECCABLE_SKILL_BEHAVIOR_MODELS:/, 'protocol coverage must retain the multi-family defaults');
     assert.match(protocol, /GOOGLE_CLOUD_API_KEY:/);
     assert.match(protocol, /ANTHROPIC_API_KEY:/);
+  });
+  it('builds the source engine and installs isolated Chrome before core tests', () => {
+    const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+    const matrix = workflow.split('\n  test-matrix:')[1].split('\n  launcher-windows:')[0];
+    const core = matrix.indexOf('bun run test:core');
+    assert.ok(matrix.indexOf('cargo build --release -p impeccable') >= 0);
+    assert.ok(matrix.indexOf('cargo build --release -p impeccable') < core);
+    assert.ok(matrix.indexOf('bunx puppeteer browsers install chrome') >= 0);
+    assert.ok(matrix.indexOf('bunx puppeteer browsers install chrome') < core);
+    const engine = workflow.split('\n  engine-source-ready:')[1].split('\n  test:')[0];
+    assert.match(engine, /cargo build --release -p impeccable/);
+    assert.match(engine, /engine-probe\)" = "impeccable-engine \$\(cat ENGINE_VERSION\)/);
+    assert.doesNotMatch(workflow, /node scripts\/check-engine-release\.mjs|bun run fetch:engine/);
   });
   it('keeps docs-only pull requests on the core suite', () => {
     const outputs = runPlan({
