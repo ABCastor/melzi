@@ -2,59 +2,137 @@
 use impeccable_browser::{cdp::Browser, discovery};
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
+use std::sync::mpsc::{Receiver, channel};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
 use std::time::Duration;
 
+fn browser_required() -> bool {
+    std::env::var_os("CI").is_some() || std::env::var_os("IMPECCABLE_BROWSER").is_some()
+}
+
+fn browser_executable() -> Option<std::path::PathBuf> {
+    let env: HashMap<String, String> = std::env::vars().collect();
+    match discovery::find_browser(&env) {
+        Ok(exe) => Some(exe),
+        Err(error) => {
+            assert!(
+                !browser_required(),
+                "required test browser unavailable: {error}"
+            );
+            eprintln!("skip: no browser: {error}");
+            None
+        }
+    }
+}
+
 fn launch(exe: &std::path::Path) -> Option<Browser> {
-    Browser::launch(exe, &[], false)
-        .map_err(|e| eprintln!("skip: could not launch browser: {}", e.message))
-        .ok()
+    match Browser::launch(exe, &[], false) {
+        Ok(browser) => Some(browser),
+        Err(error) => {
+            assert!(
+                !browser_required(),
+                "required test browser launch failed: {}",
+                error.message
+            );
+            eprintln!("skip: could not launch browser: {}", error.message);
+            None
+        }
+    }
+}
+
+fn serve_capture_fixture(listener: TcpListener, count: Arc<AtomicUsize>) -> Receiver<()> {
+    let (accepted, observed) = channel();
+    std::thread::spawn(move || {
+        for mut stream in listener.incoming().flatten() {
+            let _ = accepted.send(());
+            let count = count.clone();
+            // Chrome can preconnect without sending bytes. Keep that socket
+            // out of the accept loop and bound its handler's lifetime.
+            std::thread::spawn(move || {
+                if stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .is_err()
+                    || stream
+                        .set_write_timeout(Some(Duration::from_secs(2)))
+                        .is_err()
+                {
+                    return;
+                }
+                let mut request = [0u8; 4096];
+                let n = stream.read(&mut request).unwrap_or(0);
+                if n == 0 {
+                    return;
+                }
+                let request = String::from_utf8_lossy(&request[..n]);
+                let (kind, body) = if request.starts_with("GET /asset.bin ") {
+                    let number = count.fetch_add(1, Ordering::SeqCst);
+                    (
+                        "application/octet-stream",
+                        if number == 0 {
+                            vec![0, 255, 13, 128, 42]
+                        } else {
+                            vec![99, 4, 0, 128]
+                        },
+                    )
+                } else {
+                    (
+                        "text/html",
+                        b"<!doctype html><title>capture</title><body>fixture</body>".to_vec(),
+                    )
+                };
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = stream.write_all(header.as_bytes());
+                let _ = stream.write_all(&body);
+            });
+        }
+    });
+    observed
+}
+
+#[test]
+fn capture_fixture_serves_http_while_an_earlier_connection_is_silent() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let hits = Arc::new(AtomicUsize::new(0));
+    let accepted = serve_capture_fixture(listener, hits.clone());
+    let mut idle = TcpStream::connect(address).unwrap();
+    accepted.recv_timeout(Duration::from_secs(1)).unwrap();
+    let mut request = TcpStream::connect(address).unwrap();
+    request
+        .set_read_timeout(Some(Duration::from_millis(300)))
+        .unwrap();
+    request
+        .write_all(b"GET /asset.bin HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .unwrap();
+    let mut response = Vec::new();
+    let result = request.read_to_end(&mut response);
+    // Keep the earlier connection silent until the HTTP exchange ends.
+    result.expect("a silent preconnection must not block the fixture accept loop");
+    assert!(response.starts_with(b"HTTP/1.1 200 OK\r\n"));
+    assert!(response.ends_with(&[0, 255, 13, 128, 42]));
+    assert_eq!(hits.load(Ordering::SeqCst), 1);
+    idle.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+    assert_eq!(
+        idle.read(&mut [0]).unwrap(),
+        0,
+        "silent handler must expire without serving a response"
+    );
 }
 
 #[test]
 fn response_capture_reads_original_bytes_and_preserves_repeated_url_ambiguity() {
-    let env: HashMap<String, String> = std::env::vars().collect();
-    let Ok(exe) = discovery::find_browser(&env) else {
-        eprintln!("skip: no browser");
-        return;
-    };
+    let Some(exe) = browser_executable() else { return; };
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let origin = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
     let hits = Arc::new(AtomicUsize::new(0));
-    let count = hits.clone();
-    std::thread::spawn(move || {
-        for mut stream in listener.incoming().flatten() {
-            let mut request = [0u8; 4096];
-            let n = stream.read(&mut request).unwrap_or(0);
-            let request = String::from_utf8_lossy(&request[..n]);
-            let (kind, body) = if request.starts_with("GET /asset.bin ") {
-                let number = count.fetch_add(1, Ordering::SeqCst);
-                (
-                    "application/octet-stream",
-                    if number == 0 {
-                        vec![0, 255, 13, 128, 42]
-                    } else {
-                        vec![99, 4, 0, 128]
-                    },
-                )
-            } else {
-                (
-                    "text/html",
-                    b"<!doctype html><title>capture</title><body>fixture</body>".to_vec(),
-                )
-            };
-            let header = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
-                body.len()
-            );
-            let _ = stream.write_all(header.as_bytes());
-            let _ = stream.write_all(&body);
-        }
-    });
+    let _accepted = serve_capture_fixture(listener, hits.clone());
     let Some(mut browser) = launch(&exe) else { return; };
     let mut page = browser.new_page().unwrap();
     assert!(
@@ -112,8 +190,7 @@ fn response_capture_reads_original_bytes_and_preserves_repeated_url_ambiguity() 
 
 #[test]
 fn large_utf8_document_retains_exact_bytes_without_refetch() {
-    let env: HashMap<String, String> = std::env::vars().collect();
-    let Ok(exe) = discovery::find_browser(&env) else { return; };
+    let Some(exe) = browser_executable() else { return; };
     // One non-Latin-1 character makes Blink retain a two-byte string. The
     // inspector buffer must accommodate it even though the UTF-8 body is <16MiB.
     let body = format!("<!doctype html><meta charset=utf-8><title>€</title><!--{}-->", "a".repeat(9 * 1024 * 1024)).into_bytes();
@@ -146,8 +223,7 @@ fn large_utf8_document_retains_exact_bytes_without_refetch() {
 
 #[test]
 fn decoded_text_bodies_match_only_their_served_bytes() {
-    let env: HashMap<String, String> = std::env::vars().collect();
-    let Ok(exe) = discovery::find_browser(&env) else { return; };
+    let Some(exe) = browser_executable() else { return; };
     // Blink reports these as text: the BOM dropped, the Latin-1 byte as U+FFFD.
     let html = b"\xEF\xBB\xBF<!doctype html><link rel=stylesheet href=a.css><p>x</p>".to_vec();
     let css = b"/* caf\xE9 */\r\np{color:red}".to_vec();
