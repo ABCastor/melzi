@@ -22,6 +22,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1251,6 +1252,80 @@ for (const { name, fixture } of fixtures) {
           await pickElement(page, pickSelector, { position: fixture.runtime.pickPosition });
         } catch (error) {
           await captureLiveE2eFailure({ name, fixture, session, error, log: (m) => t.diagnostic(m) });
+          throw error;
+        } finally {
+          await teardownAndResetBrowser(teardown);
+        }
+      });
+    }
+
+    if (shouldRunScenario('orphan') && name === 'vite8-react-plain') {
+      it('self-discards completed JSX source absence despite a deliberately stale mounted module', liveE2eTestOptions, async (t) => {
+        if (manualOnly || process.env.IMPECCABLE_E2E_MANUAL_SCENARIO) {
+          t.skip('manual scenario filter is active');
+          return;
+        }
+        const session = await bootFixtureSession({
+          name, fixture, browser, agent: createFakeAgent(),
+          wrapTarget: wrapTargetFromPickedElement, log: m => t.diagnostic(m),
+        });
+        const { page, appRoot, live, teardown } = session;
+        const moduleReads = [];
+        page.on('response', response => {
+          if (new URL(response.url()).pathname !== '/src/App.jsx') return;
+          moduleReads.push(response.text().catch(() => null));
+        });
+        try {
+          await waitForHandshake(page);
+          const runtimeSource = readFileSync(join(__dirname, '../skill/scripts/live-browser.js'), 'utf8');
+          const servedRuntime = await (await fetch(`http://localhost:${live.port}/live.js?token=${encodeURIComponent(live.token)}`)).text();
+          assert.ok(servedRuntime.includes(runtimeSource), 'the actual engine serves the exact current browser runtime from disk');
+          t.diagnostic(`Served browser runtime SHA-256 ${createHash('sha256').update(runtimeSource).digest('hex')}`);
+          const sourceFile = join(appRoot, 'src/App.jsx');
+          const pristine = readFileSync(sourceFile, 'utf8');
+          await pickElement(page, fixture.runtime.pickSelector || 'h1.hero-title');
+          await clickGo(page);
+          await waitForCyclingRobust(page, 3, { timeout: 60_000, log: m => t.diagnostic(m) });
+          const saved = await readLiveSessionStorage(page);
+          assert.ok(saved?.id);
+          // Wait for actual agent completion, since mounted variants alone
+          // do not promise the agent has finished writing source.
+          const completionDeadline = Date.now() + 20_000;
+          for (;;) {
+            const status = await getServerManualEditStatus(live);
+            const summary = status.activeSessions?.find(s => s.id === saved.id);
+            if (summary?.generationCompletedAt && !summary.generationCanceled) break;
+            if (Date.now() > completionDeadline) throw new Error('generation completion was not durable');
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+          const compiled = (await Promise.all(moduleReads)).find(body => body?.includes(saved.id) && body.includes('data-impeccable-variants'));
+          assert.ok(compiled, 'captured the actual compiled variant module before source removal');
+          let staleModuleServed = false;
+          await page.route('**/src/App.jsx*', route => {
+            staleModuleServed = true;
+            return route.fulfill({ status: 200, contentType: 'text/javascript', body: compiled });
+          });
+          writeFileSync(sourceFile, pristine);
+          await page.reload({ waitUntil: 'domcontentloaded' });
+          await waitForHandshake(page);
+          await page.waitForFunction(id => !!document.querySelector(`[data-impeccable-variants="${id}"]`), saved.id, { timeout: 5000 });
+          assert.ok(staleModuleServed, 'reload actually consumed the deliberately stale compiled module');
+          assert.equal(readFileSync(sourceFile, 'utf8'), pristine, 'source remains authoritative and wrapper-free');
+          t.diagnostic('Confirmed pristine source plus stale mounted variant wrapper after completed generation');
+          const deadline = Date.now() + 30_000;
+          for (;;) {
+            if (!(await readLiveSessionStorage(page))?.id) break;
+            if (Date.now() > deadline) throw new Error('stale mounted JSX session was never discarded');
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          const snapshot = JSON.parse(readFileSync(join(appRoot, '.impeccable/live/sessions', `${saved.id}.snapshot.json`), 'utf8'));
+          assert.equal(snapshot.phase, 'discarded');
+          await page.unroute('**/src/App.jsx*');
+          await page.reload({ waitUntil: 'domcontentloaded' });
+          await waitForHandshake(page);
+          await pickElement(page, fixture.runtime.pickSelector || 'h1.hero-title');
+        } catch (error) {
+          await captureLiveE2eFailure({ name, fixture, session, error, log: m => t.diagnostic(m) });
           throw error;
         } finally {
           await teardownAndResetBrowser(teardown);

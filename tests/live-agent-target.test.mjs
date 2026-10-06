@@ -10,7 +10,7 @@
 
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { connect } from 'node:net';
+import { connect, createServer } from 'node:net';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -149,6 +149,161 @@ async function openSseClient(server, { clientId } = {}) {
     close() { controller.abort(); },
   };
 }
+
+describe('conditional orphan discard over native HTTP', { skip: ENGINE_BIN ? false : ENGINE_MISSING_MESSAGE }, () => {
+  let tmp;
+  let server;
+  const cases = new Map();
+  const seed = (id, { phase = 'CYCLING', sourceFile = 'src/App.jsx', tail = [], completed = true } = {}) => {
+    const events = [{ type: 'generate', id, pageUrl: '/', count: 3 }];
+    if (completed) events.push({ type: 'agent_done', id, sourceFile, at: 100 });
+    events.push({ type: 'checkpoint', id, phase: phase.toLowerCase(), revision: 1 }, ...tail);
+    let serialized = events.map((event, i) => JSON.stringify({
+      seq: i + 1, ts: '2026-10-06T00:00:00.000Z', event,
+    })).join('\n') + '\n';
+    // The journal can hold a floating timestamp that browser JSON serializes
+    // as an integer. Both representations name the same completed generation.
+    if (id === '0000000d') serialized = serialized.replace('"at":100', '"at":100.0');
+    writeFileSync(join(tmp, '.impeccable/live/sessions', id + '.jsonl'), serialized);
+    cases.set(id, phase);
+  };
+  const journal = id => readFileSync(join(tmp, '.impeccable/live/sessions', id + '.jsonl'), 'utf-8');
+  const snapshot = id => JSON.parse(readFileSync(join(tmp, '.impeccable/live/sessions', id + '.snapshot.json'), 'utf-8'));
+  const post = body => postJson(server, '/events', { ...body, token: server.token });
+  const proof = { expectedGenerationCompletedAt: 100, expectedSourceFile: 'src/App.jsx', expectedPageUrl: '/' };
+  const rejectWithoutMutation = async (id, authority = proof) => {
+    const beforeJournal = journal(id);
+    const beforeSnapshot = snapshot(id);
+    const res = await post({ type: 'discard', id, orphaned: true, ...authority });
+    assert.equal(res.status, 409);
+    assert.equal((await res.json()).error, 'orphan_discard_superseded');
+    assert.equal(journal(id), beforeJournal, 'rejection journals nothing');
+    assert.deepEqual(snapshot(id), beforeSnapshot, 'rejection preserves phase, pending intent and checkpoint');
+  };
+  before(async () => {
+    tmp = mkdtempSync(join(tmpdir(), 'impeccable-orphan-authority-'));
+    mkdirSync(join(tmp, '.impeccable/live/sessions'), { recursive: true });
+    writeFileSync(join(tmp, 'index.html'), '<html><body><h1>test</h1></body></html>');
+    for (let i = 1; i <= 13; i++) seed(i.toString(16).padStart(8, '0'));
+    seed('00000002', { tail: [{ type: 'accept', id: '00000002', variantId: '1' }, { type: 'complete', id: '00000002' }] });
+    seed('00000003', { tail: [{ type: 'discard', id: '00000003' }, { type: 'discarded', id: '00000003' }] });
+    seed('00000004', { tail: [{ type: 'discard', id: '00000004' }] });
+    seed('00000005', { tail: [{ type: 'accept', id: '00000005', variantId: '1' }, { type: 'agent_done', id: '00000005', carbonize: true, file: 'src/App.jsx', at: 100 }] });
+    seed('0000000c', { sourceFile: 'index.html' });
+    seed('0000000d', { phase: 'VARIANTS_READY' });
+    seed('0000000e', { phase: 'GENERATING' });
+    seed('0000000f', { sourceFile: 'index.html' });
+    seed('00000010', { completed: false, phase: 'GENERATING' });
+    seed('00000011', { tail: [{ type: 'generate', id: '00000011', pageUrl: '/', count: 3 }] });
+    seed('00000012', { phase: 'STEERING' });
+    seed('00000013', { tail: [{ type: 'agent_done', id: '00000013', sourceFile: 'src/New.jsx', at: 200 }] });
+    seed('00000014');
+    seed('00000015', { sourceFile: 'index.html' });
+    mkdirSync(join(tmp, 'src'), { recursive: true });
+    writeFileSync(join(tmp, 'src/App.jsx'), 'export default function App(){return <main><h1 id="hero">Test</h1></main>;}\n');
+    const listener = createServer();
+    await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
+    const port = listener.address().port;
+    await new Promise(resolve => listener.close(resolve));
+    server = await startServer(port, { cwd: tmp });
+    // Persist each seeded snapshot through the real protocol. A generating
+    // restore checkpoint must remain admissible when no generation is pending.
+    for (const [id, state] of cases) {
+      assert.equal((await post({ type: 'checkpoint', id, phase: state.toLowerCase(), revision: 2 })).status, 200);
+    }
+  });
+  after(async () => { if (server) await stopServer(server); });
+
+  it('rejects a stale orphan after another profile accepts, preserving its queued acceptance', async () => {
+    assert.equal((await post({ type: 'accept', id: '00000001', variantId: '2' })).status, 200);
+    assert.equal(snapshot('00000001').pendingEvent.type, 'accept');
+    await rejectWithoutMutation('00000001');
+    assert.equal(snapshot('00000001').phase, 'accept_requested');
+    assert.equal(snapshot('00000001').pendingEvent.type, 'accept');
+    const queued = await (await fetch(`http://localhost:${server.port}/poll?token=${server.token}&types=accept&id=00000001&timeout=1`)).json();
+    assert.equal(queued.type, 'accept');
+    assert.equal(queued.id, '00000001');
+    const noDiscard = await (await fetch(`http://localhost:${server.port}/poll?token=${server.token}&types=discard&id=00000001&timeout=1`)).json();
+    assert.equal(noDiscard.type, 'timeout', 'a refused orphan cannot enqueue a discard');
+  });
+
+  it('rejects completed, discarded, discard-requested and carbonize-fenced sessions without mutation', async () => {
+    for (const id of ['00000002', '00000003', '00000004', '00000005']) await rejectWithoutMutation(id);
+  });
+
+  it('rejects stale completion, source, page or absent JSX authority', async () => {
+    for (const [id, authority] of [
+      ['00000006', { ...proof, expectedGenerationCompletedAt: 99 }],
+      ['00000007', { ...proof, expectedSourceFile: 'src/Other.jsx' }],
+      ['00000008', { ...proof, expectedPageUrl: '/other' }],
+      ['00000009', {}],
+      ['0000000c', proof],
+      ['00000013', proof],
+    ]) await rejectWithoutMutation(id, authority);
+  });
+
+  it('rejects incomplete and restarted same-ID generations even with the old completion timestamp', async () => {
+    assert.equal(snapshot('00000011').generationCompletedAt, 100, 'generate deliberately retains prior completion');
+    assert.equal(snapshot('00000011').pendingEvent.type, 'generate');
+    for (const id of ['00000010', '00000011', '00000012']) await rejectWithoutMutation(id);
+  });
+
+  it('rejects stale orphan cleanup after a newer same-ID generation is leased, retaining durable intent', async () => {
+    for (const [id, sourceFile, authority] of [
+      ['00000014', 'src/App.jsx', proof],
+      ['00000015', 'index.html', {}],
+    ]) {
+      assert.equal((await post({
+        type: 'generate', id, pageUrl: '/', action: 'bolder', count: 3, sourceFile,
+        scaffoldAttempted: true,
+        scaffold: { file: sourceFile, sourceFile, count: 3, previewMode: 'source' },
+        element: { tagName: 'h1', id: 'hero', textContent: 'Test', outerHTML: '<h1 id="hero">Test</h1>' },
+      })).status, 200);
+      // A delivered queue entry and the durable pending intent are distinct.
+      // The real lease path stamps readiness without completing the generation.
+      const leased = await (await fetch(
+        `http://localhost:${server.port}/poll?token=${server.token}&types=generate&id=${id}&leaseMs=60000&timeout=100`,
+      )).json();
+      assert.equal(leased.type, 'generate');
+      assert.equal(leased.id, id);
+      assert.equal(leased.scaffoldAttempted, true);
+      assert.ok(leased.generationReadyAt > 0);
+      for (const [phase, revision] of [['generating', 3], ['cycling', 4]]) {
+        assert.equal((await post({
+          type: 'checkpoint', id, phase, revision, revisionDomain: 'browser',
+          reason: 'browser_resumed', pageUrl: '/', sourceFile,
+          arrivedVariants: 0, expectedVariants: 3,
+        })).status, 200);
+        const active = snapshot(id);
+        assert.equal(active.phase, phase);
+        assert.equal(active.generationCanceled, false);
+        assert.equal(active.generationCompletedAt, 100);
+        assert.equal(active.pendingEvent.type, 'generate');
+        assert.ok(active.pendingEvent.generationReadyAt > 0);
+        await rejectWithoutMutation(id, authority);
+      }
+    }
+  });
+
+  it('terminalizes legitimate JSX cycling and generating restores plus the legacy HTML orphan', async () => {
+    assert.equal(snapshot('0000000e').phase, 'generating', 'a completed browser restore may checkpoint generating');
+    assert.equal(snapshot('0000000d').phase, 'variants_ready');
+    for (const [id, authority] of [['0000000a', proof], ['0000000d', proof], ['0000000e', proof], ['0000000f', {}]]) {
+      const res = await post({ type: 'discard', id, orphaned: true, ...authority });
+      assert.equal(res.status, 200);
+      assert.equal(snapshot(id).phase, 'discarded');
+      assert.equal(snapshot(id).pendingEvent, null);
+      assert.deepEqual(journal(id).trim().split('\n').slice(-2).map(line => JSON.parse(line).event.type), ['discard', 'discarded']);
+    }
+  });
+
+  it('keeps normal explicit discard behavior unchanged without an authority tuple', async () => {
+    const res = await post({ type: 'discard', id: '0000000b' });
+    assert.equal(res.status, 200);
+    assert.equal(snapshot('0000000b').phase, 'discard_requested');
+    assert.equal(snapshot('0000000b').pendingEvent.type, 'discard');
+  });
+});
 
 describe('POST /agent-target', { skip: ENGINE_BIN ? false : ENGINE_MISSING_MESSAGE }, () => {
   let tmp;

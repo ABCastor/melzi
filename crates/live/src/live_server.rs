@@ -25,7 +25,7 @@ use crate::server_state::{
     lease_event, lock, now_i64, resolve_project_context, truthy, ServerState, Shared,
     DEFAULT_POLL_TIMEOUT, SSE_HEARTBEAT_INTERVAL_MS,
 };
-use crate::session::create_live_session_store;
+use crate::session::{create_live_session_store, GENERATION_FENCED_SESSION_PHASES};
 use crate::svelte_component::{
     bump_svelte_component_preview_revision, compile_check_variants,
     remove_all_svelte_component_sessions, sweep_inactive_svelte_component_sessions,
@@ -1286,6 +1286,87 @@ fn handle_events_post(
             return;
         }
     }
+    let orphaned_discard = ty == "discard" && msg_obj.get("orphaned") == Some(&Value::Bool(true));
+    if orphaned_discard {
+        // Browser profiles do not share local recovery fences. Order this
+        // decision with accept and generate intents under the shared mutex,
+        // before any journal, pending-generation or queue mutation.
+        let snapshot = match st.store.get_snapshot(id_str.as_deref().unwrap_or(""), true) {
+            Ok(Some(snapshot)) => snapshot,
+            _ => {
+                drop(st);
+                respond(
+                    stream,
+                    cors,
+                    json_res(500, json!({ "error": "session_store_read_failed" })),
+                );
+                return;
+            }
+        };
+        let phase = snapshot.get("phase").and_then(Value::as_str).unwrap_or("");
+        let source = snapshot
+            .get("sourceFile")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .or_else(|| snapshot.get("previewFile").and_then(Value::as_str))
+            .unwrap_or("");
+        let lower_source = source.to_ascii_lowercase();
+        let jsx = [".jsx", ".tsx", ".mjsx", ".cjsx", ".mtsx", ".ctsx"]
+            .iter()
+            .any(|suffix| lower_source.ends_with(suffix));
+        let supplied_authority = [
+            "expectedGenerationCompletedAt",
+            "expectedSourceFile",
+            "expectedPageUrl",
+        ]
+        .iter()
+        .any(|field| msg_obj.contains_key(*field));
+        let authority_matches = !(jsx || supplied_authority)
+            || (msg_obj
+                .get("expectedGenerationCompletedAt")
+                .and_then(Value::as_f64)
+                == snapshot
+                    .get("generationCompletedAt")
+                    .and_then(Value::as_f64)
+                && msg_obj
+                    .get("expectedGenerationCompletedAt")
+                    .and_then(Value::as_f64)
+                    .is_some()
+                && msg_obj.get("expectedSourceFile").and_then(Value::as_str) == Some(source)
+                && msg_obj.get("expectedPageUrl").and_then(Value::as_str)
+                    == snapshot.get("pageUrl").and_then(Value::as_str)
+                && msg_obj
+                    .get("expectedPageUrl")
+                    .and_then(Value::as_str)
+                    .is_some());
+        let pending_generate = snapshot
+            .get("pendingEvent")
+            .and_then(|e| e.get("type"))
+            .and_then(Value::as_str)
+            == Some("generate");
+        let comparison = [
+            "generate_requested",
+            "variants_ready",
+            "generating",
+            "cycling",
+        ]
+        .contains(&phase);
+        if !truthy(snapshot.get("generationCompletedAt"))
+            || truthy(snapshot.get("generationCanceled"))
+            || GENERATION_FENCED_SESSION_PHASES.contains(&phase)
+            || !comparison
+            || pending_generate
+            || !authority_matches
+        {
+            drop(st);
+            respond(
+                stream,
+                cors,
+                json_res(409, json!({ "error": "orphan_discard_superseded" })),
+            );
+            return;
+        }
+    }
     let missed = st.detect_missed_generation_completion(&msg_obj);
     if id_truthy {
         if let Err(e) = st.store.append_event(&msg) {
@@ -1311,7 +1392,6 @@ fn handle_events_post(
     if ty == "exit" {
         remove_all_svelte_component_sessions(&st.cwd);
     }
-    let orphaned_discard = ty == "discard" && msg_obj.get("orphaned") == Some(&Value::Bool(true));
     if orphaned_discard && id_truthy {
         let _ = st
             .store

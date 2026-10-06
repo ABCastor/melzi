@@ -6222,20 +6222,28 @@
   const COMPLETED_SOURCE_FALLBACK_RETRIES = 3;
   const COMPLETED_SOURCE_FALLBACK_RETRY_MS = 1200;
 
-  /**
-   * Terminal recovery for a session whose source-side scaffolding no longer
-   * exists. The discard event is best-effort: with no agent polling it parks
-   * the durable session in discard_requested, which no resume path adopts;
-   * with an agent attached it triggers the normal discard finalization.
-   */
-  function discardOrphanedSession(reason) {
+  // Source absence can be observed while another browser accepts the session.
+  // The helper must acknowledge a conditional discard before local teardown.
+  async function discardOrphanedSession(reason, authority, recoveryRevision = liveInteractionRevision) {
     const sessionId = currentSessionId;
-    if (!sessionId) return;
-    console.warn('[melzi] Discarding orphaned session ' + sessionId + ': ' + reason);
-    sendEvent({ type: 'discard', id: sessionId, orphaned: true }).catch(() => {});
-    markSessionHandled();
-    cleanup({ instantChrome: true });
-    showToast('The previous live session no longer matches the source file, so it was discarded. Pick an element to start fresh.', 6000);
+    const stillActive = () => sessionId && sessionId === currentSessionId
+      && (state === 'GENERATING' || state === 'CYCLING')
+      && !isSessionHandled(sessionId)
+      && !deferredRecoverySuperseded(sessionId, recoveryRevision);
+    if (!stillActive()) return;
+    console.warn('[melzi] Checking orphaned session ' + sessionId + ': ' + reason);
+    try {
+      const acknowledged = await sendEvent({ type: 'discard', id: sessionId, orphaned: true, ...authority }, { throwOnError: true });
+      if (!acknowledged?.ok) throw new Error('orphan discard was not acknowledged');
+      if (!stillActive()) return;
+      markSessionHandled();
+      cleanup({ instantChrome: true });
+      showToast('The previous live session no longer matches the source file, so it was discarded. Pick an element to start fresh.', 6000);
+    } catch (err) {
+      if (!stillActive()) return;
+      console.warn('[melzi] Keeping the session after orphan discard was refused or unavailable:', err);
+      showToast('This session changed on the live server or could not be checked. It stays open until its status is refreshed.', 6000);
+    }
   }
 
   function isJsxSourceFile(filePath) {
@@ -6263,13 +6271,21 @@
    * surface back to the picker.
    */
   function probeJsxWrapperForOrphan(filePath, sessionId, opts) {
+    if (!opts.generationCompleted) return;
     const attempt = opts._orphanAttempt || 0;
+    const recoveryRevision = opts.recoveryRevision ?? liveInteractionRevision;
     const url = 'http://localhost:' + PORT + '/source?token=' + TOKEN + '&path=' + encodeURIComponent(filePath);
-    const stillActive = () => sessionId === currentSessionId && (state === 'GENERATING' || state === 'CYCLING');
+    const stillActive = () => sessionId === currentSessionId
+      && (state === 'GENERATING' || state === 'CYCLING')
+      && !isSessionHandled(sessionId)
+      && !deferredRecoverySuperseded(sessionId, recoveryRevision);
+    if (!stillActive()) return;
     const retryLater = () => {
       setTimeout(() => {
         if (!stillActive()) return;
-        injectVariantsFromSource(filePath, sessionId, { ...opts, _orphanAttempt: attempt + 1 });
+        // A stale framework module can mount variants between reads. Keep
+        // checking source instead of taking the mounted-wrapper shortcut.
+        probeJsxWrapperForOrphan(filePath, sessionId, { ...opts, recoveryRevision, _orphanAttempt: attempt + 1 });
       }, COMPLETED_SOURCE_FALLBACK_RETRY_MS);
     };
     // Discarding is durable (the session moves to the discarded phase and the
@@ -6282,7 +6298,7 @@
     const onNoWrapper = (reason) => {
       if (!stillActive()) return;
       if (attempt < COMPLETED_SOURCE_FALLBACK_RETRIES) { retryLater(); return; }
-      discardOrphanedSession(reason);
+      discardOrphanedSession(reason, opts.authority, recoveryRevision);
     };
     const onUnreadable = (detail) => {
       if (!stillActive()) return;
@@ -6415,9 +6431,6 @@
           recoverEmptyCycling('source-fallback-empty');
         }
         return;
-      }
-      if (opts.orphanDiscard && !liveWrapper && sessionId === currentSessionId) {
-        probeJsxWrapperForOrphan(filePath, sessionId, opts);
       }
       return;
     }
@@ -9624,13 +9637,11 @@ void main() {
       ? currentPreviewFile
       : (currentSourceFile || currentPreviewFile);
     if (restoreFile) {
-      // A restored CYCLING session promises variants already written into
-      // source; if they are not there (after retries), the session is an
-      // orphan and must self-discard instead of freezing the picker (#439).
-      // GENERATING restores make no such promise: deferred-wrapper flows
-      // legitimately have no wrapper in source until the agent's write lands.
+      // Mounted variants and a cached CYCLING state can precede the agent's
+      // final source write. The connected server summary authorizes the
+      // completed-source orphan check in recoverMissedGenerationCompletion.
       injectVariantsFromSource(restoreFile, currentSessionId, {
-        orphanDiscard: savedState === 'CYCLING' && !isFrameworkComponentPreviewMode(currentPreviewMode),
+        orphanDiscard: !isJsxSourceFile(restoreFile) && savedState === 'CYCLING' && !isFrameworkComponentPreviewMode(currentPreviewMode),
       });
       return true;
     }
@@ -9655,18 +9666,35 @@ void main() {
   // variants from source when behind. Mirrors the `done` handler's source
   // fallback, including its give-HMR-the-first-chance settle delay.
   function recoverMissedGenerationCompletion(activeSessions) {
-    if (!currentSessionId || state !== 'GENERATING') return;
+    if (!currentSessionId || (state !== 'GENERATING' && state !== 'CYCLING')) return;
+    if (isSessionHandled(currentSessionId)) return;
     if (!Array.isArray(activeSessions)) return;
-    const summary = activeSessions.find((session) => session?.id === currentSessionId);
+    const summary = activeSessions.find((session) => session?.id === currentSessionId && pageMatchesCurrent(session.pageUrl));
     if (!summary?.generationCompletedAt || summary.generationCanceled) return;
     if (isTerminalSessionSummary(summary)) return;
-    if (arrivedVariants > 0 && arrivedVariants >= expectedVariants) return;
+    if (!ADOPTABLE_SESSION_PHASES.has(String(summary.phase || ''))) return;
     rememberSessionFileMeta(summary);
     const sessionId = currentSessionId;
     const file = isFrameworkComponentPreviewMode(currentPreviewMode)
       ? currentPreviewFile
       : (summary.sourceFile || summary.previewFile || currentSourceFile || currentPreviewFile);
     if (!file) return;
+    if (summary.pageUrl && (summary.sourceFile || summary.previewFile)
+        && !isFrameworkComponentPreviewMode(currentPreviewMode) && isJsxSourceFile(file)) {
+      // Framework hydration may restore a cached wrapper after source was
+      // edited out. Completed source owns validity even when all DOM variants
+      // are present; it is never parsed or injected as JSX.
+      probeJsxWrapperForOrphan(file, sessionId, {
+        generationCompleted: true,
+        recoveryRevision: liveInteractionRevision,
+        authority: {
+          expectedGenerationCompletedAt: summary.generationCompletedAt,
+          expectedSourceFile: file,
+          expectedPageUrl: summary.pageUrl,
+        },
+      });
+    }
+    if (state !== 'GENERATING' || (arrivedVariants > 0 && arrivedVariants >= expectedVariants)) return;
     console.log('[melzi] Reconnected after generation completed; recovering variants from source.');
     setTimeout(() => {
       if (sessionId !== currentSessionId || state !== 'GENERATING') return;

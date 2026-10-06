@@ -8,6 +8,240 @@ const SOURCE = readFileSync(join(process.cwd(), 'skill/scripts/live-browser.js')
 const PENDING_DOCK_POSITION_SOURCE = SOURCE.match(/function positionPendingDock\(\) \{[\s\S]*?\n  \}/)?.[0] || '';
 const CAPTURE_AND_EMIT_SOURCE = SOURCE.match(/async function captureAndEmit\([\s\S]*?\n  \}/)?.[0] || '';
 
+function jsxOrphanHarness({ source = '', mounted = true, read } = {}) {
+  const timers = [];
+  const calls = { reads: 0, discarded: 0, completed: 0, warnings: 0 };
+  const context = {
+    currentSessionId: 'session-a', state: 'CYCLING', liveInteractionRevision: 0,
+    currentPreviewMode: null, currentPreviewFile: null, currentSourceFile: 'src/App.jsx',
+    expectedVariants: 3, arrivedVariants: 3, PORT: 1, TOKEN: 'test',
+    COMPLETED_SOURCE_FALLBACK_RETRIES: 3, COMPLETED_SOURCE_FALLBACK_RETRY_MS: 1200,
+    ADOPTABLE_SESSION_PHASES: new Set(['generate_requested', 'variants_ready', 'generating', 'cycling']),
+    handled: false,
+    isSessionHandled: () => context.handled,
+    deferredRecoverySuperseded: (id, revision) => id !== context.currentSessionId || revision !== context.liveInteractionRevision,
+    pageMatchesCurrent: page => !page || page === '/',
+    isTerminalSessionSummary: s => /^(completed|discarded|discard_requested|accept_requested)$/.test(s.phase),
+    isFrameworkComponentPreviewMode: mode => mode === 'svelte-component',
+    isSvelteComponentManifestPath: () => false,
+    rememberSessionFileMeta() {},
+    findVariantsWrapper: () => context.mounted ? { querySelector: () => ({}) } : null,
+    completeSourceInjection() { calls.completed++; },
+    discardOrphanedSession(reason, authority) { calls.discarded++; calls.authority = authority; },
+    showToast() { calls.warnings++; },
+    console: { log() {}, warn() {} },
+    setTimeout(fn, ms) { timers.push({ fn, ms }); },
+    async fetch() {
+      calls.reads++;
+      return read ? read(calls.reads) : { ok: true, text: async () => source };
+    },
+    mounted,
+  };
+  const slice = (start, end) => SOURCE.slice(SOURCE.indexOf('function ' + start + '('), SOURCE.indexOf('function ' + end + '('));
+  runInNewContext([
+    slice('isJsxSourceFile', 'completeSourceInjection'),
+    slice('injectVariantsFromSource', 'buildSvelteExpressionTextMap'),
+    slice('recoverMissedGenerationCompletion', 'saveSession'),
+  ].join('\n'), context);
+  const summary = {
+    id: 'session-a', phase: 'cycling', pageUrl: '/', sourceFile: 'src/App.jsx',
+    generationCompletedAt: 100, generationCanceled: false,
+  };
+  const settle = () => new Promise(resolve => setImmediate(resolve));
+  return {
+    context, calls, timers, summary, settle,
+    recover(overrides = {}) { context.recoverMissedGenerationCompletion([{ ...summary, ...overrides }]); },
+    async drain() {
+      for (let i = 0; i < 8; i++) {
+        await settle();
+        const timer = timers.shift();
+        if (timer) { assert.ok(timer.ms === 1200 || timer.ms === 750); timer.fn(); }
+      }
+    },
+  };
+}
+
+describe('completed JSX source validity', () => {
+  it('revalidates completed JSX source despite already populated stale DOM', async () => {
+    const h = jsxOrphanHarness();
+    h.recover();
+    await h.drain();
+    assert.equal(h.calls.reads, 4, 'initial read plus the existing three retries');
+    assert.equal(h.calls.discarded, 1, 'DOM variants cannot override absent source');
+    assert.equal(h.calls.completed, 0, 'probe retries must not adopt stale DOM');
+    assert.deepEqual(JSON.parse(JSON.stringify(h.calls.authority)), { expectedGenerationCompletedAt: 100, expectedSourceFile: 'src/App.jsx', expectedPageUrl: '/' });
+  });
+
+  it('keeps a completed JSX session whose marker remains in source with mounted or hidden variants', async () => {
+    for (const mounted of [true, false]) {
+      const h = jsxOrphanHarness({ source: '<div data-impeccable-variants="session-a">', mounted });
+      h.recover();
+      await h.drain();
+      assert.equal(h.calls.reads, 1);
+      assert.equal(h.calls.discarded, 0);
+    }
+  });
+
+  it('keeps probing when stale JSX variants mount between source reads', async () => {
+    const h = jsxOrphanHarness({ mounted: false });
+    h.context.state = 'GENERATING';
+    h.context.arrivedVariants = 0;
+    h.recover();
+    await h.settle();
+    assert.deepEqual(h.timers.map(timer => timer.ms), [750, 1200], 'the normal 750 ms HMR fallback and source-probe budget remain distinct');
+    h.context.mounted = true;
+    h.context.state = 'CYCLING';
+    h.context.arrivedVariants = 3;
+    await h.drain();
+    assert.equal(h.calls.reads, 4);
+    assert.equal(h.calls.discarded, 1);
+  });
+
+  it('does not authorize an orphan probe from incomplete, canceled, terminal or foreign metadata', async () => {
+    for (const summary of [
+      { generationCompletedAt: null }, { generationCanceled: true }, { phase: 'discarded' },
+      { phase: 'accept_requested' }, { phase: 'carbonize_required' }, { pageUrl: '/other' }, { id: 'session-b' },
+      { pageUrl: null }, { sourceFile: null },
+    ]) {
+      const h = jsxOrphanHarness();
+      h.recover(summary);
+      await h.drain();
+      assert.equal(h.calls.reads, 0, JSON.stringify(summary));
+      assert.equal(h.calls.discarded, 0);
+    }
+    const h = jsxOrphanHarness();
+    h.context.currentPreviewMode = 'svelte-component';
+    h.recover();
+    await h.drain();
+    assert.equal(h.calls.reads, 0, 'adapter-owned previews do not use JSX source validation');
+  });
+
+  it('fences late source responses and retries after a new session, configuration or handled session', async () => {
+    for (const invalidate of [
+      h => { h.context.currentSessionId = 'session-b'; },
+      h => { h.context.liveInteractionRevision++; },
+      h => { h.context.handled = true; },
+      h => { h.context.state = 'CONFIRMED'; },
+    ]) {
+      const deferred = Promise.withResolvers();
+      const h = jsxOrphanHarness({ read: () => deferred.promise });
+      h.recover();
+      invalidate(h);
+      deferred.resolve({ ok: true, text: async () => '' });
+      await h.drain();
+      assert.equal(h.calls.reads, 1);
+      assert.equal(h.calls.discarded, 0);
+      assert.equal(h.timers.length, 0);
+
+      const pending = jsxOrphanHarness();
+      pending.recover();
+      await pending.settle();
+      invalidate(pending);
+      await pending.drain();
+      assert.equal(pending.calls.reads, 1, 'queued retry must also honor the fence');
+      assert.equal(pending.calls.discarded, 0);
+    }
+  });
+
+  it('keeps unreadable source, retries 404 on the existing budget and accepts a marker that returns', async () => {
+    const unreadable = jsxOrphanHarness({ read: async () => { throw new Error('offline'); } });
+    unreadable.recover();
+    await unreadable.drain();
+    assert.equal(unreadable.calls.reads, 4);
+    assert.equal(unreadable.calls.discarded, 0);
+    assert.equal(unreadable.calls.warnings, 1);
+    const missing = jsxOrphanHarness({ read: async () => ({ ok: false, status: 404 }) });
+    missing.recover();
+    await missing.drain();
+    assert.equal(missing.calls.reads, 4);
+    assert.equal(missing.calls.discarded, 1);
+    const restored = jsxOrphanHarness({ read: async n => ({ ok: true, text: async () => n > 1 ? '<div data-impeccable-variants="session-a">' : '' }) });
+    restored.recover();
+    await restored.drain();
+    assert.equal(restored.calls.reads, 2);
+    assert.equal(restored.calls.discarded, 0);
+  });
+});
+
+describe('conditional orphan acknowledgment', () => {
+  function harness() {
+    const pending = Promise.withResolvers();
+    const calls = { handled: 0, cleaned: 0, toasts: [], sent: [] };
+    const context = {
+      currentSessionId: 'aabbccdd', state: 'CYCLING', liveInteractionRevision: 3,
+      handled: false,
+      isSessionHandled: () => context.handled,
+      deferredRecoverySuperseded: (id, revision) => id !== context.currentSessionId || revision !== context.liveInteractionRevision,
+      sendEvent(payload, opts) { calls.sent.push({ payload, opts }); return pending.promise; },
+      markSessionHandled() { calls.handled++; },
+      cleanup() { calls.cleaned++; },
+      showToast(message) { calls.toasts.push(message); },
+      console: { warn() {} },
+    };
+    runInNewContext(SOURCE.slice(SOURCE.indexOf('async function discardOrphanedSession('), SOURCE.indexOf('function isJsxSourceFile(')), context);
+    return { context, pending, calls };
+  }
+
+  it('waits for an acknowledged server discard before marking handled or tearing down', async () => {
+    const h = harness();
+    const authority = { expectedGenerationCompletedAt: 100, expectedSourceFile: 'src/App.jsx', expectedPageUrl: '/' };
+    const result = h.context.discardOrphanedSession('missing', authority, 3);
+    assert.equal(h.calls.cleaned, 0);
+    assert.equal(h.calls.handled, 0);
+    assert.equal(h.calls.sent[0].opts.throwOnError, true);
+    assert.deepEqual(JSON.parse(JSON.stringify(h.calls.sent[0].payload)), { type: 'discard', id: 'aabbccdd', orphaned: true, ...authority });
+    h.pending.resolve({ ok: true });
+    await result;
+    assert.equal(h.calls.cleaned, 1);
+    assert.equal(h.calls.handled, 1);
+  });
+
+  it('retains local state when the server refuses or a request fails', async () => {
+    for (const outcome of ['409', 'network', 'unacknowledged']) {
+      const h = harness();
+      const result = h.context.discardOrphanedSession('missing');
+      if (outcome === 'unacknowledged') h.pending.resolve(null);
+      else h.pending.reject(new Error(outcome));
+      await result;
+      assert.equal(h.calls.cleaned, 0, outcome);
+      assert.equal(h.calls.handled, 0, outcome);
+      assert.equal(h.calls.toasts.length, 1, outcome);
+    }
+  });
+
+  it('retains state on a real sendEvent HTTP 409 response', async () => {
+    const h = harness();
+    Object.assign(h.context, {
+      TOKEN: 'test', PORT: 1, sessionCreationGate: Promise.resolve(),
+      fetch: async () => ({ ok: false, status: 409, json: async () => ({ error: 'orphan_discard_superseded' }) }),
+      console: { warn() {}, error() {}, debug() {} },
+    });
+    runInNewContext(SOURCE.slice(SOURCE.indexOf('function sendEvent('), SOURCE.indexOf('function abandonSupersededGo(')), h.context);
+    await h.context.discardOrphanedSession('missing');
+    assert.equal(h.calls.cleaned, 0);
+    assert.equal(h.calls.handled, 0);
+    assert.equal(h.calls.toasts.length, 1);
+  });
+
+  it('fences a late successful acknowledgment after a new session, revision, handled state or terminal UI', async () => {
+    for (const invalidate of [
+      h => { h.context.currentSessionId = 'bbbbbbbb'; },
+      h => { h.context.liveInteractionRevision++; },
+      h => { h.context.handled = true; },
+      h => { h.context.state = 'CONFIRMED'; },
+    ]) {
+      const h = harness();
+      const result = h.context.discardOrphanedSession('missing');
+      invalidate(h);
+      h.pending.resolve({ ok: true });
+      await result;
+      assert.equal(h.calls.cleaned, 0);
+      assert.equal(h.calls.handled, 0);
+      assert.equal(h.calls.toasts.length, 0);
+    }
+  });
+});
+
 describe('live-browser source contracts', () => {
   it('does not checkpoint a generation before captureAndEmit creates its session', () => {
     for (const name of ['handleGo', 'handleInsertCreate']) {
@@ -1069,11 +1303,13 @@ describe('live-browser source contracts', () => {
       /discardOrphanedSession/,
       'a missing JSX wrap must not discard from the DOM alone; only the source probe may decide',
     );
-    assert.match(
-      jsxGate,
-      /if \(opts\.orphanDiscard && !liveWrapper && sessionId === currentSessionId\) \{\s*probeJsxWrapperForOrphan\(filePath, sessionId, opts\);/,
-      'a resumed CYCLING session with no mounted JSX wrapper must run the source orphan probe (#439)',
-    );
+    assert.doesNotMatch(jsxGate, /probeJsxWrapperForOrphan/, 'DOM fallback must not authorize an orphan discard during active generation');
+    const recover = SOURCE.slice(SOURCE.indexOf('function recoverMissedGenerationCompletion('), SOURCE.indexOf('function saveSession('));
+    assert.match(recover, /summary\?\.generationCompletedAt \|\| summary\.generationCanceled/);
+    assert.match(recover, /probeJsxWrapperForOrphan\(file, sessionId, \{\s*generationCompleted: true,\s*recoveryRevision: liveInteractionRevision,\s*authority: \{\s*expectedGenerationCompletedAt: summary\.generationCompletedAt,\s*expectedSourceFile: file,\s*expectedPageUrl: summary\.pageUrl,/);
+    assert.ok(recover.indexOf('probeJsxWrapperForOrphan') < recover.indexOf('arrivedVariants > 0'), 'completed JSX source is checked before the mounted-variant shortcut');
+    const restore = SOURCE.slice(SOURCE.indexOf('function restoreSessionWithoutWrapper('), SOURCE.indexOf('function restoreFromActiveSessions('));
+    assert.match(restore, /orphanDiscard: !isJsxSourceFile\(restoreFile\) && savedState === 'CYCLING'/, 'cached CYCLING cannot authorize JSX discard; the existing HTML path is preserved');
     assert.match(
       jsxGate,
       /if \(!liveWrapper\) \{[\s\S]*?showToast\([\s\S]*?return;[\s\S]*?if \(liveWrapper\.dataset\.impeccableMode !== 'insert'\) \{[\s\S]*?recoverEmptyCycling\('source-fallback-empty'\)/,
@@ -1117,7 +1353,7 @@ describe('live-browser source contracts', () => {
     );
     assert.match(
       probe,
-      /const onNoWrapper = \(reason\) => \{[\s\S]*?if \(attempt < COMPLETED_SOURCE_FALLBACK_RETRIES\) \{ retryLater\(\); return; \}\s*discardOrphanedSession\(reason\);/,
+      /const onNoWrapper = \(reason\) => \{[\s\S]*?if \(attempt < COMPLETED_SOURCE_FALLBACK_RETRIES\) \{ retryLater\(\); return; \}\s*discardOrphanedSession\(reason, opts\.authority, recoveryRevision\);/,
       'the probe must exhaust the shared retry budget before discarding',
     );
     assert.match(
