@@ -518,6 +518,8 @@ export const UPSTREAM_REFS = [
   'Modified from Impeccable',
   'modified fork of [Impeccable]',
   'modified fork of Impeccable',
+  // The README's credit line, added 2026-10-11 with the "What Melzi adds" section.
+  'built on [Impeccable]',
   // The public docs also say what this fork does NOT take from upstream: its engine
   // packages, its signing identity, its hosted verification protocol. Rebranded, each
   // sentence claims those are Melzi's.

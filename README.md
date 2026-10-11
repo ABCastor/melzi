@@ -6,6 +6,21 @@ Design review skills and interface checks for AI coding tools.
 
 Melzi gives your coding tool a vocabulary for reviewing a frontend: typography, layout, colour, motion, accessibility, and the repeated patterns that make generated interfaces look alike. Its skill has 21 canonical commands, including `/melzi critique`, `/melzi audit`, `/melzi polish`, and `/melzi live`. A native detector checks source files and rendered pages against 59 rules.
 
+## What Melzi adds
+
+Melzi is built on [Impeccable](https://github.com/pbakaus/impeccable) by Paul Bakaus. It shares that project's git history and merges its releases, so the detector and its rules, live variant mode, and most of the commands come from there. This repository adds:
+
+- **`/melzi explore`** drives the running app looking for defects, then an independent verifier replays each one from a clean reset and confirms or rejects it with its own evidence. It needs a browser driver such as [Playwright MCP](https://github.com/microsoft/playwright-mcp).
+- **`/melzi study`** takes a URL or a screenshot of a design you admire and names its design language before anything is written.
+- **`/melzi identity`** builds a visual system and an identity mark by asking you to choose between rendered versions, never for a hex value or a font name.
+- **`/melzi handdrawn`** draws mascots, spot illustrations, and annotation marks that look drawn by a person and stay clean SVG.
+- **A review island** (`skill/scripts/review-layer.js`): one script tag on a prototype, and your notes, element pins, and the colours and typefaces you try on the page come back to the agent attached to the page.
+- **Motion capture** (`skill/scripts/motion-eyes.mjs`) records scripted interactions as a video and a timestamped contact sheet, so animation is judged from a recording rather than from stills.
+- **Taste learning** (`skill/scripts/melzi/`): your picks between rendered screens are stored in `~/.impeccable/taste/` and fitted into a model that scores screens you have not seen.
+- **Evidence labels** on critique and audit findings (observed, reproduced, standard, research, inference, taste), defined in `skill/reference/rigor.md`.
+
+Eight of the upstream commands (`adapt`, `craft`, `delight`, `distill`, `extract`, `onboard`, `optimize`, `overdrive`) are folded into other playbooks, and each name still works. Melzi generates skills for the same coding tools as upstream.
+
 ## Build and use
 
 This fork requires a local engine build. Prebuilt Melzi engine packages are not published, and the launcher does not automatically install or download Impeccable's engine.

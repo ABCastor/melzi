@@ -67,6 +67,8 @@ describe('rebrand: the transform is honest about what it owns', () => {
       '// Modified from Impeccable: typed Melzi launcher and distribution contracts.',
       'Melzi is a modified fork of [Impeccable](https://github.com/pbakaus/impeccable) by Paul Bakaus.',
       'Apache-2.0; a modified fork of Impeccable by Paul Bakaus.',
+      'Melzi is built on [Impeccable](https://github.com/pbakaus/impeccable) by Paul Bakaus.',
+      ' * Modified from Impeccable: renamed for Melzi; see NOTICE.md.',
       'It does not install upstream Impeccable engine packages.',
       "Do not reuse upstream Impeccable's signing identity or certificate claims.",
       "the launcher does not automatically install or download Impeccable's engine.",

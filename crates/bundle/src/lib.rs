@@ -150,7 +150,7 @@ pub struct ExtensionPieces {
 pub fn extension_pieces(glue_js: &str, wasm: &[u8], registry_json: &str) -> ExtensionPieces {
     let piece = |parts: &[&str], exports: &str, what: &str| -> String {
         let mut p = format!(
-            "/**\n * Melzi extension: {what}\n * Copyright (c) 2026 Paul Bakaus\n *\n * GENERATED -- do not edit. Source: browser-bundle/*.js (+ crates/core, crates/wasm for core.js).\n * Rebuild: cargo xtask bundle\n */\n"
+            "/**\n * Melzi extension: {what}\n * Copyright (c) 2026 Paul Bakaus\n * Modified from Impeccable: renamed for Melzi; see NOTICE.md.\n *\n * GENERATED -- do not edit. Source: browser-bundle/*.js (+ crates/core, crates/wasm for core.js).\n * Rebuild: cargo xtask bundle\n */\n"
         );
         p.push_str("(function () {\n");
         for part in parts {

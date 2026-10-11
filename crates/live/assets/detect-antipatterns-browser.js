@@ -1,6 +1,7 @@
 /**
  * Anti-Pattern Browser Detector for Melzi
  * Copyright (c) 2026 Paul Bakaus
+ * Modified from Impeccable: renamed for Melzi; see NOTICE.md.
  *
  * GENERATED -- do not edit. Source: crates/core/src/browser (rules, WASM) +
  * browser-bundle/*.js (DOM probe, overlay UI).
