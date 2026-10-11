@@ -89,4 +89,4 @@ After changing a typed runtime module, run `bun run build:typescript`. After cha
 
 Apache-2.0. Melzi is a modified fork of [Impeccable](https://github.com/pbakaus/impeccable) by Paul Bakaus. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for retained attribution and third-party notices.
 
-<p><a href="https://abcastor.com"><img src="docs/castor-footer.svg" width="350" alt="Chip, the Castor beaver, by Castor, we give a dam"></a></p>
+<p><a href="https://abcastor.com"><img src="docs/castor-footer.svg" width="350" alt="Chip, the Castor beaver, Castor, we give a dam"></a></p>
