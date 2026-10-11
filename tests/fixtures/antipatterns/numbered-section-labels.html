@@ -61,6 +61,21 @@
       border-radius: 8px;
       padding: 16px;
     }
+
+    /* ── relative ceiling and climbing ── */
+    .feature-row { display: flex; gap: 64px; }
+    .index-col { flex-shrink: 0; width: 17px; font-size: 16px; }
+    .mono-index { font-family: monospace; font-size: 14px; color: #71717a; }
+    .feature-h3 { font-size: 36px; margin: 0 0 12px; }
+    .sec-index-15 {
+      font-family: monospace;
+      font-size: 15px;
+      font-weight: 700;
+      color: #b45309;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .large-h2 { font-size: 44px; }
   </style>
 </head>
 <body>
@@ -92,6 +107,23 @@
       <span class="sec-index-micro">04 / ROLLOUT</span>
       <h2>Delta closes the loop</h2>
       <p>Index joined to a tracked micro-label by a separator glyph.</p>
+    </section>
+
+    <section>
+      <div class="feature-row">
+        <div class="index-col"><span class="mono-index">06</span></div>
+        <div class="feature-body">
+          <div class="feature-grid">
+            <div><h3 class="feature-h3">Instant deployment</h3><p>The index sits in a column beside the heading's grandparent.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <span class="sec-index-15">07</span>
+      <h2 class="large-h2">Omega grows larger</h2>
+      <p>A 15px index beside a 44px heading still reads as a micro label.</p>
     </section>
 
   </div>
@@ -144,6 +176,12 @@
       <span class="sec-index">11</span>
       <h3>Mu tracks progress</h3>
     </nav>
+
+    <section>
+      <span class="sec-index-15">12</span>
+      <h3>Nu sits too close in size</h3>
+      <p>A 15px index beside a 22px heading is not a micro label.</p>
+    </section>
 
   </div>
 

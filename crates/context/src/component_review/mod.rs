@@ -3,6 +3,7 @@ pub mod capture;
 mod history;
 mod lifecycle;
 mod manifest;
+pub mod plan;
 mod server;
 mod store;
 #[cfg(test)]
@@ -11,7 +12,7 @@ pub mod verify;
 mod visual_approval;
 use impeccable_common::Io;
 use serde_json::json;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 fn arg(args: &[String], name: &str) -> Option<String> {
     args.iter()
         .position(|v| v == name)
@@ -58,13 +59,32 @@ pub fn run_with_capturer(
             Some("lifecycle") => {
                 let sessions: Vec<PathBuf> = args.windows(2).filter(|w| w[0] == "--session-dir")
                     .map(|w| PathBuf::from(&w[1])).collect();
-                let required: Vec<String> = args.windows(2).filter(|w| w[0] == "--require")
+                let mut required: Vec<String> = args.windows(2).filter(|w| w[0] == "--require")
                     .map(|w| w[1].clone()).collect();
+                // A host names the builder project so the components stage is read
+                // against its spec: nothing to decide means no kit review is owed.
+                if let Some(project) = arg(args, "--project") {
+                    if !plan::spec_needs_review(Path::new(&project)) {
+                        required.retain(|stage| stage != "components");
+                    }
+                }
                 let sessions = if sessions.is_empty() && !args.iter().any(|a| a == "--hosted") {
                     let project = io.cwd.canonicalize().map_err(|e| e.to_string())?;
                     lifecycle::project_sessions(&store, &project)?
                 } else { sessions };
                 io.out(&format!("{}\n", lifecycle::inspect(&sessions, &required)?));
+                Ok(0)
+            }
+            Some("plan") => {
+                let out = arg(args, "--out").unwrap_or_else(|| plan::DEFAULT_OUT.into());
+                let packet = plan::write(&io.cwd, &out)?;
+                let components = packet["components"].as_array().unwrap();
+                let count = |role: &str| components.iter().filter(|c| c["role"] == role).count();
+                let flagged = components.iter().filter(|c| c["role"] == "plan" && (c["flags"].is_array() || c["codeDrawn"] == true)).count();
+                let flagged_assets = components.iter().filter(|c| c["role"] == "asset" && c["flags"].is_array()).count();
+                let s = io.env("IMPECCABLE_SELF").filter(|v| !v.trim().is_empty()).unwrap_or("impeccable").to_string();
+                io.out(&format!("PLAN {out}: {} assets{}, {} plan items ({flagged} flagged or code-drawn), {} code regions\nNEXT {s} component-review capture --manifest {out}, then {s} component-review serve --session <session from capture>\n",
+                    count("asset"), if flagged_assets > 0 { format!(" ({flagged_assets} flagged)") } else { String::new() }, count("plan"), packet["codeRegions"].as_array().map_or(0, Vec::len)));
                 Ok(0)
             }
             Some("prepare") | Some("capture") => {
@@ -76,7 +96,14 @@ pub fn run_with_capturer(
                     }
                 }
                 let project = io.cwd.canonicalize().map_err(|e| e.to_string())?;
-                let renderer=if args[0]=="capture" {Some(capturer.take().ok_or("native component capturer unavailable")?)}else{None};
+                // The plan review is proven without a browser; only v1/v2 packets reach the native capturer.
+                let v3 = std::fs::read(project.join(manifest::relative(&path)?)).ok()
+                    .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+                    .is_some_and(|m| m["schemaVersion"] == 3);
+                let mut plan_capturer = capture::PlanCapturer;
+                let renderer: Option<&mut dyn capture::ComponentCapturer> = if args[0] != "capture" { None }
+                    else if v3 { Some(&mut plan_capturer) }
+                    else { Some(capturer.take().ok_or("native component capturer unavailable")?) };
                 let dir=store::prepare_file(&store,&project,&path,renderer)?;
                 let state = store::read(&dir.join("current.json"))?;
                 let status = state["receipt"]["visualDecision"]
@@ -145,7 +172,7 @@ pub fn run_with_capturer(
                     Ok(0)
                 }
             }
-            _ => Err("usage: impeccable component-review prepare|capture|verify --manifest <file> | lifecycle [--session-dir <dir>] [--require components|hero] [--hosted] | serve --session <id> [--port 0] [--idle-timeout <seconds>] | status|refresh-approvals --session <id> [--store <outside-project-dir>]".into())
+            _ => Err("usage: impeccable component-review plan [--out .impeccable/review/components.json] | prepare|capture|verify --manifest <file> | lifecycle [--session-dir <dir>] [--require components|hero] [--hosted] | serve --session <id> [--port 0] [--idle-timeout <seconds>] | status|refresh-approvals --session <id> [--store <outside-project-dir>]".into())
         }
     })();
     match result {

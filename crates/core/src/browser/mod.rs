@@ -40,6 +40,9 @@
 //!   `hasMeaningfulDirectText`, `textDescendantsFlushSides`,
 //!   `isVisuallyHidden`, `isNonRenderedText`, `checkPageQualityFromDoc`,
 //!   `checkPageQualityDOM`.
+//! - `painted`: whether an element is painted at capture (visibility,
+//!   effective opacity, clipping ancestors, document bounds), the gate the
+//!   driver applies to the text and raster rules of the element pass.
 //! - `page_checks`: Section 6 browser page-level checks — `checkTypography`,
 //!   `isCardLikeDOM`, `checkLayout`, `checkHeadingRhythmDOM`,
 //!   `checkCreamPalette` (browser path), `measureHiddenTextDOM`,
@@ -64,6 +67,9 @@
 //!   `getLayerValue`, the candidate-analysis finalization. Its plain-data
 //!   plans and rects are shared. The async pixel sampling (Image loading,
 //!   canvas draws) stays JS and feeds these.
+//! - `text_layers`: what the hit-test stacks over a run of text say about the
+//!   surface the contrast walk resolved (covered at capture, paint the walk
+//!   never read, or consistent), over the occlusion grid's points.
 //!
 //! Porting rules are the crate's usual ones (see docs/PORTING-GUIDE.md):
 //! JS number/string semantics through `crate::js`, field order preserved,
@@ -77,12 +83,18 @@ pub use impeccable_foundation::browser::selector;
 pub use impeccable_foundation::browser::fake_dom;
 
 pub mod background;
+pub mod decorative_text;
 pub mod driver;
 pub mod element_checks;
+pub mod field_label;
 pub mod page_checks;
+pub mod painted;
 pub mod quality;
 pub mod snapshot;
 pub mod text_collectors;
+pub mod text_context;
+pub mod text_geometry;
+pub mod text_layers;
 pub mod visual;
 
 pub use dom::{Dom, ElId, Rect};

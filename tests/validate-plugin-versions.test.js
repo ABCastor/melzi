@@ -59,6 +59,26 @@ describe('collectPluginVersions', () => {
     expect(mismatches).toEqual([]);
   });
 
+  test('flags an npm package.json whose version drifted from the skill', () => {
+    writeFixture(root, { plugin: '3.7.1', marketplace: '3.7.1' });
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'impeccable', version: '3.6.0', optionalDependencies: { '@impeccable/cli-darwin-arm64': '0.1.14' } }));
+    const { mismatches } = collectPluginVersions(root);
+    expect(mismatches).toEqual([{ relPath: 'package.json', found: '3.6.0', expected: '3.7.1' }]);
+
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'impeccable', version: '3.7.1', optionalDependencies: { '@impeccable/cli-darwin-arm64': '0.1.14' } }));
+    expect(collectPluginVersions(root).mismatches).toEqual([]);
+  });
+
+  test('leaves a package.json that is not the impeccable CLI alone', () => {
+    // impeccable-site builds the skill from a tree whose root package.json is
+    // the site's own, also named impeccable, at its own version.
+    writeFixture(root, { plugin: '3.7.1', marketplace: '3.7.1' });
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'impeccable', version: '3.2.1' }));
+    const { checked, mismatches } = collectPluginVersions(root);
+    expect(mismatches).toEqual([]);
+    expect(checked.some((c) => c.relPath === 'package.json')).toBe(false);
+  });
+
   test('flags a lagging marketplace.json (the half the sync workflow cannot repair)', () => {
     writeFixture(root, { plugin: '3.7.1', marketplace: '3.1.1', subtreePlugin: '3.7.1', skill: '3.7.1' });
     const { mismatches } = collectPluginVersions(root);

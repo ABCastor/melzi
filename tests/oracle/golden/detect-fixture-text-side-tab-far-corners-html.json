@@ -1,0 +1,7 @@
+{
+  "stdout": "",
+  "stderr": "\n<REPO>/tests/fixtures/antipatterns/side-tab-far-corners.html\n  [side-tab] border-left: 2px + border-radius: 12px\n    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.\n  [side-tab] border-right: 2px + border-radius: 12px\n    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.\n  [side-tab] border-left: 2px + border-radius: 6px\n    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.\n  [side-tab] border-left: 4px\n    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.\n\n4 anti-patterns found.\n",
+  "exit": 2,
+  "signal": null,
+  "files": {}
+}

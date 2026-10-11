@@ -244,7 +244,7 @@ impl Browser {
                 )));
             }
         };
-        let conn = match Connection::connect(&ws_url) {
+        let mut conn = match Connection::connect(&ws_url) {
             Ok(c) => c,
             Err(e) => {
                 let _ = child.kill();
@@ -253,6 +253,14 @@ impl Browser {
                 return Err(e);
             }
         };
+        // A fresh profile loads its cookie store on the first request that
+        // needs it, and every page request waits for that load. On Windows the
+        // load (an encrypted SQLite store) takes 1 to 5 s and has taken over
+        // 15 s with several browsers starting at once, which the first
+        // navigation then spent out of its own timeout. Asking for the cookies
+        // here makes the launch wait for the load instead, under the protocol
+        // timeout, so a navigation deadline measures only the navigation.
+        let _ = conn.send(None, "Storage.getCookies", json!({}), PROTOCOL_TIMEOUT);
         Ok(Browser {
             child,
             user_data_dir,
@@ -331,6 +339,7 @@ impl Browser {
             swapped: false,
             same_document_navigation: false,
             iframe_sessions: HashSet::new(),
+            main_document_response: None,
             response_capture: None,
             execution_contexts: HashMap::new(),
         };
@@ -603,11 +612,14 @@ pub struct Page<'a> {
     target_id: String,
     frames: HashMap<String, FrameState>,
     main_frame_id: String,
-    page_errors: Vec<String>,
+    page_errors: Vec<PageError>,
     swapped: bool,
     same_document_navigation: bool,
     /// Auto-attached OOPIF sessions whose Page events feed the frame map.
     iframe_sessions: HashSet<String>,
+    /// The CDP `Network.Response` of the main frame's latest document load
+    /// (the last one wins, so after redirects this is the final response).
+    main_document_response: Option<Value>,
     response_capture: Option<crate::response_capture::ResponseCapture>,
     execution_contexts: HashMap<i64, String>,
 }
@@ -865,13 +877,19 @@ impl<'a> Page<'a> {
                         .unwrap_or(false);
                 if counts {
                     if let Some(details) = params.get("exceptionDetails") {
-                        let message = client_error_message(details);
-                        // detect-url.mjs: first line, trimmed, 160 chars, deduped.
-                        let first = message.split('\n').next().unwrap_or("");
-                        let trimmed = impeccable_core::js::trim(first);
-                        let sliced: String = trimmed.chars().take(160).collect();
-                        if !sliced.is_empty() && !self.page_errors.contains(&sliced) {
-                            self.page_errors.push(sliced);
+                        // First line, trimmed, 160 characters, deduped. One
+                        // throw that surfaces both synchronously and as an
+                        // unhandled rejection reports once, as it first
+                        // arrived.
+                        let message = page_error_message(details);
+                        let key = page_error_key(&message);
+                        if !message.is_empty()
+                            && !self.page_errors.iter().any(|e| page_error_key(&e.message) == key)
+                        {
+                            self.page_errors.push(PageError {
+                                message,
+                                source: page_error_source(details),
+                            });
                         }
                     }
                 }
@@ -941,6 +959,15 @@ impl<'a> Page<'a> {
                     .unwrap_or("Navigation");
                 if ntype == "BackForwardCacheRestore" {
                     self.swapped = true;
+                }
+            }
+            "Network.responseReceived" => {
+                if session == self.session_id
+                    && params.get("type").and_then(Value::as_str) == Some("Document")
+                    && params.get("frameId").and_then(Value::as_str)
+                        == Some(self.main_frame_id.as_str())
+                {
+                    self.main_document_response = params.get("response").cloned();
                 }
             }
             "Page.navigatedWithinDocument" => {
@@ -1015,6 +1042,20 @@ impl<'a> Page<'a> {
             }
         }
         true
+    }
+
+    /// Start the page's clock at `epoch_ms` for every document this page loads:
+    /// `new Date()`, `Date()`, `Date.now()` and an argument-less
+    /// `Intl.DateTimeFormat` format begin at that instant and advance in real
+    /// time, so a page that renders the current time or day renders the same
+    /// state in every capture pinned to the same instant, while code that measures
+    /// elapsed time still sees time pass. Call before navigating.
+    pub fn pin_clock(&mut self, epoch_ms: f64) -> CdpResult<()> {
+        if !epoch_ms.is_finite() {
+            return Err(CdpError::new("pinned clock must be a finite epoch"));
+        }
+        self.send("Page.addScriptToEvaluateOnNewDocument", json!({ "source": pinned_clock_script(epoch_ms) }))?;
+        Ok(())
     }
 
     /// Explicit screenshot-environment preference; never injected as page CSS.
@@ -1098,6 +1139,7 @@ impl<'a> Page<'a> {
             .unwrap_or_default();
         self.swapped = false;
         self.same_document_navigation = false;
+        self.main_document_response = None;
         let deadline = Instant::now() + timeout;
         let timeout_msg = format!("Navigation timeout of {} ms exceeded", timeout.as_millis());
 
@@ -1459,8 +1501,93 @@ impl<'a> Page<'a> {
             .to_string())
     }
 
-    /// The deduped `pageerror` messages so far.
-    pub fn page_errors(&mut self) -> Vec<String> {
+    /// The main document's latest CDP `Network.Response` since the last
+    /// [`Page::goto`], or `None` when no document response was seen (a
+    /// `file://` load can have none).
+    pub fn main_document_response(&mut self) -> Option<Value> {
+        self.pump_events();
+        self.main_document_response.clone()
+    }
+
+    /// A JPEG of the given document region (`captureBeyondViewport`), base64.
+    pub fn screenshot_jpeg(
+        &mut self,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        quality: u32,
+    ) -> CdpResult<String> {
+        let res = self.send(
+            "Page.captureScreenshot",
+            json!({
+                "format": "jpeg",
+                "quality": quality.min(100),
+                "fromSurface": true,
+                "clip": { "x": x, "y": y, "width": width.round(), "height": height.round(), "scale": 1 },
+                "captureBeyondViewport": true,
+            }),
+        )?;
+        Ok(res
+            .get("data")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string())
+    }
+
+    /// The visible viewport as it is painted now, base64 PNG. No clip and
+    /// nothing past the viewport, so a tile shows exactly what a visitor
+    /// scrolled to this position sees.
+    pub fn screenshot_viewport_png(&mut self) -> CdpResult<String> {
+        let res = self.send(
+            "Page.captureScreenshot",
+            json!({
+                "format": "png",
+                "optimizeForSpeed": true,
+                "fromSurface": true,
+                "captureBeyondViewport": false,
+            }),
+        )?;
+        Ok(res
+            .get("data")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string())
+    }
+
+    /// The visible viewport as base64 JPEG.
+    pub fn screenshot_viewport_jpeg(&mut self, quality: u32) -> CdpResult<String> {
+        let res = self.send(
+            "Page.captureScreenshot",
+            json!({
+                "format": "jpeg",
+                "quality": quality.min(100),
+                "fromSurface": true,
+                "captureBeyondViewport": false,
+            }),
+        )?;
+        Ok(res
+            .get("data")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string())
+    }
+
+    /// `Page.getLayoutMetrics().cssContentSize`: the document's scroll size in
+    /// CSS pixels, the region a beyond-viewport capture can paint.
+    pub fn content_size(&mut self) -> CdpResult<(f64, f64)> {
+        let res = self.send("Page.getLayoutMetrics", json!({}))?;
+        let size = res.get("cssContentSize").or_else(|| res.get("contentSize"));
+        let dim = |key: &str| {
+            size.and_then(|s| s.get(key))
+                .and_then(Value::as_f64)
+                .ok_or_else(|| CdpError::new("Page.getLayoutMetrics returned no content size"))
+        };
+        Ok((dim("width")?, dim("height")?))
+    }
+
+    /// The deduped `pageerror` messages so far, each with where it was thrown.
+    pub fn page_errors(&mut self) -> Vec<PageError> {
         self.pump_events();
         self.page_errors.clone()
     }
@@ -1502,6 +1629,283 @@ fn value_from_remote_object(remote: &Value) -> Value {
         };
     }
     remote.get("value").cloned().unwrap_or(Value::Null)
+}
+
+/// One uncaught page error: its message ([`page_error_message`]) and, when
+/// V8 recorded a script or a frame, where it was thrown.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PageError {
+    pub message: String,
+    /// `at <function>, <script url>:<line>:<column>` (1-based), or
+    /// `at <script url>:<line>:<column>` for an anonymous frame or a script
+    /// with no stack (a syntax error). A script with no URL reads
+    /// `<anonymous>` in the URL's place.
+    pub source: Option<String>,
+}
+
+/// Script URLs past this many characters are cut (a `data:` script, a URL
+/// carrying a long query), so the location never swamps the message.
+const PAGE_ERROR_URL_MAX: usize = 160;
+
+/// CDP's marker in front of an uncaught error (`exceptionDetails.text`), and
+/// the one it uses for an unhandled rejection.
+const UNCAUGHT: &str = "Uncaught";
+const UNCAUGHT_IN_PROMISE: &str = "Uncaught (in promise)";
+
+/// A message body past this many characters is cut.
+const PAGE_ERROR_MESSAGE_MAX: usize = 160;
+
+/// The message a page error reports, one shape whatever path the throw
+/// took, the way the console prints it: `Uncaught <Type>: <message>`, or
+/// `Uncaught (in promise) <Type>: <message>` for an unhandled rejection.
+///
+/// - An `Error` reads the first line of its description, which names the
+///   type (`TypeError: ...`, or the name a library gave it,
+///   `ChunkLoadError: ...`). A description that names none (a replaced
+///   `stack`) gets the class in front.
+/// - A thrown value that is not an `Error` (a plain object, a class
+///   instance, a rejected object) has no message of its own, so its class
+///   and the properties V8 previews stand in for one:
+///   `Uncaught Object {code: "E_CONFIG", message: "config missing"}`.
+/// - A primitive reads as `String(value)`: `Uncaught boom`.
+/// - A throw that arrives with no exception object (a script from another
+///   origin) keeps CDP's text, which already reads `Uncaught TypeError: ...`.
+///
+/// The body is its first line, trimmed and cut at 160 characters. A throw
+/// whose body is empty reports nothing, so this returns an empty string.
+///
+/// A production React invariant then reads as its message, the number kept
+/// ([`decode_react_invariant`]).
+pub fn page_error_message(details: &Value) -> String {
+    decode_react_invariant(&typed_page_error_message(details))
+}
+
+/// The common invariants a production React build throws by number, with the
+/// message React's error decoder prints for each (its leading sentences, where
+/// the rest is advice on how to fix it).
+const REACT_INVARIANTS: &[(u32, &str)] = &[
+    (31, "Objects are not valid as a React child."),
+    (130, "Element type is invalid: expected a string (for built-in components) or a class/function (for composite components)."),
+    (185, "Maximum update depth exceeded."),
+    (300, "Rendered fewer hooks than expected. This may be caused by an accidental early return statement."),
+    (301, "Too many re-renders. React limits the number of renders to prevent an infinite loop."),
+    (310, "Rendered more hooks than during the previous render."),
+    (321, "Invalid hook call. Hooks can only be called inside of the body of a function component."),
+    (418, "Hydration failed because the initial UI does not match what was rendered on the server."),
+    (419, "The server could not finish this Suspense boundary, likely due to an error during server rendering. Switched to client rendering."),
+    (421, "This Suspense boundary received an update before it finished hydrating."),
+    (422, "There was an error while hydrating this Suspense boundary. Switched to client rendering."),
+    (423, "There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering."),
+    (425, "Text content does not match server-rendered HTML."),
+    (426, "A component suspended while responding to synchronous input."),
+];
+
+/// A production React build throws `Minified React error #418; visit <url>
+/// for the full message or use the non-minified dev environment for full
+/// errors and additional helpful warnings.`, which says nothing on its own.
+/// For a number in [`REACT_INVARIANTS`] the boilerplate after the number is
+/// replaced by the message: `Minified React error #418: Hydration failed
+/// because the initial UI does not match what was rendered on the server.`
+/// The message is added after the 160-character cut, so it is never cut. A
+/// number the table does not know, and any other text, stays as it was.
+pub fn decode_react_invariant(message: &str) -> String {
+    const MARK: &str = "Minified React error #";
+    let Some(at) = message.find(MARK) else {
+        return message.to_string();
+    };
+    let rest = &message[at + MARK.len()..];
+    let digits_len = rest.bytes().take_while(u8::is_ascii_digit).count();
+    let Ok(code) = rest[..digits_len].parse::<u32>() else {
+        return message.to_string();
+    };
+    let Some((_, text)) = REACT_INVARIANTS.iter().find(|(c, _)| *c == code) else {
+        return message.to_string();
+    };
+    let tail = &rest[digits_len..];
+    if !(tail.is_empty() || tail.starts_with("; visit ")) {
+        return message.to_string();
+    }
+    format!("{}: {text}", &message[..at + MARK.len() + digits_len])
+}
+
+/// [`page_error_message`] before a React invariant is decoded.
+fn typed_page_error_message(details: &Value) -> String {
+    let text = details.get("text").and_then(Value::as_str).unwrap_or("");
+    let Some(exception) = details.get("exception") else {
+        let first = first_line(text);
+        for marker in [UNCAUGHT_IN_PROMISE, UNCAUGHT] {
+            if let Some(rest) = first.strip_prefix(marker) {
+                if rest.is_empty() {
+                    return marker.to_string();
+                }
+                if rest.starts_with(' ') {
+                    return format!("{marker} {}", cap_message(&first_line(rest)));
+                }
+            }
+        }
+        return cap_message(&first);
+    };
+    let marker = if text.starts_with(UNCAUGHT_IN_PROMISE) {
+        UNCAUGHT_IN_PROMISE
+    } else {
+        UNCAUGHT
+    };
+    let body = cap_message(&first_line(&thrown_value_label(details, exception)));
+    if body.is_empty() {
+        return String::new();
+    }
+    format!("{marker} {body}")
+}
+
+/// The cut at [`PAGE_ERROR_MESSAGE_MAX`] characters, applied to the message
+/// after its type (`TypeError: `), so naming the type never costs the
+/// message any of what it showed before.
+fn cap_message(line: &str) -> String {
+    let cut = |s: &str| s.chars().take(PAGE_ERROR_MESSAGE_MAX).collect::<String>();
+    if names_a_type(line) {
+        let name_len = line
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '$')
+            .map(char::len_utf8)
+            .sum::<usize>();
+        if let Some(after_colon) = line[name_len..].strip_prefix(':') {
+            let message = after_colon.trim_start();
+            let prefix = &line[..line.len() - message.len()];
+            return format!("{prefix}{}", cut(message));
+        }
+    }
+    cut(line)
+}
+
+/// What two reports of one throw share: the message with the rejection
+/// marker read as a plain `Uncaught`. A throw that surfaces both
+/// synchronously and as an unhandled rejection (a consent manager's patched
+/// `document.createElement`, called from a script and from a promise) has one
+/// key. The source is not part of it.
+pub fn page_error_key(message: &str) -> std::borrow::Cow<'_, str> {
+    match message.strip_prefix(UNCAUGHT_IN_PROMISE) {
+        Some(rest) => std::borrow::Cow::Owned(format!("{UNCAUGHT}{rest}")),
+        None => std::borrow::Cow::Borrowed(message),
+    }
+}
+
+/// The first line, trimmed. [`cap_message`] makes the cut.
+fn first_line(s: &str) -> String {
+    let first = s.split('\n').next().unwrap_or("");
+    impeccable_core::js::trim(first).chars().collect()
+}
+
+/// The thrown value, typed: `TypeError: ...`, `Object {...}`, `boom`.
+fn thrown_value_label(details: &Value, exception: &Value) -> String {
+    let is_object = exception.get("type").and_then(Value::as_str) == Some("object");
+    let subtype = exception.get("subtype").and_then(Value::as_str);
+    if is_object && subtype == Some("error") {
+        let class = exception
+            .get("className")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let description = exception
+            .get("description")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let first = first_line(description);
+        return if first.is_empty() {
+            class.to_string()
+        } else if class.is_empty() || names_a_type(&first) {
+            first
+        } else {
+            format!("{class}: {first}")
+        };
+    }
+    if is_object && subtype.is_none() {
+        if let Some(rendered) = exception.get("preview").and_then(|p| render_preview(exception, p)) {
+            return rendered;
+        }
+    }
+    client_error_message(details)
+}
+
+/// Whether an error description's first line starts with the error's type,
+/// the way V8 writes `stack`: a name alone, or a name and a colon.
+fn names_a_type(line: &str) -> bool {
+    let name: String = line
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '$')
+        .collect();
+    let starts_like_a_name = name.chars().next().is_some_and(|c| !c.is_ascii_digit());
+    let rest = &line[name.len()..];
+    starts_like_a_name && (rest.is_empty() || rest.starts_with(':'))
+}
+
+/// `Class {name: value, ...}` from a CDP `ObjectPreview`.
+fn render_preview(exception: &Value, preview: &Value) -> Option<String> {
+    let properties = preview.get("properties")?.as_array()?;
+    let class = exception
+        .get("className")
+        .and_then(Value::as_str)
+        .filter(|c| !c.is_empty())
+        .unwrap_or("Object");
+    let mut parts: Vec<String> = properties
+        .iter()
+        .filter_map(|p| {
+            let name = p.get("name")?.as_str()?;
+            let kind = p.get("type").and_then(Value::as_str).unwrap_or("");
+            let raw = p.get("value").and_then(Value::as_str).unwrap_or("");
+            let value = match kind {
+                "string" => serde_json::to_string(raw).ok()?,
+                "undefined" => "undefined".to_string(),
+                _ if raw.is_empty() => kind.to_string(),
+                _ => raw.to_string(),
+            };
+            Some(format!("{name}: {value}"))
+        })
+        .collect();
+    if preview.get("overflow").and_then(Value::as_bool) == Some(true) {
+        parts.push("...".to_string());
+    }
+    Some(format!("{class} {{{}}}", parts.join(", ")))
+}
+
+/// V8's name for a script with no URL: code run through `eval` or
+/// `new Function`, or a script element given text instead of a `src`.
+const ANONYMOUS_SCRIPT: &str = "<anonymous>";
+
+/// Where a page error was thrown: the top stack frame when V8 recorded one
+/// with a script URL, else the script position the exception details carry
+/// (a syntax error has no stack), else the top frame in a script with no URL,
+/// named `<anonymous>` the way V8's own stack names it. `None` when there is
+/// neither a named script nor a frame.
+pub fn page_error_source(details: &Value) -> Option<String> {
+    let names_script = |v: &Value| v.get("url").and_then(Value::as_str).is_some_and(|u| !u.is_empty());
+    let top = details.pointer("/stackTrace/callFrames/0");
+    let (at, frame) = match top {
+        Some(f) if names_script(f) => (f, Some(f)),
+        _ if names_script(details) => (details, None),
+        Some(f) => (f, Some(f)),
+        None => return None,
+    };
+    let url = at
+        .get("url")
+        .and_then(Value::as_str)
+        .filter(|u| !u.is_empty())
+        .unwrap_or(ANONYMOUS_SCRIPT);
+    // CDP positions are 0-based; stack traces and editors count from 1.
+    let position = |key: &str| at.get(key).and_then(Value::as_f64).unwrap_or(0.0).max(0.0) as u64 + 1;
+    let url = if url.chars().count() > PAGE_ERROR_URL_MAX {
+        format!("{}...", url.chars().take(PAGE_ERROR_URL_MAX).collect::<String>())
+    } else {
+        url.to_string()
+    };
+    let location = format!("{url}:{}:{}", position("lineNumber"), position("columnNumber"));
+    let function = frame
+        .and_then(|f| f.get("functionName"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    Some(if function.is_empty() {
+        format!("at {location}")
+    } else {
+        format!("at {function}, {location}")
+    })
 }
 
 /// `String(err?.message || err)` over puppeteer's `createClientError` /
@@ -1606,6 +2010,193 @@ mod tests {
     }
 
     #[test]
+    fn page_error_names_a_thrown_object_by_its_preview() {
+        // A plain object thrown from a named function (the shape adm.com's tag
+        // manager reported as `Uncaught [object Object]`).
+        let object = json!({
+            "text": "Uncaught",
+            "exception": { "type": "object", "className": "Object", "description": "Object", "objectId": "1",
+                "preview": { "type": "object", "description": "Object", "overflow": false, "properties": [
+                    { "name": "code", "type": "string", "value": "E_CONFIG" },
+                    { "name": "message", "type": "string", "value": "config \"missing\"" }
+                ] } }
+        });
+        assert_eq!(page_error_message(&object), r#"Uncaught Object {code: "E_CONFIG", message: "config \"missing\""}"#);
+        let instance = json!({
+            "text": "Uncaught",
+            "exception": { "type": "object", "className": "ApiError", "description": "ApiError", "objectId": "2",
+                "preview": { "type": "object", "description": "ApiError", "overflow": true, "properties": [
+                    { "name": "status", "type": "number", "value": "500" },
+                    { "name": "body", "type": "object", "value": "Object" },
+                    { "name": "cause", "type": "undefined" }
+                ] } }
+        });
+        assert_eq!(page_error_message(&instance), "Uncaught ApiError {status: 500, body: Object, cause: undefined, ...}");
+        // An Error names its type; a primitive reads as itself.
+        let error = json!({
+            "text": "Uncaught",
+            "exception": { "type": "object", "subtype": "error", "className": "Error", "objectId": "3",
+                "description": "Error: Minified React error #418; visit https://reactjs.org/docs/error-decoder.html?invariant=418\n    at t3 (https://x.test/a.js:1:24070)" },
+            "stackTrace": { "callFrames": [{ "functionName": "t3", "url": "https://x.test/a.js", "lineNumber": 0, "columnNumber": 24069 }] }
+        });
+        // A production React invariant reads as its message
+        // (`a_react_invariant_reads_as_its_message`).
+        assert_eq!(
+            page_error_message(&error),
+            "Uncaught Error: Minified React error #418: Hydration failed because the initial UI does not match what was rendered on the server."
+        );
+        assert_eq!(page_error_message(&json!({ "text": "Uncaught", "exception": { "type": "string", "value": "boom" } })), "Uncaught boom");
+        // A cross-origin throw arrives with no exception object to read.
+        assert_eq!(page_error_message(&json!({ "text": "Uncaught [object Object]" })), "Uncaught [object Object]");
+    }
+
+    #[test]
+    fn page_error_message_names_the_type_on_every_path() {
+        // The thrown-object path used to drop the type (`jQuery is not
+        // defined` on adm.com) while CDP's text kept it for a script from
+        // another origin (`Uncaught TypeError: ...` from OneTrust).
+        let reference = json!({
+            "text": "Uncaught",
+            "exception": { "type": "object", "subtype": "error", "className": "ReferenceError", "objectId": "1",
+                "description": "ReferenceError: jQuery is not defined\n    at https://www.adm.com/en-us/products-services/services/:4811:60" }
+        });
+        assert_eq!(page_error_message(&reference), "Uncaught ReferenceError: jQuery is not defined");
+        let rejected = json!({
+            "text": "Uncaught (in promise)",
+            "exception": { "type": "object", "subtype": "error", "className": "TypeError", "objectId": "2",
+                "description": "TypeError: Cannot read properties of undefined (reading 'ECID')\n    at <anonymous>:894:50" }
+        });
+        assert_eq!(
+            page_error_message(&rejected),
+            "Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'ECID')"
+        );
+        // The name a library gave its error is the type V8 prints.
+        let chunk = json!({
+            "text": "Uncaught (in promise)",
+            "exception": { "type": "object", "subtype": "error", "className": "Error", "objectId": "3",
+                "description": "ChunkLoadError: Loading chunk web-vitals failed.\n(error: https://www.att.com/x.js)\n    at __webpack_require__.f.j (https://www.att.com/chat/runtime.js:298:31)" }
+        });
+        assert_eq!(page_error_message(&chunk), "Uncaught (in promise) ChunkLoadError: Loading chunk web-vitals failed.");
+        // A description that names no type gets the class in front; an empty
+        // message is the type alone.
+        let replaced_stack = json!({ "text": "Uncaught",
+            "exception": { "type": "object", "subtype": "error", "className": "Error", "objectId": "4", "description": "config went missing" } });
+        assert_eq!(page_error_message(&replaced_stack), "Uncaught Error: config went missing");
+        let bare = json!({ "text": "Uncaught",
+            "exception": { "type": "object", "subtype": "error", "className": "AbortError", "objectId": "5", "description": "AbortError" } });
+        assert_eq!(page_error_message(&bare), "Uncaught AbortError");
+        // CDP's text for a throw from another origin is typed already.
+        let text_only = json!({ "text": "Uncaught (in promise) TypeError: Cannot redefine property: src\nmore" });
+        assert_eq!(page_error_message(&text_only), "Uncaught (in promise) TypeError: Cannot redefine property: src");
+        // The message after its type is cut at 160 characters, the cut base
+        // applied to the untyped message, so a long React invariant keeps
+        // everything it showed before.
+        let long = json!({ "text": "Uncaught",
+            "exception": { "type": "object", "subtype": "error", "className": "Error", "objectId": "6",
+                "description": format!("Error: {}", "x".repeat(300)) } });
+        assert_eq!(page_error_message(&long), format!("Uncaught Error: {}", "x".repeat(160)));
+        let long_text = json!({ "text": format!("Uncaught (in promise) TypeError: {}", "y".repeat(300)) });
+        assert_eq!(page_error_message(&long_text), format!("Uncaught (in promise) TypeError: {}", "y".repeat(160)));
+        let long_object = json!({ "text": "Uncaught", "exception": { "type": "string", "value": "z".repeat(300) } });
+        assert_eq!(page_error_message(&long_object), format!("Uncaught {}", "z".repeat(160)));
+        // A throw with nothing to say reports nothing, as before.
+        assert_eq!(page_error_message(&json!({ "text": "Uncaught", "exception": { "type": "string", "value": "" } })), "");
+        assert!(names_a_type("TypeError: x") && names_a_type("AbortError") && names_a_type("$Err: y"));
+        assert!(!names_a_type("config went missing") && !names_a_type("404: gone") && !names_a_type(""));
+    }
+
+    #[test]
+    fn a_throw_reported_sync_and_in_promise_has_one_key() {
+        let sync = "Uncaught TypeError: Cannot redefine property: src";
+        let rejected = "Uncaught (in promise) TypeError: Cannot redefine property: src";
+        assert_eq!(page_error_key(rejected), sync);
+        assert_eq!(page_error_key(sync), page_error_key(rejected));
+        assert_ne!(page_error_key(sync), page_error_key("Uncaught TypeError: Cannot redefine property: href"));
+        assert_eq!(page_error_key("Uncaught boom"), "Uncaught boom");
+    }
+
+    #[test]
+    fn a_react_invariant_reads_as_its_message() {
+        // Both URL forms, after the cut: React 18's decoder page and React
+        // 19's errors page. The number stays; the boilerplate goes.
+        assert_eq!(
+            decode_react_invariant("Uncaught Error: Minified React error #423; visit https://reactjs.org/docs/error-decoder.html?invariant=423 for the full message or use the non-minified dev environment for full"),
+            "Uncaught Error: Minified React error #423: There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering."
+        );
+        assert_eq!(
+            decode_react_invariant("Uncaught Error: Minified React error #425; visit https://react.dev/errors/425 for the full message or use the non-minified dev environment for full errors and additional helpful warnings."),
+            "Uncaught Error: Minified React error #425: Text content does not match server-rendered HTML."
+        );
+        assert_eq!(
+            decode_react_invariant("Uncaught (in promise) Error: Minified React error #422"),
+            "Uncaught (in promise) Error: Minified React error #422: There was an error while hydrating this Suspense boundary. Switched to client rendering."
+        );
+        // The decoded message is added after the cut, so it is never cut.
+        let details = json!({
+            "text": "Uncaught",
+            "exception": { "type": "object", "subtype": "error", "className": "Error", "objectId": "1",
+                "description": "Error: Minified React error #423; visit https://reactjs.org/docs/error-decoder.html?invariant=423 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.\n    at x (https://x.test/a.js:1:2)" }
+        });
+        assert!(page_error_message(&details).ends_with("the entire root will switch to client rendering."));
+        // A number the table does not know, and text that is not an invariant,
+        // stay as they were.
+        for unchanged in [
+            "Uncaught Error: Minified React error #9999; visit https://react.dev/errors/9999 for the full message",
+            "Uncaught Error: Order #418 failed to sync",
+            "Uncaught Error: Minified React error #418 happened twice",
+            "Uncaught Error: Minified React error #",
+            "Uncaught boom",
+        ] {
+            assert_eq!(decode_react_invariant(unchanged), unchanged);
+        }
+        // Both reports of one invariant still share a key.
+        let sync = page_error_message(&json!({ "text": "Uncaught Error: Minified React error #418; visit https://react.dev/errors/418 for the full message" }));
+        let rejected = page_error_message(&json!({ "text": "Uncaught (in promise) Error: Minified React error #418; visit https://react.dev/errors/418 for the full message" }));
+        assert_eq!(page_error_key(&sync), page_error_key(&rejected));
+    }
+
+    #[test]
+    fn page_error_source_is_the_top_frame_or_the_script_position() {
+        let framed = json!({
+            "text": "Uncaught [object Object]", "url": "https://www.googletagmanager.com/gtm.js?id=GTM-X",
+            "lineNumber": 271, "columnNumber": 503,
+            "stackTrace": { "callFrames": [
+                { "functionName": "error", "url": "https://www.googletagmanager.com/gtm.js?id=GTM-X", "lineNumber": 271, "columnNumber": 503 },
+                { "functionName": "c.m.onerror", "url": "https://www.googletagmanager.com/gtm.js?id=GTM-X", "lineNumber": 280, "columnNumber": 160 }
+            ] }
+        });
+        assert_eq!(
+            page_error_source(&framed).as_deref(),
+            Some("at error, https://www.googletagmanager.com/gtm.js?id=GTM-X:272:504")
+        );
+        let anonymous = json!({
+            "stackTrace": { "callFrames": [{ "functionName": "", "url": "https://co-trip.jp/_next/static/chunks/fd9d.js", "lineNumber": 0, "columnNumber": 63838 }] }
+        });
+        assert_eq!(page_error_source(&anonymous).as_deref(), Some("at https://co-trip.jp/_next/static/chunks/fd9d.js:1:63839"));
+        // A syntax error has no stack, only the script position.
+        let syntax = json!({ "text": "Uncaught SyntaxError: Invalid or unexpected token", "url": "http://127.0.0.1/p.html", "lineNumber": 50, "columnNumber": 18 });
+        assert_eq!(page_error_source(&syntax).as_deref(), Some("at http://127.0.0.1/p.html:51:19"));
+        // A frame in a script with no URL (eval, `new Function`, an inline
+        // script given text) names V8's `<anonymous>` script, where it used to
+        // print no source at all (samsung.com `ECID`, heynoah.io `t.push`).
+        let evaluated = json!({ "text": "Uncaught", "stackTrace": { "callFrames": [{ "functionName": "f", "url": "", "lineNumber": 0, "columnNumber": 0 }] } });
+        assert_eq!(page_error_source(&evaluated).as_deref(), Some("at f, <anonymous>:1:1"));
+        let injected = json!({ "text": "Uncaught (in promise)", "url": "", "lineNumber": 893, "columnNumber": 49,
+            "stackTrace": { "callFrames": [{ "functionName": "", "url": "", "lineNumber": 893, "columnNumber": 49 }] } });
+        assert_eq!(page_error_source(&injected).as_deref(), Some("at <anonymous>:894:50"));
+        // A named script in the details still wins over an unnamed top frame.
+        let inline = json!({ "url": "https://www.cvs.com/", "lineNumber": 2804, "columnNumber": 42,
+            "stackTrace": { "callFrames": [{ "functionName": "g", "url": "", "lineNumber": 0, "columnNumber": 0 }] } });
+        assert_eq!(page_error_source(&inline).as_deref(), Some("at https://www.cvs.com/:2805:43"));
+        // Nothing named and no frame: no source.
+        assert_eq!(page_error_source(&json!({ "text": "Uncaught" })), None);
+        let long = format!("data:text/javascript,{}", "x".repeat(400));
+        let cut = page_error_source(&json!({ "url": long, "lineNumber": 0, "columnNumber": 0 })).unwrap();
+        assert!(cut.ends_with("...:1:1"), "{cut}");
+        assert_eq!(cut.chars().count(), "at ".len() + 160 + "...:1:1".len());
+    }
+
+    #[test]
     fn concurrent_launches_with_identical_clock_ticks_reserve_distinct_profiles() {
         let profiles = std::thread::scope(|scope| {
             let handles: Vec<_> = (0..32)
@@ -1639,4 +2230,15 @@ mod tests {
         assert_eq!(with.last().unwrap(), "--no-sandbox");
         assert!(with.contains(&"about:blank".to_string()));
     }
+}
+
+/// The page-side half of [`Page::pin_clock`].
+pub fn pinned_clock_script(epoch_ms: f64) -> String {
+    format!(r#"(()=>{{const T={epoch},P=performance.now(),N=Date;const now=()=>Math.floor(T+performance.now()-P);
+const D=new Proxy(N,{{construct(t,a,nt){{return Reflect.construct(N,a.length?a:[now()],nt)}},apply(){{return new N(now()).toString()}},get(t,k,r){{return k==="now"?now:Reflect.get(t,k,r)}}}});
+Object.defineProperty(globalThis,"Date",{{value:D,writable:true,configurable:true,enumerable:false}});
+Object.defineProperty(N.prototype,"constructor",{{value:D,writable:true,configurable:true,enumerable:false}});
+const F=Intl.DateTimeFormat.prototype,g=Object.getOwnPropertyDescriptor(F,"format").get,p=F.formatToParts;
+Object.defineProperty(F,"format",{{configurable:true,get(){{const f=g.call(this);return d=>f(d===undefined?now():d)}}}});
+F.formatToParts=function(d){{return p.call(this,d===undefined?now():d)}};}})()"#, epoch = epoch_ms.floor() as i64)
 }

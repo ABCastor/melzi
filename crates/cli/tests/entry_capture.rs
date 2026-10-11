@@ -1,3 +1,6 @@
+#[path = "support/capture_service.rs"]
+#[allow(dead_code)]
+mod capture_service;
 use impeccable::entry_capture::{CdpEntryRenderer, static_inventory};
 use impeccable_comp::{png_io, raster};
 use impeccable_comp_verbs::entry_capture::{EntryRenderer, EntryRequest, EntryStage};
@@ -93,5 +96,26 @@ fn entry_renderer_returns_fresh_hero_and_responsive_pixels_with_live_input_guard
         fs::write(f.0.join("assets/art.png"), b"changed").unwrap();
         assert!(captured.verify_current().is_err());
         fs::write(f.0.join("assets/art.png"), before).unwrap();
+    }
+}
+
+#[test]
+fn host_capture_service_keeps_one_receipt_per_raster_region() {
+    if impeccable_browser::discovery::find_browser(&std::env::vars().collect()).is_err() {
+        eprintln!("skip: browser unavailable");
+        return;
+    }
+    let f = Fixture::new();
+    let service = capture_service::CaptureService::start(&f.0, None);
+    let remote = service.renderer();
+    for stage in [EntryStage::Hero, EntryStage::Responsive] {
+        let captured = remote.capture_entry(&f.request(stage)).unwrap();
+        let evidence = captured.evidence();
+        assert!(evidence.report.get("captureMethod").is_none());
+        for frame in &evidence.frames {
+            let ids: Vec<_> = frame.regions.iter().map(|r| r.receipt["regionId"].clone()).collect();
+            assert_eq!(ids, [serde_json::json!("art")], "{}", frame.name);
+        }
+        captured.verify_current().unwrap();
     }
 }

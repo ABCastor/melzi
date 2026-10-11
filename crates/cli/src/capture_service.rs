@@ -3,14 +3,15 @@
 use crate::reviewed_entry::ReviewedEntryRenderer;
 use base64::Engine;
 use impeccable_comp_verbs::entry_capture::{
-    CapturedEntry, EntryRenderer, EntryRequest, EntryStage,
+    ApprovedReference, CapturedEntry, EntryEvidence, EntryRenderer, EntryRequest, EntryStage,
+    FrameEvidence,
 };
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader, Read, Write},
     net::{TcpListener, TcpStream},
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 
@@ -163,7 +164,8 @@ pub fn serve(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             let text = |k: &str| body[k].as_str().ok_or_else(|| format!("missing {k}"));
             match route.as_str() {
                 "/capture" => {
-                    require_component_review(component_review_pending, &review_tool)?;
+                    require_component_review(component_review_pending
+                        && capture_owes_review(&root, text("spec")?), &review_tool)?;
                     if active.len() >= 2 {
                         return Err("active capture limit".into());
                     }
@@ -356,6 +358,12 @@ pub struct RemoteEntryRenderer {
     key: String,
 }
 
+/// Pending binds only while the spec being captured owes a kit review: a spec with
+/// nothing to decide never produces a kit to approve. The requested spec, not the
+/// default path, so a capture cannot borrow another file's exemption.
+fn capture_owes_review(root: &Path, spec: &str) -> bool {
+    impeccable_context::component_review::plan::spec_file_needs_review(&root.join(spec))
+}
 fn require_component_review(pending: bool, tool: &str) -> Result<(), String> {
     if pending {
         return Err(format!("Component kit approval is pending. Call {tool} with the component manifest's manifest_path and wait for the user's decisions before assembled-page comparison. No page comparison was performed."));
@@ -447,10 +455,6 @@ impl Drop for RemoteEntry {
 }
 impl EntryRenderer for RemoteEntryRenderer {
     fn capture_entry(&self, r: &EntryRequest) -> Result<Box<dyn CapturedEntry>, String> {
-        use impeccable_comp_verbs::{
-            asset_capture::AssetCapture,
-            entry_capture::{EntryEvidence, FrameEvidence},
-        };
         let stage = match r.stage {
             EntryStage::Hero => "hero",
             EntryStage::Responsive => "responsive",
@@ -463,71 +467,155 @@ impl EntryRenderer for RemoteEntryRenderer {
             .as_str()
             .ok_or("missing native capture handle")?
             .to_string();
-        let parsed = (|| -> Result<Box<dyn CapturedEntry>, String> {
-            let root = std::fs::canonicalize(&r.root).map_err(|e| e.to_string())?;
-            if result["report"]["captureService"]["registeredRoot"] != json!(root)
-                || result["report"]["captureService"]["id"] != id
-                || result["report"]["stage"] != stage
-                || result["report"]["artifact"] != r.artifact
-            {
-                return Err("native capture binding mismatch".into());
-            }
-            let expected = if stage == "hero" {
-                vec!["hero"]
-            } else {
-                vec!["desktop", "mobile"]
-            };
-            let frames = result["frames"]
-                .as_array()
-                .filter(|f| f.len() == expected.len())
-                .ok_or("invalid native capture frames")?;
-            let frames = frames
-                .iter()
-                .zip(expected)
-                .map(|(f, name)| -> Result<FrameEvidence, String> {
-                    if f["name"] != name {
-                        return Err("invalid native capture frame name".into());
-                    }
-                    let png = base64::engine::general_purpose::STANDARD
-                        .decode(f["png"].as_str().ok_or("missing frame PNG")?)
-                        .map_err(|e| e.to_string())?;
-                    let regions = f["regions"]
-                        .as_array()
-                        .filter(|r| !r.is_empty() && r.len() <= 32)
-                        .ok_or("invalid native capture regions")?
-                        .iter()
-                        .map(|r| AssetCapture {
-                            receipt: r.clone(),
-                            images: vec![],
-                        })
-                        .collect();
-                    Ok(FrameEvidence {
-                        name: name.into(),
-                        png,
-                        regions,
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(Box::new(RemoteEntry {
-                approved: if result["approvedReference"].is_null(){None}else{
-                    let a=&result["approvedReference"];
-                    let png=base64::engine::general_purpose::STANDARD.decode(a["png"].as_str().ok_or("missing reviewed PNG")?).map_err(|e|e.to_string())?;
-                    if a["proof"]["schema"]!="human-assembled-reference-v1" || a["proof"]["sha256"]!=impeccable_comp_verbs::asset_capture::capture_sha256(&png) || a["proof"]!=result["report"]["humanTextReview"] {return Err("invalid human reference proof".into())}
-                    Some(impeccable_comp_verbs::entry_capture::ApprovedReference{png,proof:a["proof"].clone()})
-                },
+        let parsed = parse_capture(&result, r, stage, &id).map(|(evidence, approved)| {
+            Box::new(RemoteEntry {
+                approved,
                 renderer: self.clone(),
                 id: id.clone(),
-                evidence: EntryEvidence {
-                    report: result["report"].clone(),
-                    frames,
-                },
-            }))
-        })();
+                evidence,
+            }) as Box<dyn CapturedEntry>
+        });
         if parsed.is_err() {
             let _ = self.call("/release", json!({"handle":id}));
         }
         parsed
     }
+}
+
+/// The kind of capture a spec calls for, read from the spec bytes the service
+/// froze: the raster region ids in spec order, empty for a first viewport drawn
+/// entirely in code.
+fn bound_raster_ids(report: &Value, r: &EntryRequest) -> Result<Vec<String>, String> {
+    let root = std::fs::canonicalize(&r.root).map_err(|e| e.to_string())?;
+    let bytes = std::fs::read(root.join(&r.spec)).map_err(|e| format!("cannot read bound spec: {e}"))?;
+    let frozen = report["manifest"]["files"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|f| f["path"] == r.spec.as_str())
+        .ok_or("native capture did not freeze the bound spec")?;
+    if frozen["sha256"] != impeccable_comp_verbs::asset_capture::capture_sha256(&bytes) {
+        return Err("native capture binding mismatch: spec changed".into());
+    }
+    let spec: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+    spec["regions"]
+        .as_array()
+        .ok_or("missing spec regions")?
+        .iter()
+        .filter(|g| g["medium"] == "raster")
+        .map(|g| g["id"].as_str().map(str::to_string).ok_or_else(|| "raster region missing id".to_string()))
+        .collect()
+}
+
+/// Validate a service capture against the request and the spec it froze. The
+/// spec decides the kind, not the response: a spec with raster regions needs one
+/// receipt per measured region in every frame, and a spec without any needs the
+/// assembled-page capture, whose frames carry no receipts. A raster capture
+/// that comes back with no receipts, or a text-only claim for a raster spec, is
+/// refused before build-phase sees it.
+fn parse_capture(
+    result: &Value,
+    r: &EntryRequest,
+    stage: &str,
+    id: &str,
+) -> Result<(EntryEvidence, Option<ApprovedReference>), String> {
+    use crate::{capture_snapshot::MAX_CAPTURE_REGIONS, entry_capture::TEXT_ONLY_RASTER_SHARE_MAX};
+    use impeccable_comp_verbs::asset_capture::AssetCapture;
+    let report = &result["report"];
+    let root = std::fs::canonicalize(&r.root).map_err(|e| e.to_string())?;
+    if report["captureService"]["registeredRoot"] != json!(root)
+        || report["captureService"]["id"] != id
+        || report["stage"] != stage
+        || report["artifact"] != r.artifact
+    {
+        return Err("native capture binding mismatch".into());
+    }
+    let raster = bound_raster_ids(report, r)?;
+    let text_only = raster.is_empty();
+    if text_only != (report["captureMethod"] == "assembled-page-viewport") {
+        return Err(if text_only {
+            "native capture method does not match a spec without raster regions".into()
+        } else {
+            "native capture method does not match a spec with raster regions".into()
+        });
+    }
+    if text_only {
+        if !matches!(report["dependencyPolicy"].as_str(), Some("hero-review-manifest" | "static-inventory")) {
+            return Err("invalid native capture dependency policy".into());
+        }
+        let served = report["servedToPage"].as_array().ok_or("missing native capture page inventory")?;
+        if served.iter().any(|f| f["path"] == r.spec.as_str() || f["path"] == r.reference.as_str()) {
+            return Err("native capture served a bound input to the page".into());
+        }
+    }
+    let expected = if stage == "hero" {
+        vec!["hero"]
+    } else {
+        vec!["desktop", "mobile"]
+    };
+    let frames = result["frames"]
+        .as_array()
+        .filter(|f| f.len() == expected.len())
+        .ok_or("invalid native capture frames")?;
+    let frames = frames
+        .iter()
+        .zip(expected)
+        .map(|(f, name)| -> Result<FrameEvidence, String> {
+            if f["name"] != name {
+                return Err("invalid native capture frame name".into());
+            }
+            let png = base64::engine::general_purpose::STANDARD
+                .decode(f["png"].as_str().ok_or("missing frame PNG")?)
+                .map_err(|e| e.to_string())?;
+            let receipts = f["regions"].as_array().ok_or("invalid native capture regions")?;
+            if text_only {
+                // No raster region, so nothing to measure: the frame's evidence is
+                // its proof, which must show images stayed under the share limit.
+                let share = report["frameProofs"][name]["rasterCoverage"]["share"].as_f64();
+                if !receipts.is_empty() || !share.is_some_and(|s| (0. ..TEXT_ONLY_RASTER_SHARE_MAX).contains(&s)) {
+                    return Err("invalid native capture regions".into());
+                }
+            } else {
+                // Mobile measures only the first raster region (see entry_capture).
+                let wanted = if name == "mobile" { &raster[..1] } else { &raster[..] };
+                // Every receipt must name its region: one without an id is malformed, not skipped.
+                let mut got: Vec<Option<&str>> = receipts.iter().map(|g| g["regionId"].as_str()).collect();
+                got.sort_unstable();
+                let mut want: Vec<Option<&str>> = wanted.iter().map(|w| Some(w.as_str())).collect();
+                want.sort_unstable();
+                if receipts.is_empty() || receipts.len() > MAX_CAPTURE_REGIONS || got != want {
+                    return Err("invalid native capture regions".into());
+                }
+            }
+            Ok(FrameEvidence {
+                name: name.into(),
+                png,
+                regions: receipts
+                    .iter()
+                    .map(|g| AssetCapture {
+                        receipt: g.clone(),
+                        images: vec![],
+                    })
+                    .collect(),
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let approved = if result["approvedReference"].is_null() {
+        None
+    } else {
+        let a = &result["approvedReference"];
+        let png = base64::engine::general_purpose::STANDARD
+            .decode(a["png"].as_str().ok_or("missing reviewed PNG")?)
+            .map_err(|e| e.to_string())?;
+        if a["proof"]["schema"] != "human-assembled-reference-v1"
+            || a["proof"]["sha256"] != impeccable_comp_verbs::asset_capture::capture_sha256(&png)
+            || a["proof"] != report["humanTextReview"]
+        {
+            return Err("invalid human reference proof".into());
+        }
+        Some(ApprovedReference { png, proof: a["proof"].clone() })
+    };
+    Ok((EntryEvidence { report: report.clone(), frames }, approved))
 }
 
 #[cfg(test)]
@@ -623,5 +711,152 @@ mod component_boundary_tests {
         assert!(error.contains("Component kit approval is pending"));
         assert!(error.contains("No page comparison was performed"));
         assert!(require_component_review(false, "component_review").is_ok());
+    }
+    #[test]
+    fn pending_binds_only_while_the_captured_spec_owes_a_review() {
+        let root = std::env::temp_dir().join(format!("impeccable-capture-owed-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("specs")).unwrap();
+        let write = |name: &str, body: &str| std::fs::write(root.join("specs").join(name), body).unwrap();
+        write("text.json", r#"{"regions":[{"id":"copy","kind":"text","box":{"x":0,"y":0,"w":1,"h":1}}]}"#);
+        write("plate.json", r#"{"regions":[{"id":"art","kind":"plate","box":{"x":0,"y":0,"w":1,"h":1}}]}"#);
+        write("invalid.json", "{}");
+        assert!(!capture_owes_review(&root, "specs/text.json"));
+        assert!(capture_owes_review(&root, "specs/plate.json"));
+        assert!(capture_owes_review(&root, "specs/invalid.json"), "no regions array is not a measured spec");
+        assert!(capture_owes_review(&root, "specs/missing.json"));
+        assert!(require_component_review(true && capture_owes_review(&root, "specs/plate.json"), "component_review").is_err());
+        assert!(require_component_review(true && capture_owes_review(&root, "specs/text.json"), "component_review").is_ok());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod parse_tests {
+    use super::*;
+    use impeccable_comp_verbs::asset_capture::capture_sha256;
+    const SPEC: &str = ".impeccable/build/spec.json";
+    struct Root(PathBuf);
+    impl Drop for Root {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    fn root(name: &str, raster: usize) -> (Root, EntryRequest, Value) {
+        let dir = std::env::temp_dir().join(format!("capsvc-parse-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(".impeccable/build")).unwrap();
+        let mut regions = vec![json!({"id":"headline","kind":"text","medium":"semantic"})];
+        regions.extend((0..raster).map(|i| json!({"id":format!("art-{i}"),"kind":"plate","medium":"raster"})));
+        let spec = serde_json::to_vec(&json!({"comp":"comp.png","regions":regions})).unwrap();
+        std::fs::write(dir.join(SPEC), &spec).unwrap();
+        let request = EntryRequest {
+            root: dir.clone(),
+            artifact: "index.html".into(),
+            spec: SPEC.into(),
+            reference: "comp.png".into(),
+            stage: EntryStage::Hero,
+        };
+        let canonical = std::fs::canonicalize(&dir).unwrap();
+        let mut report = json!({"stage":"hero","artifact":"index.html",
+            "captureService":{"id":"h-1","registeredRoot":canonical},
+            "manifest":{"files":[{"path":SPEC,"sha256":capture_sha256(&spec)}]}});
+        if raster == 0 {
+            report["captureMethod"] = json!("assembled-page-viewport");
+            report["dependencyPolicy"] = json!("static-inventory");
+            report["servedToPage"] = json!([{"path":"index.html"}]);
+            report["frameProofs"] = json!({"hero":{"rasterCoverage":{"share":0.01}}});
+        }
+        (Root(dir), request, report)
+    }
+    fn frame(regions: Vec<Value>) -> Value {
+        json!({"name":"hero","png":"","regions":regions})
+    }
+    fn receipts(n: usize) -> Vec<Value> {
+        (0..n).map(|i| json!({"regionId":format!("art-{i}")})).collect()
+    }
+    /// The parsed report and per-frame receipt counts.
+    fn parse(request: &EntryRequest, report: &Value, frame: Value) -> Result<(Value, Vec<usize>), String> {
+        parse_frames(request, report, "hero", vec![frame])
+    }
+    fn parse_frames(request: &EntryRequest, report: &Value, stage: &str, frames: Vec<Value>) -> Result<(Value, Vec<usize>), String> {
+        let result = json!({"report":report,"frames":frames,"approvedReference":null});
+        parse_capture(&result, request, stage, "h-1")
+            .map(|(e, _)| (e.report, e.frames.iter().map(|f| f.regions.len()).collect()))
+    }
+    fn named(name: &str, regions: Vec<Value>) -> Value {
+        json!({"name":name,"png":"","regions":regions})
+    }
+
+    #[test]
+    fn text_only_capture_crosses_the_transport_without_receipts() {
+        let (_root, request, report) = root("text", 0);
+        let (parsed, counts) = parse(&request, &report, frame(vec![])).unwrap();
+        assert_eq!(counts, [0]);
+        assert_eq!(parsed["dependencyPolicy"], "static-inventory");
+        // Text-only frames never carry receipts, and their proofs bound images.
+        assert!(parse(&request, &report, frame(vec![json!({"regionId":"x"})])).is_err());
+        for (pointer, value) in [
+            ("/frameProofs/hero/rasterCoverage/share", json!(0.15)),
+            ("/frameProofs/hero", json!(null)),
+            ("/dependencyPolicy", json!("caller")),
+            ("/servedToPage", json!([{"path":"index.html"},{"path":"comp.png"}])),
+            ("/servedToPage", json!([{"path":SPEC}])),
+        ] {
+            let mut broken = report.clone();
+            *broken.pointer_mut(pointer).unwrap() = value;
+            assert!(parse(&request, &broken, frame(vec![])).is_err(), "{pointer}");
+        }
+        // The spec, not the response, decides the kind.
+        let mut claimed = report.clone();
+        claimed["captureMethod"] = json!("native-raster");
+        let e = parse(&request, &claimed, frame(vec![])).unwrap_err();
+        assert!(e.contains("method"), "{e}");
+    }
+
+    #[test]
+    fn raster_capture_without_receipts_still_fails_closed() {
+        let (_root, request, report) = root("raster", 2);
+        assert!(parse(&request, &report, frame(receipts(2))).is_ok());
+        let e = parse(&request, &report, frame(vec![])).unwrap_err();
+        assert_eq!(e, "invalid native capture regions");
+        // Claiming the text-only method does not excuse a raster spec.
+        let mut claimed = report.clone();
+        claimed["captureMethod"] = json!("assembled-page-viewport");
+        claimed["frameProofs"] = json!({"hero":{"rasterCoverage":{"share":0.0}}});
+        claimed["dependencyPolicy"] = json!("static-inventory");
+        claimed["servedToPage"] = json!([]);
+        let e = parse(&request, &claimed, frame(vec![])).unwrap_err();
+        assert!(e.contains("method"), "{e}");
+        // Every raster region needs its own receipt; a missing one is refused.
+        assert!(parse(&request, &report, frame(receipts(1))).is_err());
+        // So is a receipt that names no region, even beside a full set.
+        let mut extra = receipts(2);
+        extra.push(json!({"regionId":null}));
+        assert!(parse(&request, &report, frame(extra)).is_err());
+        let mut twice = receipts(1);
+        twice.push(json!({"regionId":"art-0"}));
+        assert!(parse(&request, &report, frame(twice)).is_err());
+        // Responsive: desktop measures every raster region, mobile only the first.
+        let mut responsive = report.clone();
+        responsive["stage"] = json!("responsive");
+        let (_, counts) = parse_frames(&request, &responsive, "responsive", vec![named("desktop", receipts(2)), named("mobile", receipts(1))]).unwrap();
+        assert_eq!(counts, [2, 1]);
+        for (desktop, mobile) in [(receipts(1), receipts(1)), (receipts(2), receipts(2)), (receipts(2), vec![json!({"regionId":"art-1"})]), (receipts(2), vec![])] {
+            assert!(parse_frames(&request, &responsive, "responsive", vec![named("desktop", desktop), named("mobile", mobile)]).is_err());
+        }
+        // A spec edited after the capture no longer binds it.
+        std::fs::write(request.root.join(SPEC), b"{\"regions\":[]}").unwrap();
+        let e = parse(&request, &report, frame(receipts(2))).unwrap_err();
+        assert!(e.contains("spec changed"), "{e}");
+    }
+
+    #[test]
+    fn receipt_cap_is_the_native_batch_bound() {
+        use crate::capture_snapshot::MAX_CAPTURE_REGIONS;
+        let (_root, request, report) = root("cap", MAX_CAPTURE_REGIONS);
+        assert!(parse(&request, &report, frame(receipts(MAX_CAPTURE_REGIONS))).is_ok());
+        let (_root, request, report) = root("over", MAX_CAPTURE_REGIONS + 1);
+        let e = parse(&request, &report, frame(receipts(MAX_CAPTURE_REGIONS + 1))).unwrap_err();
+        assert_eq!(e, "invalid native capture regions");
     }
 }

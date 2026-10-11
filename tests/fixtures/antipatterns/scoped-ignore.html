@@ -7,7 +7,9 @@
   body { margin: 0; padding: 40px; background: #faf8f4; font-family: Arial, sans-serif; color: #262421; }
   /* Every case carries a UNIQUE border-left width so each finding's snippet
      (`border-left: Npx`) attributes to exactly one case. Flag widths: 5, 6,
-     8, 12. Pass widths: 4, 7, 9, 10, 11. */
+     8, 12. Pass widths: 4, 7, 9, 10, 11. The corners away from the stripe are
+     rounded, which is what makes a side accent read as a card tab; the
+     shorthand starts at 0 so the snippets stay in their bare form. */
   .tabbed {
     width: 420px;
     padding: 16px 20px;
@@ -15,6 +17,7 @@
     background: #ffffff;
     border: 1px solid #ddd8d0;
     border-left: 6px solid #b8422e;
+    border-radius: 0 10px 10px 0;
   }
   .w4 { border-left-width: 4px; }
   .w5 { border-left-width: 5px; }

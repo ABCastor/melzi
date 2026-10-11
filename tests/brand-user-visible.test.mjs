@@ -64,6 +64,7 @@ const KEEP_FORMS = new RegExp([
   'impeccable:',            // the npm script contract
   'i-impeccable',           // legacy harness install dir we still detect
   'annotate-click',         // the postMessage protocol property `impeccable: 'annotate-click'`
+  'impeccableSketch',       // the sketch frame's postMessage key; page and frame must agree (2026-10-11 sync)
   'impeccable frontend',    // the English adjective
   'impeccable design',      // the English adjective
 ].join('|'), 'i');
@@ -191,7 +192,10 @@ function withoutCliExecutable(line) {
   return line
     .replace(/^(\s*(?:Usage:|Stop:|Command failed:)\s+)impeccable(?= (?:pin|live-server|live-inject)\b)/, '$1<engine>')
     .replace(/^(\s*Inject: managed by )impeccable(?= live-inject;)/, '$1<engine>')
-    .replace(/(`<skill-base-dir>\/scripts\/)impeccable(?= context`)/g, '$1<engine>');
+    .replace(/(`<skill-base-dir>\/scripts\/)impeccable(?= context`)/g, '$1<engine>')
+    // The engine binary keeps upstream's name (scripts/rebrand.mjs, engine names); a
+    // backticked `impeccable generate-image` is that executable, not the product's name.
+    .replace(/`impeccable(?= generate-image\b)/g, '`<engine>');
 }
 
 /**

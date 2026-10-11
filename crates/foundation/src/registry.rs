@@ -124,7 +124,7 @@ pub static ANTIPATTERNS: &[Antipattern] = &[
         id: "bounce-easing",
         category: "slop",
         scopes: None,
-        severity: None,
+        severity: Some("advisory"),
         name: "Bounce or elastic easing",
         description: "Bounce and elastic easing feel dated and tacky. Real objects decelerate smoothly — use exponential easing (ease-out-quart/quint/expo) instead.",
         skill_section: Some("Motion"),
@@ -206,7 +206,7 @@ pub static ANTIPATTERNS: &[Antipattern] = &[
         scopes: None,
         severity: None,
         name: "Decorative radial spotlight glow",
-        description: "A soft, low-opacity accent-colored radial gradient fading to transparent, dropped behind a hero or section as a \"spotlight.\" It is a reflex AI decoration — the translucent cousin of the saturated radial halo. Let the surface stand on its own, or light the composition with a deliberate material accent rather than a floating colored haze.",
+        description: "An accent-colored radial gradient fading to transparent, dropped behind a hero or section as a \"spotlight\" and bright enough against that surface to read as a cloud floating over the copy. It is a reflex AI decoration — the translucent cousin of the saturated radial halo. Let the surface stand on its own, or light the composition with a deliberate material accent rather than a floating colored haze.",
         skill_section: Some("Color & Contrast"),
         skill_guideline: Some("dark mode with glowing accents"),
     },
@@ -401,16 +401,6 @@ pub static ANTIPATTERNS: &[Antipattern] = &[
         skill_guideline: None,
     },
     Antipattern {
-        id: "layout-transition",
-        category: "quality",
-        scopes: None,
-        severity: None,
-        name: "Layout property animation",
-        description: "Animating width, height, padding, or margin causes layout thrash and janky performance. Use transform and opacity instead, or grid-template-rows for height animations.",
-        skill_section: Some("Motion"),
-        skill_guideline: Some("Animate layout properties"),
-    },
-    Antipattern {
         id: "line-length",
         category: "quality",
         scopes: Some(&["type", "layout"]),
@@ -436,7 +426,7 @@ pub static ANTIPATTERNS: &[Antipattern] = &[
         scopes: Some(&["layout"]),
         severity: None,
         name: "Body text touching viewport edge",
-        description: "Body paragraphs render flush against the left or right viewport edge with no container providing horizontal padding. Wrap content in a container with at least 16px (ideally 24-32px) of horizontal padding, or apply max-width with mx-auto.",
+        description: "Body paragraphs render flush against the left or right viewport edge with no container providing horizontal padding: closer than 16px, or 12px on viewports 480px wide or narrower. Wrap content in a container with at least 16px (ideally 24-32px) of horizontal padding, or apply max-width with mx-auto. Body text that runs past the viewport edge is reported once per page as overflow, naming the widest element: constrain that element's width instead of adding padding.",
         skill_section: None,
         skill_guideline: None,
     },
@@ -476,7 +466,7 @@ pub static ANTIPATTERNS: &[Antipattern] = &[
         scopes: Some(&["type"]),
         severity: None,
         name: "Justified text",
-        description: "Justified text without hyphenation creates uneven word spacing (\"rivers of white\"). Use text-align: left for body text, or enable hyphens: auto if you must justify.",
+        description: "In a column this narrow, justifying without hyphenation stretches the word spaces until vertical rivers of white run down the block. Use text-align: left, widen the measure, or enable hyphens: auto if you must justify. Scripts that justify on a character grid or by elongating glyphs, such as CJK, Thai and Arabic, are not affected and are not reported.",
         skill_section: None,
         skill_guideline: None,
     },
@@ -506,7 +496,7 @@ pub static ANTIPATTERNS: &[Antipattern] = &[
         scopes: Some(&["type"]),
         severity: None,
         name: "All-caps body text",
-        description: "Long passages in uppercase are hard to read. We recognize words by shape (ascenders and descenders), which all-caps removes. Reserve uppercase for short labels and headings.",
+        description: "Long passages in uppercase are hard to read. We recognize words by shape (ascenders and descenders), which all-caps removes. Reserve uppercase for short labels and headings. Only a run that reads as a sentence counts: 80 characters or more of an element's own text. Buttons, nav items, kickers and eyebrows set in caps are a convention and stay silent.",
         skill_section: Some("Typography"),
         skill_guideline: Some("long body passages in uppercase"),
     },
@@ -526,7 +516,7 @@ pub static ANTIPATTERNS: &[Antipattern] = &[
         scopes: Some(&["layout"]),
         severity: None,
         name: "Content overflowing its container",
-        description: "Content renders wider than its container, spilling out or forcing a horizontal scrollbar. Let text wrap, constrain widths, or give the region a deliberate scroll affordance.",
+        description: "Content renders wider than its container and the spill does harm: a clipping ancestor cuts it off, it runs into another box, or it reaches the viewport edge. Let text wrap, constrain widths, or give the region a deliberate scroll affordance.",
         skill_section: Some("Layout & Space"),
         skill_guideline: Some("content wider than its container"),
     },
@@ -544,7 +534,7 @@ pub static ANTIPATTERNS: &[Antipattern] = &[
         id: "clipped-overflow-container",
         category: "quality",
         scopes: Some(&["layout"]),
-        severity: None,
+        severity: Some("advisory"),
         name: "Positioned child clipped by overflow container",
         description: "A clipping container (overflow hidden or clip) wrapping an absolutely-positioned child cuts off tooltips, menus, and popovers that need to escape. Let the overflow be visible, or move the positioned layer out of the clip.",
         skill_section: Some("Layout & Space"),
@@ -596,9 +586,9 @@ pub static ANTIPATTERNS: &[Antipattern] = &[
         scopes: None,
         severity: Some("advisory"),
         name: "Hairline border with wide shadow",
-        description: "A hairline border paired with a wide, diffuse shadow is a recurring generated-UI signature. Commit to one — a defined edge or a soft elevation — rather than both at once.",
+        description: "Every card of this row wears a hairline border paired with a wide, diffuse shadow, which is a recurring generated-UI signature. One floating panel earns both; a whole row wearing them reads as a default nobody chose. Across the row, commit to one: a defined edge or a soft elevation.",
         skill_section: Some("Visual Details"),
-        skill_guideline: Some("hairline border plus wide diffuse shadow"),
+        skill_guideline: Some("a row of cards each wearing a hairline border plus a wide diffuse shadow"),
     },
     Antipattern {
         id: "repeating-stripes-gradient",
@@ -630,16 +620,6 @@ pub static ANTIPATTERNS: &[Antipattern] = &[
         skill_section: Some("Copy"),
         skill_guideline: Some("theater framing copy"),
     },
-    Antipattern {
-        id: "image-hover-transform",
-        category: "slop",
-        scopes: None,
-        severity: Some("advisory"),
-        name: "Image hover transform",
-        description: "Scaling or rotating an image on hover is a recurring generated-UI signature. Let imagery sit still, or use a subtler, purposeful interaction.",
-        skill_section: Some("Motion"),
-        skill_guideline: Some("image scale or rotate on hover"),
-    },
 ];
 
 /// The rules the design hook fixes at edit time rather than deferring to a
@@ -656,7 +636,6 @@ pub const IMMEDIATE_TIER_RULES: &[&str] = &[
     // Broken output.
     "broken-image",
     "text-overflow",
-    "clipped-overflow-container",
     "body-text-viewport-edge",
     // Objective contrast / legibility failures.
     "low-contrast",
@@ -840,7 +819,7 @@ mod tests {
 
     #[test]
     fn registry_shape() {
-        assert_eq!(ANTIPATTERNS.len(), 61);
+        assert_eq!(ANTIPATTERNS.len(), 59);
         assert_eq!(ANTIPATTERNS[0].id, "side-tab");
         assert_eq!(rule_scopes(), vec!["type", "layout"]);
         assert!(is_advisory_rule("em-dash-overuse"));
@@ -851,6 +830,23 @@ mod tests {
             get_antipattern("blinking-cursor").unwrap().severity,
             Some("advisory")
         );
+        // The corpus review moved this one out of the failure count: the
+        // measurement is right, the finding is almost never harmful.
+        assert!(is_advisory_rule("bounce-easing"));
+        // A live recapture judged the fixed rule's new findings 0.08 pattern
+        // precision and 0.04 harm: the clip is almost always intended. An
+        // advisory rule is no longer an edit-time interruption either.
+        assert!(is_advisory_rule("clipped-overflow-container"));
+        assert!(!IMMEDIATE_TIER_RULES.contains(&"clipped-overflow-container"));
+        // Retired by the same review. An id the registry does not carry
+        // resolves to `None` rather than panicking, so a config or an inline
+        // ignore naming it still parses.
+        assert!(get_antipattern("image-hover-transform").is_none());
+        // `layout-transition` went advisory in that review and was retired
+        // on 2026-10-07 (decision r8-t5-layout-transition-retire): two
+        // judged cohorts later, not one of its findings had been harmful.
+        assert!(get_antipattern("layout-transition").is_none());
+        assert!(!is_advisory_rule("layout-transition"));
         assert_eq!(
             get_rule_engine_support("browser"),
             &["element", "page", "layout"]

@@ -12,6 +12,18 @@
   --stripe-fixture-neutral: #e5e7eb;
 }
 
+/* The side accent is the tell on a rounded card, so each left or right flag
+   case rounds its host; the bottom-edge case needs no radius. A host no
+   radius rule names reads the whole file, so the square pass case squares
+   its host off. */
+.card[data-case="Inset Shorthand Left Edge"],
+.card[data-case="Longhand Left Edge"] {
+  border-radius: 12px;
+}
+.card[data-case="Full Height Right Edge"] {
+  border-radius: 0.75rem;
+}
+
 /* ── FLAG: the issue reproducer — inset shorthand pin + 4px chromatic bar ── */
 .card[data-case="Inset Shorthand Left Edge"]::before {
   content: "";
@@ -52,6 +64,30 @@
   height: 100%;
   width: 3px;
   background: oklch(60% 0.2 300);
+}
+
+/* ── PASS: a chromatic stripe on a square host is the old callout rule ── */
+.card[data-case="Square Host Left Edge"] {
+  border-radius: 0;
+}
+.card[data-case="Square Host Left Edge"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: #7c3aed;
+}
+
+/* ── PASS: rounded only along the stripe, square where it counts ── */
+.card[data-case="Rounded Under Stripe"] {
+  border-radius: 12px 0 0 12px;
+}
+.card[data-case="Rounded Under Stripe"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: #7c3aed;
 }
 
 /* ── PASS: neutral gray divider is not an accent stripe ── */

@@ -27,6 +27,23 @@ pub struct ScanOptions {
     /// to the text engine and on to the HTML engine. `None` in the `impeccable`
     /// binary, which ships the built-in rules only.
     pub rule_pack: Option<&'static dyn RulePack>,
+    /// URL scans only: leave known consent managers' banners on the page
+    /// (`--no-consent-hiding`). By default the browser engine hides them
+    /// before the rule pass.
+    pub keep_consent_banners: bool,
+    /// URL scans only: leave product tours, site-builder badges and
+    /// preloaders on the page (`--no-overlay-hiding`). By default the browser
+    /// engine waits briefly for a preloader and hides what is left, and hides
+    /// known tours and badges, before the rule pass.
+    pub keep_overlays: bool,
+}
+
+/// A URL scan's findings plus the notes the CLI prints about how the page
+/// was scanned (a consent banner or a preloader the engine hid, say).
+#[derive(Debug, Default)]
+pub struct UrlScan {
+    pub findings: Vec<Finding>,
+    pub notes: Vec<String>,
 }
 
 /// An error an engine raises; `detectCli` reports it the way the JS surfaces
@@ -64,6 +81,11 @@ pub trait HtmlEngine {
 pub trait UrlEngine {
     /// A single-URL scan (`detectUrl`: `waitUntil: 'networkidle0'`, `settleMs: 0`).
     fn detect_url(&self, url: &str, options: &ScanOptions) -> Result<Vec<Finding>, EngineError>;
+    /// [`UrlEngine::detect_url`] plus notes for the text output. Engines with
+    /// nothing to say keep the default.
+    fn detect_url_scan(&self, url: &str, options: &ScanOptions) -> Result<UrlScan, EngineError> {
+        Ok(UrlScan { findings: self.detect_url(url, options)?, notes: Vec::new() })
+    }
     /// A shared-browser session for multi-URL scans (`createBrowserDetector()`:
     /// `waitUntil: 'load'`, `settleMs: 100`). Return `None` when the engine has
     /// no shared mode; `detect_url` is used per target instead.
@@ -75,6 +97,10 @@ pub trait UrlEngine {
 /// A `createBrowserDetector()` handle: `detectUrl` per target, `close()` at the end.
 pub trait SharedBrowser {
     fn detect_url(&self, url: &str, options: &ScanOptions) -> Result<Vec<Finding>, EngineError>;
+    /// [`SharedBrowser::detect_url`] plus notes, as [`UrlEngine::detect_url_scan`].
+    fn detect_url_scan(&self, url: &str, options: &ScanOptions) -> Result<UrlScan, EngineError> {
+        Ok(UrlScan { findings: self.detect_url(url, options)?, notes: Vec::new() })
+    }
     fn close(&self);
     /// The eager half of `createBrowserDetector()`: bring the browser up now,
     /// so a launch failure is reported once before the loop and every URL

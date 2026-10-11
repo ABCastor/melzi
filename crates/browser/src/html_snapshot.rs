@@ -10,10 +10,10 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, File},
     io::{Read, Write},
-    net::{TcpListener, TcpStream},
+    net::{Shutdown, TcpListener, TcpStream},
     path::{Component, Path, PathBuf},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
     thread::{self, JoinHandle},
@@ -192,11 +192,16 @@ impl HtmlSnapshot {
         let worker_stop = stop.clone();
         let snapshot = self.clone();
         let worker_host = host.clone();
+        let connections = Connections::default();
+        let worker_connections = connections.clone();
         let worker = thread::spawn(move || {
             while !worker_stop.load(Ordering::Acquire) {
                 match listener.accept() {
-                    Ok((mut stream, _)) => {
-                        let _ = respond(&mut stream, &worker_host, &snapshot, scripts);
+                    Ok((stream, _)) => {
+                        let (host, snapshot) = (worker_host.clone(), snapshot.clone());
+                        worker_connections.spawn(stream, move |stream| {
+                            let _ = respond(stream, &host, &snapshot, scripts);
+                        });
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                         thread::sleep(Duration::from_millis(5))
@@ -210,6 +215,7 @@ impl HtmlSnapshot {
             entry: self.entry.clone(),
             stop,
             worker: Some(worker),
+            connections,
         })
     }
 }
@@ -317,11 +323,44 @@ fn encode_path(path: &str) -> String {
         })
         .collect()
 }
+/// A snapshot server's open connections, each answered on its own thread.
+/// Chrome opens sockets it may leave idle (backup connect jobs, preconnects),
+/// and one of those must not hold the page's requests behind its read
+/// timeout. A finished connection leaves the set; dropping the server closes
+/// the rest at once instead of leaving them to their read timeout.
+#[derive(Clone, Default)]
+pub struct Connections(Arc<Mutex<(u64, BTreeMap<u64, TcpStream>)>>);
+impl Connections {
+    pub fn spawn(&self, mut stream: TcpStream, answer: impl FnOnce(&mut TcpStream) + Send + 'static) {
+        let id = {
+            let mut open = self.0.lock().unwrap_or_else(|e| e.into_inner());
+            open.0 += 1;
+            let id = open.0;
+            if let Ok(handle) = stream.try_clone() {
+                open.1.insert(id, handle);
+            }
+            id
+        };
+        let open = self.clone();
+        thread::spawn(move || {
+            answer(&mut stream);
+            let _ = stream.shutdown(Shutdown::Write);
+            open.0.lock().unwrap_or_else(|e| e.into_inner()).1.remove(&id);
+        });
+    }
+    pub fn close_all(&self) {
+        let open = std::mem::take(&mut self.0.lock().unwrap_or_else(|e| e.into_inner()).1);
+        for stream in open.into_values() {
+            let _ = stream.shutdown(Shutdown::Both);
+        }
+    }
+}
 pub struct SnapshotServer {
     host: String,
     entry: String,
     stop: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
+    connections: Connections,
 }
 impl SnapshotServer {
     pub fn entry_url(&self) -> String {
@@ -334,8 +373,10 @@ impl Drop for SnapshotServer {
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
+        self.connections.close_all();
     }
 }
+const CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
 fn respond(
     stream: &mut TcpStream,
     host: &str,
@@ -346,8 +387,15 @@ fn respond(
     // switch accepted streams back before write_all; otherwise large bodies
     // stop at EWOULDBLOCK and appear as valid-header/truncated-image responses.
     stream.set_nonblocking(false)?;
-    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
-    stream.set_write_timeout(Some(Duration::from_secs(2)))?;
+    // Chrome can connect and then write its request seconds later: on Windows
+    // a fresh browser's first request takes 1.5 to 3 s to go out, sometimes
+    // over 5 s, and the socket is often open well before. Closing it early
+    // made Chrome stall the navigation for about 13 s before retrying, past
+    // the capture's navigation timeout. Wait longer than any navigation
+    // timeout instead; the connection has its own thread, so waiting blocks no
+    // other request.
+    stream.set_read_timeout(Some(CONNECTION_TIMEOUT))?;
+    stream.set_write_timeout(Some(CONNECTION_TIMEOUT))?;
     let mut bytes = Vec::new();
     let mut buf = [0u8; 1024];
     while bytes.len() <= 8192 && !bytes.windows(4).any(|x| x == b"\r\n\r\n") {
@@ -389,4 +437,24 @@ fn respond(
         body.len()
     )?;
     stream.write_all(body)
+}
+#[cfg(test)]
+mod connection_tests {
+    use super::*;
+    #[test]
+    fn finished_connections_leave_the_open_set() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let open = Connections::default();
+        let _client = TcpStream::connect(addr).unwrap();
+        let (stream, _) = listener.accept().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        open.spawn(stream, move |_| tx.send(()).unwrap());
+        rx.recv().unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !open.0.lock().unwrap().1.is_empty() && std::time::Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(open.0.lock().unwrap().1.is_empty(), "a finished connection kept its socket handle");
+    }
 }

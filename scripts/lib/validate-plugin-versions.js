@@ -100,6 +100,9 @@ function extractFromFile(absPath, extract) {
  *   A present-but-malformed root, or one missing its `version` field, instead
  *   reports an entry in `errors` so the build fails loudly rather than passing.
  */
+// A reader returns SKIP when the file is not the artifact it checks.
+const SKIP = Symbol('skip');
+
 export function collectPluginVersions(rootDir) {
   const rootRel = '.claude-plugin/plugin.json';
   const rootManifestPath = path.join(rootDir, rootRel);
@@ -116,6 +119,19 @@ export function collectPluginVersions(rootDir) {
   }
 
   const checks = [
+    {
+      // The npm CLI shares the skill's version: one number for users to read
+      // off npm, the plugin and the changelog. Only this repo's package.json is
+      // the CLI, and it is the one that pins the engine's platform packages:
+      // impeccable-site builds the skill from a tree whose root package.json is
+      // the site's own, also named impeccable, at its own version.
+      relPath: 'package.json',
+      read: (raw) => {
+        const pkg = JSON.parse(raw);
+        const isCli = Object.keys(pkg.optionalDependencies || {}).some((k) => k.startsWith('@impeccable/cli-'));
+        return isCli ? pkg.version : SKIP;
+      },
+    },
     {
       relPath: '.claude-plugin/marketplace.json',
       read: (raw) => JSON.parse(raw).plugins?.[0]?.version,
@@ -150,6 +166,7 @@ export function collectPluginVersions(rootDir) {
       continue;
     }
     const found = result.value;
+    if (found === SKIP) continue;
     checked.push({ relPath, found });
     if (found !== source) mismatches.push({ relPath, found, expected: source });
   }

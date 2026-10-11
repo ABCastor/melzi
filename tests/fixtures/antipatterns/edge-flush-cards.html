@@ -30,6 +30,18 @@
     /* PASS: flush children without card styling are plain content, not cards. */
     .pass-plain .panel { width: 620px; }
     .pass-plain .plain { margin-left: 16px; width: 588px; }
+
+    /* PASS: one box past the clip edge is not a row of cards. */
+    .pass-lone .panel-wide { width: 620px; }
+    .pass-lone .card { margin-left: 16px; width: 588px; }
+
+    /* PASS: a wrapper that hides x overflow scrolls only on y (the shorthand
+       computes to `hidden auto`). */
+    .pass-x-hidden { overflow-x: hidden; overflow-y: auto; }
+    .pass-x-hidden .panel-wide { width: 620px; }
+    .pass-x-hidden .panel-wide .card { margin-left: 16px; width: 588px; }
+    .pass-x-hidden .panel-ok { width: 600px; }
+    .pass-x-hidden .panel-ok .card { margin-left: 16px; width: 568px; }
   </style>
 </head>
 <body>
@@ -62,6 +74,23 @@
   <div class="scroller pass-plain">
     <div class="panel"><div class="plain">Unstyled text block flush against the edge is not a card.</div></div>
     <div class="panel"><div class="plain">Second plain block.</div></div>
+  </div>
+
+  <h2>Pass: one box past the clip edge, no row</h2>
+  <div class="scroller pass-lone">
+    <div class="panel panel-wide">
+      <div class="card">A lone box keeping its left gutter while it runs past the right edge.</div>
+    </div>
+  </div>
+
+  <h2>Pass: a wrapper that hides x overflow</h2>
+  <div class="scroller pass-x-hidden">
+    <div class="panel panel-wide">
+      <div class="card">Card in a wrapper that hides sideways overflow and scrolls on y only.</div>
+    </div>
+    <div class="panel panel-ok">
+      <div class="card">Sibling panel card in the same wrapper.</div>
+    </div>
   </div>
 </body>
 </html>

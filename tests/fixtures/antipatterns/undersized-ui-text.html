@@ -16,6 +16,9 @@
   .cell-small    { font-size: 9px; }
   .caps-label    { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; }
   .footer-link   { font-size: 8px; }
+  .edge-link     { font-size: 10.9px; }                         /* 0.1px under the 11px floor */
+  .edge-legal    { font-size: 9.9px; }                          /* 0.1px under the 10px smallprint floor */
+  .card-credit   { font-size: 10.5px; }                         /* smallprint class inside a card-wide link */
 
   /* --- should-pass styles --- */
   .legal         { font-size: 10px; line-height: 1.5; }         /* non-interactive footer smallprint at 10px */
@@ -27,6 +30,8 @@
   .mock-terminal { width: 400px; }
   .term-line     { font-size: 9px; }                            /* legitimately small code/terminal text */
   .normal-link   { font-size: 12px; }                           /* at the floor, allowed */
+  .fluid-link    { font-size: 10.9688px; }                      /* fluid 12px design size, 0.03px under 11px */
+  .fluid-legal   { font-size: 9.95px; }                         /* 0.05px under the 10px smallprint floor */
 </style>
 </head>
 <body>
@@ -63,6 +68,18 @@
   <footer>
     <a href="/privacy" class="footer-link">Flag Footer Link</a>
   </footer>
+
+  <!-- 0.1px under the 11px floor: the tolerance stops short of this -->
+  <a href="/listings" class="edge-link">Flag Edge Link</a>
+
+  <!-- 0.1px under the 10px smallprint floor: the same tolerance, the same edge -->
+  <footer>
+    <p class="edge-legal">Flag Edge Legal copyright 2026 all rights reserved in every market</p>
+  </footer>
+
+  <!-- a smallprint class inside a link around the whole card keeps the
+       interactive 11px floor (taste call r3-07, kept) -->
+  <a href="/story/42" class="story-card"><div class="image-copyright card-credit">Flag Photo Credit</div></a>
 </div>
 
 <!-- ================= SHOULD PASS ================= -->
@@ -90,6 +107,14 @@
 
   <!-- functional text exactly at the 12px floor is allowed -->
   <a href="/home" class="normal-link">Pass Normal Link</a>
+
+  <!-- fluid type 0.03px under the 11px floor: inside the 0.1px tolerance -->
+  <a href="/buy" class="fluid-link">Pass Fluid Link</a>
+
+  <!-- fluid smallprint 0.05px under the 10px floor: inside the tolerance -->
+  <footer>
+    <p class="fluid-legal">Pass Fluid Legal copyright 2026 all rights reserved in every market</p>
+  </footer>
 </div>
 
 </body>

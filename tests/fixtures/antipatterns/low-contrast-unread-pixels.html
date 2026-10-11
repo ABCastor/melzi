@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Low contrast: verdicts the pixels could not read (browser-only)</title>
+  <!--
+    The element pass scores white copy against the grey fill under a dark
+    photo it cannot read, and hands the verdict to the pixel pass. Where the
+    pixels read the box they replace it: the copy passes on the photo. Where
+    they refuse to read it (a backdrop filter over the photo), the element
+    pass's verdict stands as advisory (corpus decision
+    r6-t5-unread-pixel-verdicts). The two cases differ only in the filter.
+  -->
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; color: #1a1a1a; background: #ffffff; }
+    main { width: 1200px; margin: 0 auto; display: flex; gap: 48px; padding: 32px 0; }
+    .col { width: 560px; }
+    h1 { font-size: 28px; line-height: 36px; margin: 0 0 16px; }
+    h2 { font-size: 20px; line-height: 28px; margin: 0 0 16px; }
+    .case { margin: 0 0 32px; }
+    .photo-band { position: relative; width: 560px; height: 160px; background-color: #979797; overflow: hidden; }
+    /* A decorative photo the hit test sees through, as a hero image behind a
+       product tour wash is. */
+    .photo-band img { pointer-events: none; position: absolute; left: 0; top: 0; width: 560px; height: 160px; }
+    .photo-band .copy { position: relative; padding: 56px 24px; }
+    .photo-band .frosted { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+    .photo-band p { margin: 0; font: 600 20px/28px system-ui; color: #ffffff; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="col">
+      <h1>Should flag (advisory): the pixels could not read it</h1>
+      <div class="case">
+        <div class="photo-band">
+          <img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAD0lEQVR42mNQwAEYhpYEAGFPGAHY2OnFAAAAAElFTkSuQmCC">
+          <div class="copy frosted"><p id="flag-copy-under-backdrop-filter">Book a table for tonight</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <h1>Should pass: the pixels read it</h1>
+      <div class="case">
+        <div class="photo-band">
+          <img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAD0lEQVR42mNQwAEYhpYEAGFPGAHY2OnFAAAAAElFTkSuQmCC">
+          <div class="copy"><p id="pass-copy-on-read-photo">Order a delivery for later</p></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

@@ -25,9 +25,9 @@
 //! The findings are identical to the in-page bundle's; the differential
 //! (`crates/browser/tests/differential.rs`) is the gate.
 
-use impeccable_core::browser::snapshot::{Facts, SnapshotDom};
+use impeccable_core::browser::snapshot::{Facts, ScrollShown, SnapshotDom};
 use impeccable_core::browser::visual::{self, CssPlan, Prepared, StackNode};
-use impeccable_core::browser::{BrowserConfig, Dom, ElId};
+use impeccable_core::browser::{BrowserConfig, ElId};
 use impeccable_core::color::Rgba;
 use serde_json::{json, Value};
 
@@ -55,15 +55,96 @@ pub fn ensure_snapshot_js(page: &mut Page<'_>) -> CdpResult<()> {
 /// stable across scrolls (the DOM is unchanged), which is why an earlier
 /// snapshot's ids keep matching the page's current `__impCap`.
 pub fn capture_snapshot(page: &mut Page<'_>) -> CdpResult<SnapshotDom> {
-    let expr = "(function(){ const s = window.__impeccableSnapshot; const c = s.capture(); if (c.error) return { error: c.error }; window.__impCap = c; window.__impIO = s.visualIO(c); return { json: c.json }; })()";
+    parse_snapshot(&capture_snapshot_json(page)?)
+}
+
+/// [`capture_snapshot`] without the parse: the capture's JSON exactly as the
+/// page produced it, which is what a replay loads.
+pub fn capture_snapshot_json(page: &mut Page<'_>) -> CdpResult<String> {
+    // The page-side default cap (48 MiB) exists for the extension's message
+    // channel. Over CDP the websocket accepts 256 MiB (`cdp.rs`), so a URL scan
+    // allows a capture up to 200 MiB: large commerce pages serialize to 70+ MiB
+    // (cvs.com, 2026-09) and used to fail the scan outright.
+    let expr = "(function(){ const s = window.__impeccableSnapshot; const c = s.capture({ maxBytes: 200 * 1024 * 1024 }); if (c.error) return { error: c.error }; window.__impCap = c; window.__impIO = s.visualIO(c); return { json: c.json }; })()";
     let out = page.evaluate_value(expr)?;
     if let Some(err) = out.get("error").and_then(Value::as_str) {
         return Err(CdpError::new(format!("snapshot capture failed: {err}")));
     }
-    let json = out
-        .get("json")
+    out.get("json")
         .and_then(Value::as_str)
-        .ok_or_else(|| CdpError::new("snapshot capture returned no json"))?;
+        .map(String::from)
+        .ok_or_else(|| CdpError::new("snapshot capture returned no json"))
+}
+
+/// Answer [`SnapshotDom::take_scroll_probes`]: scroll the page to each box
+/// (its centre to the viewport's centre; for a box inside a `position:
+/// sticky` stage, through the stage's scroll range in half-viewport steps),
+/// wait a few frames, and read whether it is still at opacity 0.02 or less or
+/// `visibility: hidden | collapse`. The page is scrolled back to the top and
+/// given the same 700ms the reveal sweep gives it before anything reads it
+/// again. Boxes the page no longer holds are left unanswered. The whole
+/// probe stops after [`SCROLL_PROBE_BUDGET_MS`], and boxes it did not reach
+/// are left unanswered too, so they count as hidden.
+pub fn probe_shown_on_scroll(page: &mut Page<'_>, ids: &[ElId]) -> CdpResult<Vec<ScrollShown>> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let expr = format!(
+        r#"(async (ids, budget) => {{
+  const cap = window.__impCap;
+  const out = [];
+  if (!cap || !cap.elements) return out;
+  const started = performance.now();
+  const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 60)));
+  const shown = (el) => {{
+    const cs = getComputedStyle(el);
+    return parseFloat(cs.opacity) > 0.02 && cs.visibility !== 'hidden' && cs.visibility !== 'collapse';
+  }};
+  const docTop = (el) => el.getBoundingClientRect().top + window.scrollY;
+  for (const id of ids) {{
+    if (performance.now() - started > budget) break;
+    const el = cap.elements[id];
+    if (!el || !el.isConnected) continue;
+    const vh = window.innerHeight;
+    let stage = null;
+    for (let a = el; a && a !== document.body; a = a.parentElement) {{
+      if (getComputedStyle(a).position === 'sticky') {{ stage = a; break; }}
+    }}
+    const stops = [];
+    if (stage && stage.parentElement) {{
+      const host = stage.parentElement;
+      const from = docTop(host) - vh / 2;
+      const to = docTop(host) + host.getBoundingClientRect().height - vh / 2;
+      for (let y = from; y <= to && stops.length < 12; y += Math.max(100, vh / 2)) stops.push(y);
+    }}
+    const r = el.getBoundingClientRect();
+    stops.push(docTop(el) + r.height / 2 - vh / 2);
+    let seen = false;
+    for (const y of stops) {{
+      window.scrollTo({{ top: Math.max(0, y), left: 0, behavior: 'instant' }});
+      for (let i = 0; i < 4 && !seen; i++) {{ await frame(); seen = shown(el); }}
+      if (seen) break;
+    }}
+    out.push({{ el: id, shown: seen }});
+  }}
+  window.scrollTo({{ top: 0, left: 0, behavior: 'instant' }});
+  await new Promise(r => setTimeout(r, 700));
+  return out;
+}})({ids}, {budget})"#,
+        ids = serde_json::to_string(ids).unwrap_or_else(|_| "[]".into()),
+        budget = SCROLL_PROBE_BUDGET_MS,
+    );
+    let out = page.evaluate_value(&expr)?;
+    Ok(serde_json::from_value(out).unwrap_or_default())
+}
+
+/// The time the scroll probe ([`probe_shown_on_scroll`]) may spend before
+/// it stops asking. Each box takes about a quarter of a second, a sticky
+/// stage up to three seconds.
+pub const SCROLL_PROBE_BUDGET_MS: u64 = 5000;
+
+/// Parse a capture's JSON into a [`SnapshotDom`].
+pub fn parse_snapshot(json: &str) -> CdpResult<SnapshotDom> {
     SnapshotDom::from_json(json).map_err(|e| CdpError::new(format!("snapshot parse: {e}")))
 }
 
@@ -165,12 +246,26 @@ pub fn resolve_needs<T>(
     page: &mut Page<'_>,
     f: impl Fn(&SnapshotDom) -> T,
 ) -> CdpResult<T> {
+    resolve_needs_recording(dom, page, f, None)
+}
+
+/// [`resolve_needs`], appending every answered hit test to `record` so the
+/// run can be replayed over the same capture without the page.
+pub fn resolve_needs_recording<T>(
+    dom: &SnapshotDom,
+    page: &mut Page<'_>,
+    f: impl Fn(&SnapshotDom) -> T,
+    mut record: Option<&mut Facts>,
+) -> CdpResult<T> {
     let mut out = f(dom);
     let mut rounds = 0;
     while dom.has_needs() && rounds < 12 {
         let needs = dom.take_needs();
         let facts = answer_needs(page, &needs.hit_tests)?;
         dom.add_facts(&facts);
+        if let Some(record) = record.as_deref_mut() {
+            record.hits.extend(facts.hits.iter().cloned());
+        }
         out = f(dom);
         rounds += 1;
     }
@@ -262,12 +357,28 @@ fn scroll_to(page: &mut Page<'_>, x: f64, y: f64) -> CdpResult<()> {
     Ok(())
 }
 
-fn scroll_into_view(page: &mut Page<'_>, selector: &str) -> CdpResult<bool> {
+fn scroll_into_view(page: &mut Page<'_>, candidate: &Value) -> CdpResult<bool> {
+    let selector = candidate.get("selector").and_then(Value::as_str).unwrap_or("");
+    let identity = candidate.get("match").cloned().unwrap_or(Value::Null);
+    // Every ancestor's offset is kept before the scroll, so an element scroller
+    // it moves (a page that scrolls inside its body or an app shell's main) can
+    // be put back: `window.scrollTo` never reaches those.
     let expr = format!(
-        "(function(){{ let el; try {{ el = document.querySelector({}); }} catch {{ return false; }} if (!el || typeof el.scrollIntoView !== 'function') return false; el.scrollIntoView({{ block: 'center', inline: 'nearest', behavior: 'instant' }}); return true; }})()",
-        json!(selector)
+        "(function(){{ const el = ({})({}, {}); if (!el || typeof el.scrollIntoView !== 'function') return false; const saved = window.__impeccableVisualScrollSaved || (window.__impeccableVisualScrollSaved = new Map()); const up = n => n.assignedSlot || n.parentElement || (n.parentNode && n.parentNode.host) || null; for (let p = up(el); p; p = up(p)) {{ if (!saved.has(p)) saved.set(p, [p.scrollTop, p.scrollLeft]); }} el.scrollIntoView({{ block: 'center', inline: 'nearest', behavior: 'instant' }}); return true; }})()",
+        crate::screenshot_contrast::PICK_CANDIDATE_JS,
+        json!(selector),
+        identity
     );
     Ok(page.evaluate_value(&expr)?.as_bool() == Some(true))
+}
+
+/// Put back the element offsets [`scroll_into_view`] moved. Returns whether
+/// any element had moved.
+fn restore_element_scroll(page: &mut Page<'_>) -> CdpResult<bool> {
+    let out = page.evaluate_value(
+        "(function(){ const saved = window.__impeccableVisualScrollSaved; window.__impeccableVisualScrollSaved = undefined; if (!saved) return false; let moved = false; for (const [p, [t, l]] of saved) { if (p.scrollTop !== t || p.scrollLeft !== l) { p.scrollTo({ top: t, left: l, behavior: 'instant' }); moved = true; } } return moved; })()",
+    )?;
+    Ok(out.as_bool() == Some(true))
 }
 
 fn wait_for_paint(page: &mut Page<'_>) -> CdpResult<()> {
@@ -399,11 +510,14 @@ fn sample_image_element(
     Ok(sample)
 }
 
-/// Port of `sampleCssBackground`.
+/// Port of `sampleCssBackground`. `el` is the candidate whose text is being
+/// sampled, which decides whether an image is under that text at all.
+#[allow(clippy::too_many_arguments)]
 fn sample_css_background(
     page: &mut Page<'_>,
     dom: &SnapshotDom,
     node: ElId,
+    el: ElId,
     px: f64,
     py: f64,
     text_color: &Rgba,
@@ -412,9 +526,9 @@ fn sample_css_background(
         CssPlan::Sample { sample } => Ok(sample),
         CssPlan::Url { url, size, position } => {
             let Some(img) = load_image(page, &url)? else {
-                return Ok(visual::css_url_no_image());
+                return Ok(visual::css_url_no_image(dom, node, el, &size, &position));
             };
-            match visual::css_url_source_point(dom, node, img.w, img.h, &size, &position, px, py) {
+            match visual::css_url_source_point(dom, node, el, img.w, img.h, &size, &position, px, py) {
                 Err(sample) => Ok(sample),
                 Ok(source) => {
                     let pixel = sample_drawable_pixel(
@@ -479,43 +593,41 @@ fn sample_background_impl(
         Ok(nodes) => nodes,
     };
     let mut unresolved: Vec<String> = Vec::new();
+    // Translucent surfaces the walk passed through, topmost first. The walk
+    // keeps descending the same stack for the opaque ground under them: a
+    // surface's own parent sits below siblings that paint over it, so
+    // restarting the walk there would skip whatever those paint.
+    let mut pending: Vec<Value> = Vec::new();
     for StackNode { el: node, kind } in nodes {
-        match kind.as_str() {
-            "img" => {
-                let sample = sample_image_element(page, dom, node, px, py)?;
-                if is_sampled(&sample) {
-                    return Ok(sample);
-                }
-                unresolved.push(sample_reason(&sample));
-            }
+        let sample = match kind.as_str() {
+            "img" => visual::media_sample(dom, node, el, sample_image_element(page, dom, node, px, py)?),
             "raster" => {
                 let intrinsic = intrinsic_raster(dom, node);
-                if let Some(source) =
-                    visual::raster_source_point(dom, node, intrinsic.0, intrinsic.1, px, py)
-                {
-                    let node_ref = json!(node);
-                    let pixel =
-                        sample_drawable_pixel(page, &node_ref, intrinsic, source.0, source.1)?;
-                    let sample = visual::raster_finish(dom, node, pixel);
-                    if is_sampled(&sample) {
-                        return Ok(sample);
+                match visual::raster_source_point(dom, node, intrinsic.0, intrinsic.1, px, py) {
+                    Some(source) => {
+                        let node_ref = json!(node);
+                        let pixel =
+                            sample_drawable_pixel(page, &node_ref, intrinsic, source.0, source.1)?;
+                        visual::media_sample(dom, node, el, visual::raster_finish(dom, node, pixel))
                     }
-                    unresolved.push(sample_reason(&sample));
+                    // Outside the drawable: nothing sampled, nothing to say.
+                    None => continue,
                 }
             }
-            _ => {
-                let sample = sample_css_background(page, dom, node, px, py, text_color)?;
-                if is_sampled(&sample) {
-                    if visual::sample_is_opaque(&sample) {
-                        return Ok(sample);
-                    }
-                    let parent = dom.parent(node).or_else(|| dom.body()).unwrap_or(0);
-                    let under =
-                        sample_background_impl(page, dom, parent, px, py, depth + 1.0, text_color)?;
-                    return Ok(visual::alpha_composite(sample, &under));
-                }
-                unresolved.push(sample_reason(&sample));
+            // Paint this walk cannot read (vector artwork).
+            "unreadable" => visual::unreadable_stack_sample(dom, node),
+            _ => sample_css_background(page, dom, node, el, px, py, text_color)?,
+        };
+        if is_sampled(&sample) {
+            if visual::sample_is_opaque(&sample) {
+                return Ok(visual::composite_stack(&pending, &sample));
             }
+            pending.push(sample);
+            continue;
+        }
+        unresolved.push(sample_reason(&sample));
+        if visual::sample_ends_walk(&sample) {
+            break;
         }
     }
     Ok(visual::unresolved_from_reasons(&unresolved))
@@ -529,26 +641,36 @@ pub fn analyze_visual_contrast(
     page: &mut Page<'_>,
     base: &SnapshotDom,
     max_candidates: f64,
+    max_routed: f64,
     scroll_offscreen: bool,
 ) -> CdpResult<Vec<Value>> {
-    let options = json!({ "maxCandidates": max_candidates });
+    let options = json!({ "maxCandidates": max_candidates, "maxRoutedCandidates": max_routed });
     let candidates = resolve_needs(base, page, |d| {
         visual::collect_visual_contrast_candidates(d, &options)
     })?;
     let mut results: Vec<Value> = Vec::with_capacity(candidates.len());
     let restore = live_scroll(page)?;
+    // Set once a retry scrolled, so a page that never retried pays nothing.
+    let mut retried = false;
     for candidate in &candidates {
         if scroll_offscreen {
+            // Back to the scroll the base snapshot measured, element scrollers
+            // included, before the next candidate reads the live page with the
+            // base geometry.
+            let element_moved = retried && restore_element_scroll(page)?;
+            retried = false;
             let now = live_scroll(page)?;
             if now != restore {
                 scroll_to(page, restore.0, restore.1)?;
+                wait_for_paint(page)?;
+            } else if element_moved {
                 wait_for_paint(page)?;
             }
         }
         let mut result = analyze_candidate(page, base, candidate)?;
         if scroll_offscreen && visual::needs_scroll_retry(&result) {
-            let selector = candidate.get("selector").and_then(Value::as_str).unwrap_or("");
-            if scroll_into_view(page, selector)? {
+            if scroll_into_view(page, candidate)? {
+                retried = true;
                 wait_for_paint(page)?;
                 // Only geometry changed (the page scrolled); patch it onto the
                 // base snapshot rather than re-capturing the whole page.
@@ -559,9 +681,12 @@ pub fn analyze_visual_contrast(
         results.push(result);
     }
     if scroll_offscreen {
+        let element_moved = retried && restore_element_scroll(page)?;
         let now = live_scroll(page)?;
         if now != restore {
             scroll_to(page, restore.0, restore.1)?;
+        } else if element_moved {
+            wait_for_paint(page)?;
         }
     }
     Ok(results)

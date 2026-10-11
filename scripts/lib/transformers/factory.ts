@@ -193,11 +193,14 @@ function buildCursorAgent(agent: SkillAgent, body: string) {
  * here, so all three resolve provider blocks, {{placeholders}}, rule markers,
  * and {{scripts_path}} the same way. The nested Codex .toml used to skip the
  * last two and shipped `node {{scripts_path}}/embed-prompt.mjs` literally.
+ * {{reference_path}} is the skill's reference/ dir relative to emitDir: a
+ * markdown link resolves against its own file, and each surface lands elsewhere.
  */
-function renderAgentBody(agent: SkillAgent, { providerTags, placeholderKey, allSkillNames, scriptsPath }: { providerTags: string[]; placeholderKey: string; allSkillNames: string[]; scriptsPath: string }) {
+function renderAgentBody(agent: SkillAgent, { providerTags, placeholderKey, allSkillNames, scriptsPath, emitDir, skillDir }: { providerTags: string[]; placeholderKey: string; allSkillNames: string[]; scriptsPath: string; emitDir: string; skillDir: string }) {
   let body = compileProviderBlocks(agent.body, providerTags);
   body = replacePlaceholders(body, placeholderKey, [], allSkillNames);
   body = stripRuleMarkers(body);
+  body = body.replace(/\{\{reference_path\}\}/g, path.relative(emitDir, path.join(skillDir, 'reference')).split(path.sep).join('/'));
   return body.replace(/\{\{scripts_path\}\}/g, scriptsPath);
 }
 
@@ -365,7 +368,7 @@ export function createTransformer(config: ProviderConfig): Transformer {
         ensureDir(degradedDir);
         for (const agent of skill.agents) {
           const role = agent.name.replace(/^impeccable-/, '');
-          const body = renderAgentBody(agent, { providerTags, placeholderKey, allSkillNames, scriptsPath });
+          const body = renderAgentBody(agent, { providerTags, placeholderKey, allSkillNames, scriptsPath, emitDir: degradedDir, skillDir });
           const content = `${DEGRADED_PREAMBLE}\n\n${body.replace(/^\s+/, '')}`;
           writeFile(path.join(degradedDir, `${role}.md`), content);
           refCount++;
@@ -395,7 +398,7 @@ export function createTransformer(config: ProviderConfig): Transformer {
       if (CODEX_SKILL_PROVIDERS.has(provider)) {
         for (const agent of skill.agents || []) {
           if (agent.providers && !agent.providers.includes('codex')) continue;
-          const agentBody = renderAgentBody(agent, { providerTags, placeholderKey, allSkillNames, scriptsPath });
+          const agentBody = renderAgentBody(agent, { providerTags, placeholderKey, allSkillNames, scriptsPath, emitDir: path.join(skillDir, 'agents'), skillDir });
           const filename = `${agent.codexName || agent.name.replace(/-/g, '_')}.toml`;
           ensureDir(path.join(skillDir, 'agents'));
           writeFile(path.join(skillDir, 'agents', filename), buildCodexAgent(agent, agentBody));
@@ -433,7 +436,7 @@ export function createTransformer(config: ProviderConfig): Transformer {
           // Agents can declare `providers: <list>` to limit which harnesses
           // they emit to. Default (no field) ships everywhere with agentFormat.
           if (agent.providers && !agent.providers.includes(provider)) continue;
-          const body = renderAgentBody(agent, { providerTags, placeholderKey, allSkillNames, scriptsPath });
+          const body = renderAgentBody(agent, { providerTags, placeholderKey, allSkillNames, scriptsPath, emitDir: agentsDir, skillDir: path.join(skillsDir, skill.name) });
           const agentFile = buildAgentFile(config, agent, body);
           if (!agentFile) continue;
           ensureDir(agentsDir);

@@ -27,7 +27,10 @@
     .bounce-animation { animation: bounce-keyframe 1s infinite; }
     .elastic-transition { transition: transform 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
 
-    /* ── FLAG: layout property transitions ── */
+    /* ── PASS: layout property transitions. The layout-transition rule
+       was retired on 2026-10-07: on two judged cohorts every finding was a
+       progress bar, a shrinking header, an accordion or a toast, and none
+       was harmful. ── */
     .width-transition { transition: width 0.3s ease; }
     .height-transition { transition: height 0.4s ease-out; }
     .padding-transition { transition: padding 0.2s linear; }
@@ -53,6 +56,11 @@
     .shadow-transition { transition: box-shadow 0.2s ease; }
     .all-transition { transition: all 0.3s ease; }
     .multi-safe-transition { transition: transform 0.3s ease, opacity 0.3s ease, box-shadow 0.2s ease; }
+
+    /* ── PASS: hover zoom on card imagery (a long-standing convention) ── */
+    .zoom-card img { display: block; width: 240px; height: 160px; transition: transform 0.3s ease; }
+    .zoom-card:hover img { transform: scale(1.04); }
+    .zoom-card img:hover { transform: scale(1.05); }
   </style>
 </head>
 <body>
@@ -71,40 +79,6 @@
       <div class="demo elastic-transition">
         <h4>Elastic cubic-bezier</h4>
         <p>cubic-bezier(0.68, -0.55, 0.265, 1.55)</p>
-      </div>
-
-      <h3>Layout property transitions</h3>
-      <div class="demo width-transition">
-        <h4>transition: width</h4>
-        <p>Animating width causes layout thrash.</p>
-      </div>
-      <div class="demo height-transition">
-        <h4>transition: height</h4>
-        <p>Animating height causes layout thrash.</p>
-      </div>
-      <div class="demo padding-transition">
-        <h4>transition: padding</h4>
-        <p>Animating padding causes layout thrash.</p>
-      </div>
-      <div class="demo margin-transition">
-        <h4>transition: margin</h4>
-        <p>Animating margin causes layout thrash.</p>
-      </div>
-      <div class="demo max-height-transition">
-        <h4>transition: max-height</h4>
-        <p>Use grid-template-rows instead.</p>
-      </div>
-      <div class="demo multi-layout-transition">
-        <h4>transition: width, height</h4>
-        <p>Multiple layout properties.</p>
-      </div>
-      <div class="demo mixed-transition">
-        <h4>transition: width, opacity</h4>
-        <p>Layout property mixed with OK property.</p>
-      </div>
-      <div class="demo transition-property-width">
-        <h4>transition-property: width</h4>
-        <p>Longhand form.</p>
       </div>
     </div>
 
@@ -153,6 +127,57 @@
         <h4>transition: transform, opacity, box-shadow</h4>
         <p>Multiple safe properties combined.</p>
       </div>
+
+      <h3>Layout property transitions (the retired layout-transition rule)</h3>
+      <div class="demo width-transition">
+        <h4>transition: width</h4>
+        <p>A progress bar fills by its width.</p>
+      </div>
+      <div class="demo height-transition">
+        <h4>transition: height</h4>
+        <p>A header shrinks on scroll by its height.</p>
+      </div>
+      <div class="demo padding-transition">
+        <h4>transition: padding</h4>
+        <p>A header tightens its padding on scroll.</p>
+      </div>
+      <div class="demo margin-transition">
+        <h4>transition: margin</h4>
+        <p>A toast slides in by its margin.</p>
+      </div>
+      <div class="demo max-height-transition">
+        <h4>transition: max-height</h4>
+        <p>An accordion opens by its max-height.</p>
+      </div>
+      <div class="demo multi-layout-transition">
+        <h4>transition: width, height</h4>
+        <p>Multiple layout properties.</p>
+      </div>
+      <div class="demo mixed-transition">
+        <h4>transition: width, opacity</h4>
+        <p>Layout property mixed with OK property.</p>
+      </div>
+      <div class="demo transition-property-width">
+        <h4>transition-property: width</h4>
+        <p>Longhand form.</p>
+      </div>
+
+      <h3>Hover zoom on card imagery</h3>
+      <a class="demo zoom-card group" href="#zoom-parent-hover">
+        <h4>Parent hover scales the card image</h4>
+        <img src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='240'%20height='160'%3E%3Crect%20width='240'%20height='160'%20fill='%23cbd5e1'/%3E%3C/svg%3E" width="240" height="160" alt="Card thumbnail that zooms when the card is hovered" />
+        <p>A card-wide zoom is the click affordance, not decoration.</p>
+      </a>
+      <a class="demo zoom-card" href="#zoom-own-hover">
+        <h4>Image hover scales the image itself</h4>
+        <img src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='240'%20height='160'%3E%3Crect%20width='240'%20height='160'%20fill='%23bfc9d6'/%3E%3C/svg%3E" width="240" height="160" alt="Thumbnail that zooms on its own hover" />
+        <p>Same convention, written on the image's own hover state.</p>
+      </a>
+      <a class="demo group" href="#zoom-utility-classes">
+        <h4>Utility classes, restrained magnitude</h4>
+        <img class="transition-transform group-hover:scale-[1.04] hover:scale-105" src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='240'%20height='160'%3E%3Crect%20width='240'%20height='160'%20fill='%23b6c2d1'/%3E%3C/svg%3E" width="240" height="160" alt="Thumbnail that zooms through utility classes" />
+        <p>A four to five percent lift reads as a pointer cue.</p>
+      </a>
     </div>
   </div>
   <script src="/js/detect-antipatterns-browser.js"></script>

@@ -122,41 +122,31 @@ pub fn encode_png(img: &Image, text: &[(String, String)]) -> Result<Vec<u8>, Str
 }
 
 /// JS: loadRaster(file). PNG natively; WebP/JPEG/GIF through the `image` crate
-/// (replacing the JS dwebp/sips/magick/convert shell-outs). Like the JS, a
-/// converted source is cached as a sibling `<name>.png`; the returned path is
-/// the PNG actually decoded. AVIF is deferred to step 2.
+/// (replacing the JS dwebp/sips/magick/convert shell-outs). Non-PNG sources are
+/// decoded from their own bytes on every call so an edited source can never be
+/// shadowed by an older conversion. AVIF is deferred to step 2.
 pub fn load_raster(file: &std::path::Path) -> Result<(Decoded, std::path::PathBuf), String> {
     let buf = std::fs::read(file).map_err(|e| format!("png: {file:?}: {e}"))?;
     if is_png(&buf) {
         return Ok((decode_png(&buf)?, file.to_path_buf()));
     }
-    let cache = {
-        let mut s = file.as_os_str().to_os_string();
-        s.push(".png");
-        std::path::PathBuf::from(s)
-    };
-    if cache.exists() {
-        if let Ok(b) = std::fs::read(&cache) {
-            if is_png(&b) {
-                if let Ok(d) = decode_png(&b) {
-                    return Ok((d, cache));
-                }
-            }
-        }
-    }
-    // Decode the source with the `image` crate and materialize the PNG cache.
-    let dyn_img = image::load_from_memory(&buf)
+    let image = decode_source(&buf)
         .map_err(|e| format!("png: {file:?} is not a PNG and could not be decoded: {e}"))?;
-    let rgba = dyn_img.to_rgba8();
-    let (w, h) = (rgba.width() as usize, rgba.height() as usize);
-    let img = Image { width: w, height: h, data: rgba.into_raw() };
-    let bytes = encode_png(&img, &[])?;
-    let _ = std::fs::write(&cache, &bytes);
-    Ok((Decoded { image: img, text: HashMap::new() }, cache))
+    Ok((Decoded { image, text: HashMap::new() }, file.to_path_buf()))
 }
 
-/// Decode a static review image from its pinned bytes, without consulting or
-/// writing sibling conversion caches. Keep the original file as review evidence.
+/// Decode an image from its own bytes, using any format `load_raster` reads.
+pub fn decode_source(bytes: &[u8]) -> Result<Image, String> {
+    if is_png(bytes) {
+        return Ok(decode_png(bytes)?.image);
+    }
+    let rgba = image::load_from_memory(bytes).map_err(|e| format!("not a decodable image: {e}"))?.to_rgba8();
+    let (width, height) = (rgba.width() as usize, rgba.height() as usize);
+    Ok(Image { width, height, data: rgba.into_raw() })
+}
+
+/// Decode a static review image from its pinned bytes. Keep the original file
+/// as review evidence.
 pub fn decode_review_image(bytes: &[u8]) -> Result<(Image, &'static str), String> {
     if is_png(bytes) {
         if bytes.len() < 24 { return Err("truncated PNG".into()); }
@@ -185,6 +175,15 @@ pub fn decode_review_image(bytes: &[u8]) -> Result<(Image, &'static str), String
 #[cfg(test)]
 mod review_image_tests {
     use super::*;
+
+    fn lossless_webp(pixel: [u8; 4]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        image::codecs::webp::WebPEncoder::new_lossless(&mut bytes)
+            .encode(&pixel, 1, 1, image::ExtendedColorType::Rgba8)
+            .unwrap();
+        bytes
+    }
+
     #[test]
     fn review_webp_and_jpeg_decode_original_bytes_and_keep_alpha() {
         let pixels = [25, 90, 65, 120, 200, 40, 35, 255];
@@ -197,5 +196,36 @@ mod review_image_tests {
         let (decoded, format) = decode_review_image(&jpeg).unwrap();
         assert_eq!(format, "JPEG"); assert_eq!(decoded.data[3], 255);
         assert!(decode_review_image(b"not an image").is_err());
+    }
+
+    #[test]
+    fn load_raster_reads_an_edited_non_png_source() {
+        let unique = format!(
+            "impeccable-load-raster-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let dir = std::env::temp_dir().join(unique);
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("comp.webp");
+
+        std::fs::write(&source, lossless_webp([20, 40, 60, 255])).unwrap();
+        let first = load_raster(&source).unwrap().0.image;
+        let mut cache_name = source.as_os_str().to_os_string();
+        cache_name.push(".png");
+        std::fs::write(
+            std::path::PathBuf::from(cache_name),
+            encode_png(&first, &[]).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(&source, lossless_webp([200, 180, 160, 255])).unwrap();
+        let second = load_raster(&source).unwrap().0.image;
+
+        assert_eq!(first.data, [20, 40, 60, 255]);
+        assert_eq!(second.data, [200, 180, 160, 255]);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

@@ -80,6 +80,72 @@ fn mode_allows(concept: &Value, mode: &str) -> bool {
     }
 }
 
+/// JS: TIER_QUOTAS. Challenger picks per tier, by mode; a mode with no entry
+/// takes two from every tier, the draw every mode had before quotas existed.
+///
+/// Operate draws mostly from the graphic tier. Instrument and atmosphere worlds
+/// dealt to working screens became costumes of the tool (dashboards built as
+/// terminals and gauge clusters), while timetables, specimens, maps and tables
+/// transfer as a system. Keep in parity with impeccable-site's
+/// scripts/lib/catalog/roll-selection.mjs.
+pub const TIER_QUOTAS: [(&str, [(&str, usize); 3]); 1] =
+    [("operate", [("graphic", 5), ("interaction", 1), ("atmosphere", 0)])];
+const DEFAULT_TIER_QUOTA: usize = 2;
+
+fn tier_quotas(mode: Option<&str>) -> Option<HashMap<String, usize>> {
+    let mode = mode?;
+    TIER_QUOTAS
+        .iter()
+        .find(|(m, _)| *m == mode)
+        .map(|(_, quotas)| quotas.iter().map(|(t, q)| (t.to_string(), *q)).collect())
+}
+
+/// JS: pickFromFamilies. Up to `count` concepts in ranked order, preferring one
+/// from a family not yet picked, then any concept not yet picked. At a count of
+/// two this is exactly the first-then-different-family pick of every roll
+/// before quotas. `prior` are picks already in the hand, whose families count
+/// as taken.
+fn pick_from_families(order: &[Value], count: usize, prior: &[Value]) -> Vec<Value> {
+    let mut picks: Vec<Value> = Vec::new();
+    let mut families: Vec<Value> = prior.iter().map(|c| c.get("familyId").cloned().unwrap_or(Value::Null)).collect();
+    let id_of = |c: &Value| s(c, "id").unwrap_or("").to_string();
+    while picks.len() < count {
+        let picked = |c: &Value| picks.iter().any(|p| id_of(p) == id_of(c));
+        let family_of = |c: &Value| c.get("familyId").cloned().unwrap_or(Value::Null);
+        let next = order
+            .iter()
+            .find(|c| !picked(c) && !families.contains(&family_of(c)))
+            .or_else(|| order.iter().find(|c| !picked(c)))
+            .cloned();
+        match next {
+            Some(c) => {
+                families.push(family_of(&c));
+                picks.push(c);
+            }
+            None => break,
+        }
+    }
+    picks
+}
+
+/// JS: rankTier. A tier's pool in ticket order, one entry per concept.
+fn rank_tier(pool: &[Value], salt_input: &str) -> Vec<Value> {
+    let mut tickets = challenger_tickets(pool);
+    if tickets.is_empty() {
+        tickets = pool.iter().map(|c| Ticket { item: c.clone(), ticket: 0 }).collect();
+    }
+    let ranked = rank(&tickets, salt_input, |e| format!("{}#{}", s(&e.item, "id").unwrap_or(""), e.ticket));
+    let mut ordered: Vec<Value> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    for e in ranked {
+        let id = s(&e.item, "id").unwrap_or("").to_string();
+        if seen.insert(id) {
+            ordered.push(e.item);
+        }
+    }
+    ordered
+}
+
 pub struct ChallengerSelection {
     pub approved: Vec<Value>,
     pub picks: Vec<Value>,
@@ -111,12 +177,23 @@ pub fn select_approved_challengers(
     if WELL_TIERS.iter().any(|t| by_tier.get(*t).map(|p| p.is_empty()).unwrap_or(true)) {
         return Err("concept-seed: every challenger tier needs at least one approved concept".to_string());
     }
+    // A mode with quotas does not fall back: refilling an emptied tier from its
+    // whole pool would deal the worlds the reviewer kept out of the mode, so the
+    // tier's picks move to graphic. Graphic itself still falls back.
+    let mut quotas = tier_quotas(mode);
     if let Some(mode) = mode {
         for tier in &tier_order {
             let pool = by_tier.get(tier).unwrap();
             let eligible: Vec<Value> = pool.iter().filter(|c| mode_allows(c, mode)).cloned().collect();
             if !eligible.is_empty() {
                 by_tier.insert(tier.clone(), eligible);
+            } else if let Some(q) = quotas.as_mut() {
+                if tier != "graphic" {
+                    if let Some(moved) = q.get(tier).copied() {
+                        *q.entry("graphic".to_string()).or_insert(0) += moved;
+                        q.insert(tier.clone(), 0);
+                    }
+                }
             }
         }
     }
@@ -134,40 +211,35 @@ pub fn select_approved_challengers(
         let order = rank(&tiers, &format!("{}:{}:tiers{}", scope, key, salt), |t| t.clone());
         let mut picks: Vec<Value> = Vec::new();
         for (index, tier) in order.iter().enumerate() {
+            // A zero-quota tier is skipped without shifting `index`, so every
+            // tier's salt stays what it was.
+            let quota = match &quotas {
+                Some(q) => q.get(tier).copied().unwrap_or(0),
+                None => DEFAULT_TIER_QUOTA,
+            };
+            if quota == 0 {
+                continue;
+            }
             let full = by_tier.get(tier).cloned().unwrap_or_default();
-            let mut pool: Vec<Value> = full.iter().filter(|c| !excluded.contains(s(c, "id").unwrap_or(""))).cloned().collect();
-            if pool.is_empty() {
-                pool = full;
+            let fresh: Vec<Value> = full.iter().filter(|c| !excluded.contains(s(c, "id").unwrap_or(""))).cloned().collect();
+            let salt_input = format!("{}:{}:challenger-{}{}", scope, key, index, salt);
+            // Reuse over starvation.
+            let first_pool = if fresh.is_empty() { &full } else { &fresh };
+            let mut tier_picks = pick_from_families(&rank_tier(first_pool, &salt_input), quota, &[]);
+            // Under a quota, a tier whose unseen worlds cannot fill the quota
+            // deals every unseen one first and only then tops up from worlds
+            // already shown, so a late re-roll never repeats a world ahead of a
+            // new one.
+            if quotas.is_some() && tier_picks.len() < quota && !fresh.is_empty() && fresh.len() < full.len() {
+                let rest: Vec<Value> = full
+                    .iter()
+                    .filter(|c| !tier_picks.iter().any(|p| s(p, "id") == s(c, "id")))
+                    .cloned()
+                    .collect();
+                let more = pick_from_families(&rank_tier(&rest, &salt_input), quota - tier_picks.len(), &tier_picks);
+                tier_picks.extend(more);
             }
-            let mut tickets = challenger_tickets(&pool);
-            if tickets.is_empty() {
-                tickets = pool.iter().map(|c| Ticket { item: c.clone(), ticket: 0 }).collect();
-            }
-            let ranked = rank(&tickets, &format!("{}:{}:challenger-{}{}", scope, key, index, salt), |e| {
-                format!("{}#{}", s(&e.item, "id").unwrap_or(""), e.ticket)
-            });
-            let mut ordered: Vec<Value> = Vec::new();
-            let mut seen: HashSet<String> = HashSet::new();
-            for e in ranked {
-                let id = s(&e.item, "id").unwrap_or("").to_string();
-                if seen.contains(&id) {
-                    continue;
-                }
-                seen.insert(id);
-                ordered.push(e.item);
-            }
-            let first = ordered[0].clone();
-            let first_family = first.get("familyId").cloned().unwrap_or(Value::Null);
-            let first_id = s(&first, "id").unwrap_or("").to_string();
-            let second = ordered
-                .iter()
-                .find(|c| c.get("familyId").cloned().unwrap_or(Value::Null) != first_family)
-                .or_else(|| ordered.iter().find(|c| s(c, "id").unwrap_or("") != first_id))
-                .cloned();
-            picks.push(first);
-            if let Some(sec) = second {
-                picks.push(sec);
-            }
+            picks.extend(tier_picks);
         }
         picks
     };
@@ -313,5 +385,148 @@ pub fn select_approved_compositions(
             platform_excluded,
         },
         picks,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn parity() -> Value {
+        serde_json::from_str(include_str!("../../../tests/fixtures/roll-quota-parity.json")).unwrap()
+    }
+
+    fn closed_interaction(concepts: &[Value]) -> Vec<Value> {
+        concepts
+            .iter()
+            .map(|c| {
+                let mut c = c.clone();
+                if s(&c, "wellTier") == Some("interaction") {
+                    c["review"]["allowedModes"] = json!(["persuade"]);
+                }
+                c
+            })
+            .collect()
+    }
+
+    fn ids(picks: &[Value]) -> Vec<String> {
+        picks.iter().map(|p| s(p, "id").unwrap().to_string()).collect()
+    }
+
+    fn tiers(picks: &[Value]) -> HashMap<String, usize> {
+        let mut out = HashMap::new();
+        for p in picks {
+            *out.entry(s(p, "wellTier").unwrap().to_string()).or_insert(0) += 1;
+        }
+        out
+    }
+
+    // The fixture is recorded from the site's JS selection: modes without a
+    // quota from the code before quotas existed, operate from the quota code.
+    // Every case must match, which holds the two implementations in parity and
+    // pins every other mode's rolls byte-identical.
+    #[test]
+    fn matches_the_js_selection_for_every_recorded_roll() {
+        let fixture = parity();
+        let open: Vec<Value> = fixture["concepts"].as_array().unwrap().clone();
+        let closed = closed_interaction(&open);
+        let cases = fixture["cases"].as_array().unwrap();
+        assert!(cases.len() > 100);
+        for case in cases {
+            let concepts = if case["catalog"] == "closed-interaction" { &closed } else { &open };
+            let mode = case["mode"].as_str();
+            let sel = select_approved_challengers(
+                case["scope"].as_str().unwrap(),
+                case["key"].as_str().unwrap(),
+                case["reroll"].as_u64().unwrap() as usize,
+                mode,
+                concepts,
+            )
+            .unwrap();
+            let want: Vec<String> = case["picks"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect();
+            assert_eq!(ids(&sel.picks), want, "case {}", case);
+        }
+    }
+
+    #[test]
+    fn operate_deals_five_graphic_one_interaction_and_no_atmosphere() {
+        let open: Vec<Value> = parity()["concepts"].as_array().unwrap().clone();
+        for key in ["alpha", "beta", "gamma"] {
+            for reroll in 0..3 {
+                let sel = select_approved_challengers("direction", key, reroll, Some("operate"), &open).unwrap();
+                let t = tiers(&sel.picks);
+                assert_eq!(t.get("graphic"), Some(&5), "{key}/{reroll}");
+                assert_eq!(t.get("interaction"), Some(&1), "{key}/{reroll}");
+                assert_eq!(t.get("atmosphere"), None, "{key}/{reroll}");
+            }
+        }
+    }
+
+    // Before quotas, a tier the mode filter would empty refilled from its whole
+    // approved pool, dealing worlds the reviewer had closed to the mode.
+    #[test]
+    fn an_emptied_tier_hands_its_picks_to_graphic() {
+        let closed = closed_interaction(parity()["concepts"].as_array().unwrap());
+        let sel = select_approved_challengers("direction", "alpha", 0, Some("operate"), &closed).unwrap();
+        assert_eq!(tiers(&sel.picks).get("graphic"), Some(&6));
+        for p in &sel.picks {
+            assert!(mode_allows(p, "operate"), "{} is closed to operate", s(p, "id").unwrap());
+        }
+    }
+
+    // A late re-roll whose unseen graphic concepts cannot fill the quota deals
+    // every unseen one first, then tops up with families not yet in the hand.
+    #[test]
+    fn a_short_tier_deals_unseen_first_and_tops_up_across_families() {
+        let open: Vec<Value> = parity()["concepts"].as_array().unwrap().clone();
+        let graphic: Vec<Value> = open
+            .iter()
+            .filter(|c| {
+                s(c, "status") == Some("approved")
+                    && s(c, "wellTier") == Some("graphic")
+                    && mode_allows(c, "operate")
+                    && matches!(s(c, "strength"), Some("world") | Some("dual"))
+                    && review_field(c, "breadth").and_then(|b| b.as_str()) != Some("niche")
+            })
+            .cloned()
+            .collect();
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut short_rounds = 0;
+        for round in 0..6 {
+            let sel = select_approved_challengers("direction", "chain", round, Some("operate"), &open).unwrap();
+            let dealt: Vec<Value> = sel.picks.iter().filter(|p| s(p, "wellTier") == Some("graphic")).cloned().collect();
+            let unseen: Vec<&Value> = graphic.iter().filter(|c| !seen.contains(s(c, "id").unwrap())).collect();
+            let dealt_ids: HashSet<String> = ids(&dealt).into_iter().collect();
+            if !unseen.is_empty() && unseen.len() < 5 && dealt.len() == 5 {
+                short_rounds += 1;
+                for c in &unseen {
+                    assert!(dealt_ids.contains(s(c, "id").unwrap()), "round {round} skipped unseen {}", s(c, "id").unwrap());
+                }
+                let taken: Vec<Value> = unseen.iter().map(|c| c["familyId"].clone()).collect();
+                let top_up: Vec<&Value> = dealt.iter().filter(|p| !unseen.iter().any(|c| s(c, "id") == s(p, "id"))).collect();
+                let families_left = graphic.iter().map(|c| c["familyId"].clone()).filter(|f| !taken.contains(f)).collect::<Vec<_>>();
+                if !families_left.is_empty() {
+                    assert!(!taken.contains(&top_up[0]["familyId"]), "round {round} top-up reused a taken family");
+                }
+            }
+            if unseen.is_empty() {
+                break;
+            }
+            seen.extend(dealt_ids);
+        }
+        assert!(short_rounds > 0, "the chain never reached a short round");
+    }
+
+    #[test]
+    fn modes_without_a_quota_keep_two_per_tier() {
+        let open: Vec<Value> = parity()["concepts"].as_array().unwrap().clone();
+        for mode in [None, Some("persuade"), Some("read"), Some("experience")] {
+            let sel = select_approved_challengers("direction", "alpha", 0, mode, &open).unwrap();
+            let t = tiers(&sel.picks);
+            for tier in WELL_TIERS {
+                assert_eq!(t.get(tier), Some(&2), "{mode:?} {tier}");
+            }
+        }
     }
 }

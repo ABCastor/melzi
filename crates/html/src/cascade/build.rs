@@ -243,6 +243,23 @@ fn mark_pseudo_rule(
                 .all(|side| zero_len(get(side)))
             || (js::trim(get("width").unwrap_or("")) == "100%"
                 && js::trim(get("height").unwrap_or("")) == "100%");
+        // A pseudo stretched over its element and painting a raster image is a
+        // picture under that element's content: the hero photo written as
+        // `.hero::before { position: absolute; inset: 0; background: url() }`.
+        // The contrast pass stands down over it, as it does over an `<img>`.
+        if covers_box
+            && decls.contains_key("content")
+            && js::to_lower_case(&first_of("background-image", "background")).contains("url(")
+        {
+            let ids: Vec<NodeId> = doc
+                .query_selector_all(base_selector)
+                .iter()
+                .map(|e| e.id())
+                .collect();
+            for id in ids {
+                doc.set_pseudo_picture(id);
+            }
+        }
         if covers_box && decls.contains_key("content") {
             let surf_raw = resolve_root(
                 &first_of("background-color", "background"),
@@ -279,6 +296,9 @@ pub fn build_static_style_map(
     let mut hover_specified: SpecifiedStore<NodeId> = SpecifiedStore::new();
     let mut placeholder_specified: SpecifiedStore<NodeId> = SpecifiedStore::new();
     let root_custom_props = collect_css_custom_props(css_text);
+    // Selectors of radius rules the matcher refuses: the side-accent gate
+    // cannot read their corners, so the elements they may reach stay unknown.
+    let mut refused_radius_selectors: Vec<String> = Vec::new();
     let rules = profile::step(
         profile,
         Meta::new("parse-css", "css-rules", file_path),
@@ -324,6 +344,14 @@ pub fn build_static_style_map(
                             Meta::new("selector-match", "unsupported-selector", file_path)
                                 .with_detail(match_selector),
                         );
+                        if !rule.is_hover
+                            && rule
+                                .declarations
+                                .iter()
+                                .any(|d| is_radius_property(&d.prop))
+                        {
+                            refused_radius_selectors.push(match_selector.to_string());
+                        }
                         continue;
                     }
                 };
@@ -384,6 +412,138 @@ pub fn build_static_style_map(
             compute_styles(doc, &specified, &hover_specified, &placeholder_specified);
         },
     );
+    mark_side_accent_radius_blind_spots(doc, css_text, &specified, &refused_radius_selectors);
+}
+
+/// Whether a property sets a border radius, in CSS or camelCase spelling.
+fn is_radius_property(prop: &str) -> bool {
+    let key = prop.replace('-', "").to_ascii_lowercase();
+    key.starts_with("border") && key.ends_with("radius")
+}
+
+static STATE_PSEUDO_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i):(?:hover|focus|focus-visible|focus-within|active)\b")
+        .expect("STATE_PSEUDO_RE")
+});
+static CLASS_ID_TOKEN_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"[.#](?:\\.|[-_A-Za-z0-9])+").expect("CLASS_ID_TOKEN_RE"));
+
+/// Record what the side-accent gate needs to fail safe on this page: which
+/// elements an applied declaration gave a radius, and which elements a radius
+/// the cascade could not apply may reach. The cascade skips rules nested in a
+/// style rule, rules inside `@container` and unknown at-rules, and selectors
+/// the matcher refuses; a radius there could round a card the cascade reads
+/// as square, so the elements those selectors name keep their side accents.
+/// A radius under the rounded threshold, one on a pseudo-element, and one
+/// behind a hover or focus state cannot round the card at rest.
+fn mark_side_accent_radius_blind_spots(
+    doc: &mut StaticDocument,
+    css_text: &str,
+    specified: &SpecifiedStore<NodeId>,
+    refused: &[String],
+) {
+    use impeccable_core::checks::css_scan::{pseudo_stripped_selector, CssHostIndex};
+    use impeccable_core::checks::rules::SIDE_ACCENT_MIN_RADIUS_PX;
+
+    let declared: Vec<NodeId> = specified
+        .iter()
+        .filter(|(_, props)| props.keys().any(|k| is_radius_property(k)))
+        .map(|(node, _)| *node)
+        .collect();
+    for node in declared {
+        doc.set_radius_declared(node);
+    }
+
+    let at_rest = |s: &str| !s.contains("::") && !s.contains('&') && !STATE_PSEUDO_RE.is_match(s);
+    let mut selectors: Vec<String> = refused
+        .iter()
+        .filter(|s| at_rest(s))
+        .map(|s| pseudo_stripped_selector(s))
+        .collect();
+    if css_text.contains("adius") {
+        for rule in CssHostIndex::new(css_text).unapplied_radius_rules() {
+            let could_round = rule.corners.to_corners().map_or(true, |c| {
+                [c.top_left, c.top_right, c.bottom_right, c.bottom_left]
+                    .iter()
+                    .any(|v| *v >= SIDE_ACCENT_MIN_RADIUS_PX)
+            });
+            if !could_round {
+                continue;
+            }
+            selectors.extend(
+                rule.selectors
+                    .iter()
+                    .filter(|s| at_rest(s))
+                    .map(|s| pseudo_stripped_selector(s)),
+            );
+        }
+    }
+    for selector in selectors {
+        if selector.is_empty() {
+            continue;
+        }
+        if let Some(ids) = doc.select_ids_quiet(&selector) {
+            for id in ids {
+                doc.set_radius_unseen(id);
+            }
+            continue;
+        }
+        // The matcher refuses the selector: name its element by the classes
+        // and id of its last compound, or give up on every element.
+        let compound = selector
+            .rsplit(|c: char| c.is_whitespace() || matches!(c, '>' | '+' | '~'))
+            .next()
+            .unwrap_or("");
+        let tokens: Vec<String> = CLASS_ID_TOKEN_RE
+            .find_iter(compound)
+            .map(|m| m.as_str().replace('\\', ""))
+            .collect();
+        if tokens.is_empty() {
+            doc.set_radius_unseen_everywhere();
+            continue;
+        }
+        let ids: Vec<NodeId> = doc
+            .all_elements()
+            .iter()
+            .filter(|el| {
+                tokens.iter().all(|t| match t.strip_prefix('.') {
+                    Some(class) => el.class_name().split_whitespace().any(|c| c == class),
+                    None => el.id_attr() == &t[1..],
+                })
+            })
+            .map(|el| el.id())
+            .collect();
+        for id in ids {
+            doc.set_radius_unseen(id);
+        }
+    }
+}
+
+static FONT_STYLESHEET_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?i)^(?:https?:)?//(?:fonts\.googleapis\.com|fonts\.bunny\.net|use\.typekit\.net|p\.typekit\.net|api\.fontshare\.com|fonts\.cdnfonts\.com|rsms\.me)/",
+    )
+    .expect("FONT_STYLESHEET_RE")
+});
+
+/// Whether the page links a stylesheet the static engine did not read: a
+/// remote sheet (other than a font service, which carries no box rules) or a
+/// local one it could not open. [`collect_static_css_text`] skips both.
+pub fn has_unread_stylesheet(doc: &StaticDocument, file_dir: &Path) -> bool {
+    let dir = file_dir.to_string_lossy().into_owned();
+    doc.query_selector_all("link").iter().any(|link| {
+        let rel = link.get_attribute("rel").unwrap_or("");
+        let href = link.get_attribute("href").unwrap_or("");
+        if !STYLESHEET_REL_RE.is_match(rel) || href.is_empty() {
+            return false;
+        }
+        if REMOTE_HREF_RE.is_match(href) {
+            return !FONT_STYLESHEET_RE.is_match(href);
+        }
+        !std::fs::metadata(resolve_linked_css_path(&dir, href))
+            .map(|m| m.is_file())
+            .unwrap_or(false)
+    })
 }
 
 /// The `computeNode` walk over every `tag`-typed element, root children
@@ -426,17 +586,18 @@ fn compute_styles(
             }
         }
 
+        // Every property starts at its default; only an inherited property
+        // the parent carries is overwritten here.
         let mut values: StyleValues = make_default_style();
-        for (prop, default) in STATIC_DEFAULT_STYLE {
-            let inherited = if is_static_inherited_prop(prop) {
-                parent_style.as_ref().and_then(|ps| ps.get(*prop)).cloned()
-            } else {
-                None
-            };
-            values.insert(
-                prop.to_string(),
-                inherited.unwrap_or_else(|| default.to_string()),
-            );
+        if let Some(ps) = parent_style.as_ref() {
+            for (prop, _) in STATIC_DEFAULT_STYLE {
+                if !is_static_inherited_prop(prop) {
+                    continue;
+                }
+                if let Some(inherited) = ps.get(*prop) {
+                    values.insert(prop.to_string(), inherited.clone());
+                }
+            }
         }
         // Minimal user-agent emphasis styles. Author declarations below
         // still win, including explicit normal/inherit resets.

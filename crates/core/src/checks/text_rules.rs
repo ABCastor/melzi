@@ -35,6 +35,13 @@ pub static KICKER_META_TEXT_RE: Lazy<Regex> = Lazy::new(|| {
     .expect("KICKER_META_TEXT_RE")
 });
 
+/// The year clause of [`KICKER_META_TEXT_RE`]: a four-digit year from 1900 to
+/// 2099 standing as its own word, which marks a dated meta line ("Sep 2,
+/// 2026", "Engineering / 2 September 2026").
+pub static KICKER_META_YEAR_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(&format!(r"(?-u:\b)(19|20){d}{{2}}(?-u:\b)", d = D)).expect("KICKER_META_YEAR_RE")
+});
+
 /// JS: checks.mjs#KICKER_DOC_NUMBERING_RE (JS `/i`).
 pub static KICKER_DOC_NUMBERING_RE: Lazy<Regex> = Lazy::new(|| {
     let words = [
@@ -189,7 +196,9 @@ pub fn is_kicker_candidate(o: &KickerCandidateInput) -> bool {
     if !is_uppercased {
         return false;
     }
-    if !(o.kicker_font_size > 0.0 && o.kicker_font_size <= 14.0) {
+    if !(o.kicker_font_size > 0.0
+        && o.kicker_font_size <= label_size_ceiling(o.heading_font_size, KICKER_BASE_MAX_PX))
+    {
         return false;
     }
     let min_tracked_spacing = o.kicker_font_size * 0.06;
@@ -197,6 +206,30 @@ pub fn is_kicker_candidate(o: &KickerCandidateInput) -> bool {
         return false;
     }
     true
+}
+
+/// The size a kicker was always allowed, whatever the heading.
+pub const KICKER_BASE_MAX_PX: f64 = 14.0;
+/// The size a numbered label was always allowed, whatever the heading.
+pub const NUMBERED_LABEL_BASE_MAX_PX: f64 = 13.0;
+/// A label reads as a label beside a heading at most this share of the
+/// heading's size: a 15px eyebrow over a 44px h2 is as small, relative to it,
+/// as a 12px one over a 32px h2.
+pub const LABEL_HEADING_SIZE_RATIO: f64 = 0.45;
+/// The absolute cap on a label's size, whatever the heading: past it the text
+/// is a subheading.
+pub const LABEL_MAX_PX: f64 = 16.0;
+
+/// The largest size a label beside a heading of `heading_font_size` may be:
+/// the old fixed ceiling `base`, raised to [`LABEL_HEADING_SIZE_RATIO`] of the
+/// heading where that is larger, and never past [`LABEL_MAX_PX`].
+pub fn label_size_ceiling(heading_font_size: f64, base: f64) -> f64 {
+    let relative = if heading_font_size.is_finite() && heading_font_size > 0.0 {
+        heading_font_size * LABEL_HEADING_SIZE_RATIO
+    } else {
+        0.0
+    };
+    base.max(relative.min(LABEL_MAX_PX))
 }
 
 /// JS: checks.mjs#isNumberedSectionLabelCandidate.
@@ -214,7 +247,9 @@ pub fn is_numbered_section_label_candidate(o: &NumberedLabelCandidateInput) -> b
     if o.label_index.is_none() || o.label_text.is_empty() {
         return false;
     }
-    if !(o.label_font_size > 0.0 && o.label_font_size <= 13.0) {
+    if !(o.label_font_size > 0.0
+        && o.label_font_size <= label_size_ceiling(o.heading_font_size, NUMBERED_LABEL_BASE_MAX_PX))
+    {
         return false;
     }
     if o.heading_font_size > 0.0 && o.heading_font_size < o.label_font_size * 1.3 {
@@ -271,6 +306,170 @@ pub fn check_numbered_section_labels(
             )
         })
         .collect()
+}
+
+// ─── Letter spacing ─────────────────────────────────────────────────────────
+
+/// Size at which type is read as display rather than as reading copy.
+pub const DISPLAY_FONT_SIZE_PX: f64 = 40.0;
+/// Tracking (letter-spacing over font-size) past which reading copy starts
+/// losing its letterforms.
+pub const CRUSHED_TRACKING_EM: f64 = -0.07;
+/// Display type conventionally tightens further, and several display faces
+/// ship values in the -0.05em range in their own tracking tables, so it takes
+/// more before the letterforms are actually damaged.
+pub const CRUSHED_TRACKING_EM_DISPLAY: f64 = -0.09;
+
+/// The `extreme-negative-tracking` gate: how tight is too tight at this size.
+pub fn tracking_is_crushed(tracking_em: f64, font_size_px: f64) -> bool {
+    let limit = if font_size_px >= DISPLAY_FONT_SIZE_PX {
+        CRUSHED_TRACKING_EM_DISPLAY
+    } else {
+        CRUSHED_TRACKING_EM
+    };
+    tracking_em < limit
+}
+
+/// How many leading characters the script test reads. Tracking is one authored
+/// value for the whole element, so a prefix settles which script it is set in
+/// and the test stays cheap on long text.
+const SCRIPT_SAMPLE_CHARS: usize = 256;
+
+fn is_cjk_char(c: char) -> bool {
+    matches!(
+        c as u32,
+        0x1100..=0x11FF        // Hangul Jamo
+        | 0x3040..=0x30FF      // Hiragana and Katakana
+        | 0x3130..=0x318F      // Hangul compatibility Jamo
+        | 0x31F0..=0x31FF      // Katakana phonetic extensions
+        | 0x3400..=0x4DBF      // CJK unified ideographs extension A
+        | 0x4E00..=0x9FFF      // CJK unified ideographs
+        | 0xA960..=0xA97F      // Hangul Jamo extended-A
+        | 0xAC00..=0xD7FF      // Hangul syllables and Jamo extended-B
+        | 0xF900..=0xFAFF      // CJK compatibility ideographs
+        | 0xFF66..=0xFF9F      // halfwidth Katakana
+        | 0x20000..=0x3FFFF // CJK extensions B and later
+    )
+}
+
+/// True when the text is written mostly in Han, Hiragana, Katakana or Hangul.
+/// Letter-spacing on those scripts trims the gap between full-width glyphs
+/// instead of pulling letterforms into each other, so the Latin tracking
+/// thresholds do not describe them. Read from the text itself: a `lang`
+/// attribute says what the page is, not what this element renders.
+pub fn is_cjk_text(text: &str) -> bool {
+    let mut cjk = 0usize;
+    let mut scripted = 0usize;
+    for c in text.chars().take(SCRIPT_SAMPLE_CHARS) {
+        if is_cjk_char(c) {
+            cjk += 1;
+            scripted += 1;
+        } else if c.is_alphabetic() {
+            scripted += 1;
+        }
+    }
+    cjk > 0 && cjk * 2 >= scripted
+}
+
+/// A glyph set a full em wide: Han, kana and Hangul, the CJK symbols and
+/// punctuation block, and the fullwidth forms. Halfwidth katakana is half.
+fn is_full_width_char(c: char) -> bool {
+    matches!(c as u32, 0x3000..=0x303F | 0xFF01..=0xFF60 | 0xFFE0..=0xFFE6)
+        || (is_cjk_char(c) && !matches!(c as u32, 0xFF66..=0xFF9F))
+}
+
+/// The average advance of a proportional face's Latin glyphs in ems, the
+/// estimate's old constant.
+pub const PROPORTIONAL_ADVANCE_EM: f64 = 0.5;
+
+/// The advance of a monospace face's glyphs in ems: 600 units to the em in
+/// JetBrains Mono, Courier, Menlo and SF Mono.
+pub const MONOSPACE_ADVANCE_EM: f64 = 0.6;
+
+/// The average advance of `text`'s characters in ems, for estimating how many
+/// fit on a line: half an em for Latin and the scripts set like it, a whole em
+/// for full-width CJK glyphs, weighted by how many of each the text holds.
+/// Text with no full-width glyph is exactly 0.5, the estimate's old constant.
+pub fn average_glyph_advance_em(text: &str) -> f64 {
+    average_glyph_advance_em_at(text, PROPORTIONAL_ADVANCE_EM)
+}
+
+/// [`average_glyph_advance_em`] with the advance of the text's Latin glyphs
+/// given: [`MONOSPACE_ADVANCE_EM`] for a monospace face. Full-width glyphs
+/// are a whole em in either.
+pub fn average_glyph_advance_em_at(text: &str, latin_em: f64) -> f64 {
+    let mut total = 0usize;
+    let mut wide = 0usize;
+    for c in text.chars() {
+        total += 1;
+        if is_full_width_char(c) {
+            wide += 1;
+        }
+    }
+    if wide == 0 {
+        return latin_em;
+    }
+    (latin_em * (total - wide) as f64 + wide as f64) / total as f64
+}
+
+/// Faces set on a fixed advance whose names hold no `mono` word.
+const MONOSPACE_FACES: &[&str] = &[
+    "andale mono",
+    "cascadia code",
+    "consolas",
+    "courier",
+    "courier new",
+    "fira code",
+    "hack",
+    "inconsolata",
+    "lucida console",
+    "menlo",
+    "monaco",
+    "source code pro",
+];
+
+/// A class token that carries a generated id: one of its `-` or `_`
+/// separated parts is four or more hex digits with at least one decimal digit
+/// among them (`43268`, `a565c83`, `67254963955209192`). `grid-col-desk-2`,
+/// `elementor-col-50` and `text-gray-500` carry none.
+pub fn is_id_like_class(token: &str) -> bool {
+    token.split(['-', '_']).any(|part| {
+        part.len() >= 4
+            && part.bytes().all(|b| b.is_ascii_hexdigit())
+            && part.bytes().any(|b| b.is_ascii_digit())
+    })
+}
+
+/// Whether a short run reads as source code rather than as a label: it holds
+/// a character that structured text is written with and a label is not, one
+/// of `{ } [ ] < > = ; " \` \ _`. A JSON line (`"id": 7,`, `},`), a tag, an
+/// assignment and a snake_case name all do; a price (`$50/seat`), a count
+/// (`200+`), a rating (`4.9`) and a copyright line do not. Builders set
+/// monospace labels with their whitespace kept (Framer keeps it on every text
+/// box), so the face and `white-space` alone cannot tell a code sample from a
+/// pricing label.
+pub fn reads_as_code(text: &str) -> bool {
+    text.chars()
+        .any(|c| matches!(c, '{' | '}' | '[' | ']' | '<' | '>' | '=' | ';' | '"' | '`' | '\\' | '_'))
+}
+
+/// Whether a computed `font-family` leads with a monospace face: a generic
+/// `monospace` or `ui-monospace`, a name with a `mono` word in it
+/// (`JetBrains Mono`, `SFMono-Regular`, `Roboto Mono`), or a known code face.
+/// Only the first family is read; a display face such as `Monotype Corsiva`
+/// holds no `mono` word.
+pub fn is_monospace_family(font_family: &str) -> bool {
+    let first = font_family
+        .split(',')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .trim_matches(|c| c == '"' || c == '\'')
+        .to_ascii_lowercase();
+    MONOSPACE_FACES.contains(&first.as_str())
+        || first
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|w| matches!(w, "mono" | "monospace" | "monospaced" | "sfmono"))
 }
 
 /// JS `/[—]|--(?=\S)/g` match count over `body`.
@@ -349,7 +548,69 @@ pub fn is_repeated_text_container(style: Option<&dyn StyleMap>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_as_code_wants_a_character_code_is_written_with() {
+        for code in ["\"data\":", "\"id\": 7,", "},", "{", "<div>", "const x = 1", "published_date", "`npm i`", "a\\b", "items[0]", "run();"] {
+            assert!(reads_as_code(code), "{code}");
+        }
+        for label in ["$50/seat", "per Month", "200+", "4.9", "© 2026 VexoAI, Inc.", "Type II", "G2", "v2.0-beta", "don't", "(optional)", "50% off: today", "A / B"] {
+            assert!(!reads_as_code(label), "{label}");
+        }
+    }
+
     use std::collections::HashMap;
+
+    #[test]
+    fn label_ceilings_follow_the_heading_up_to_a_cap() {
+        assert_eq!(label_size_ceiling(32.0, KICKER_BASE_MAX_PX), 14.4);
+        assert_eq!(label_size_ceiling(24.0, KICKER_BASE_MAX_PX), 14.0);
+        assert_eq!(label_size_ceiling(44.0, KICKER_BASE_MAX_PX), 16.0);
+        assert_eq!(label_size_ceiling(0.0, NUMBERED_LABEL_BASE_MAX_PX), 13.0);
+        assert_eq!(label_size_ceiling(f64::NAN, NUMBERED_LABEL_BASE_MAX_PX), 13.0);
+    }
+
+    /// opentrailpaper.com: 15.04px tracked kickers above 44px h2s.
+    #[test]
+    fn a_fifteen_pixel_kicker_counts_above_a_display_heading() {
+        let input = |heading: f64, kicker: f64| KickerCandidateInput {
+            heading_level: 2.0,
+            heading_text: "Device walkthrough",
+            heading_font_size: heading,
+            kicker_tag: "p",
+            kicker_text: "01 — Device controls",
+            kicker_text_transform: "uppercase",
+            kicker_font_variant: "normal normal",
+            kicker_font_size: kicker,
+            kicker_letter_spacing: kicker * 0.2,
+        };
+        assert!(is_kicker_candidate(&input(44.0, 15.04)));
+        assert!(!is_kicker_candidate(&input(24.0, 15.04)));
+        assert!(!is_kicker_candidate(&input(64.0, 17.0)));
+        assert!(is_kicker_candidate(&input(20.0, 14.0)));
+    }
+
+    /// v0-optimus-delta.vercel.app: 14px mono "01" beside 36px h3s.
+    #[test]
+    fn a_numbered_label_ceiling_follows_the_heading() {
+        let input = |heading: f64, label: f64| NumberedLabelCandidateInput {
+            heading_tag: "h3",
+            heading_text: "Instant Deployment",
+            heading_font_size: heading,
+            label_tag: "div",
+            label_index: Some(1.0),
+            label_text: "01",
+            label_font_size: label,
+            label_letter_spacing: 0.0,
+            label_font_weight: "400",
+            label_font_family: "\"JetBrains Mono\", monospace",
+            label_text_transform: "none",
+            label_color: "rgb(113, 113, 122)",
+        };
+        assert!(is_numbered_section_label_candidate(&input(36.0, 14.0)));
+        assert!(!is_numbered_section_label_candidate(&input(24.0, 14.0)));
+        assert!(is_numbered_section_label_candidate(&input(24.0, 13.0)));
+    }
 
     fn style(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         pairs
@@ -395,6 +656,32 @@ mod tests {
     }
 
     #[test]
+    fn tracking_is_crushed_cases() {
+        // Reading sizes: Tailwind's tracking-tighter and vendor display tables pass.
+        assert!(!tracking_is_crushed(-0.05, 16.0));
+        assert!(!tracking_is_crushed(-0.06, 16.0));
+        assert!(tracking_is_crushed(-0.08, 16.0));
+        // Display sizes take the looser line.
+        assert!(!tracking_is_crushed(-0.08, 40.0));
+        assert!(!tracking_is_crushed(-0.08, 104.8));
+        assert!(tracking_is_crushed(-0.1, 40.0));
+        // Just under display size the reading-copy line still applies.
+        assert!(tracking_is_crushed(-0.08, 39.0));
+    }
+
+    #[test]
+    fn is_cjk_text_cases() {
+        assert!(is_cjk_text("赓续长征精神 奋进复兴征程|福建守护"));
+        assert!(is_cjk_text("この段落は日本語の文字組みです"));
+        assert!(is_cjk_text("한국어 문장은 자간을 줄여도 글자 모양이 남습니다"));
+        assert!(!is_cjk_text("The APIs powering your next feature"));
+        assert!(!is_cjk_text(""));
+        assert!(!is_cjk_text("משרד ההגנה של דרום קוריאה מסר"));
+        // A lone ideograph in a Latin line is not CJK typesetting.
+        assert!(!is_cjk_text("Download the 中 glyph sample sheet today"));
+    }
+
+    #[test]
     fn check_em_dash_overuse_non_string() {
         assert!(check_em_dash_overuse(None).is_empty());
     }
@@ -427,6 +714,28 @@ mod tests {
             ("borderBottomWidth", "1px"),
             ("backgroundColor", "rgba(255, 255, 255, 0.05)"),
         ]))));
+    }
+
+    #[test]
+    fn monospace_faces_advance_six_tenths_of_an_em() {
+        for family in [
+            "\"JetBrains Mono\", \"JetBrains Mono Fallback\", ui-monospace, monospace",
+            "ui-monospace, SFMono-Regular, Menlo, monospace",
+            "SFMono-Regular, Consolas, monospace",
+            "monospace",
+            "'Courier New', Courier, monospace",
+            "Menlo",
+            "\"Roboto Mono\", sans-serif",
+        ] {
+            assert!(is_monospace_family(family), "{family}");
+        }
+        for family in ["\"Monotype Corsiva\", cursive", "Inter, monospace", "system-ui, sans-serif", ""] {
+            assert!(!is_monospace_family(family), "{family}");
+        }
+        assert_eq!(average_glyph_advance_em("plain latin text"), 0.5);
+        assert_eq!(average_glyph_advance_em_at("plain latin text", MONOSPACE_ADVANCE_EM), 0.6);
+        // A full-width glyph is an em in either face: one of four.
+        assert!((average_glyph_advance_em_at("ab c漢", 0.6) - (0.6 * 4.0 + 1.0) / 5.0).abs() < 1e-12);
     }
 
     #[test]

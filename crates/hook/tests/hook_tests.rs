@@ -179,6 +179,107 @@ fn unfinished_comp_stop_is_owned_bounded_and_does_not_reopen_on_unrelated_turn()
     assert!(hook::run_stop_hook(&r, &active).stdout.is_empty());
 }
 
+/// A comp build this session recorded as shipped, the way `finish` leaves it.
+fn shipped_build(t: &Tmp) {
+    t.write("index.html", "<main>Shipped</main>");
+    let mut state = json!({
+        "tool":"build-phase", "version":2, "startedAt":"build-one", "phase":"review",
+        "sessionId":"owner", "artifact":"index.html", "capturePolicy":"native-html-v1", "phases":{}
+    });
+    for phase in ["comps", "spec", "plates", "hero", "sections", "motion", "responsive", "review"] {
+        state["phases"][phase] = json!({"status":"closed"});
+    }
+    let hash = impeccable_comp_verbs::completion::artifact_hash(std::path::Path::new(&t.path()), &state).unwrap();
+    state["finish"] = json!({"disposition":"ship", "phaseAtFinish":"review", "artifactSha256":hash,
+        "captureInputs":[{"path":"index.html","sha256":hash}]});
+    t.write(".impeccable/build/state.json", &state.to_string());
+}
+
+#[test]
+fn findings_over_a_shipped_build_say_a_fix_voids_the_finish_and_the_follow_up_asks_for_it_again() {
+    let t = Tmp::new();
+    t.write("package.json", "{}");
+    shipped_build(&t);
+    let file = t.write("card.css", SIDE_TAB_CSS);
+    let r = rt(&t.path());
+    hook::run_hook(&r, &edit_with_original(&t.path(), &file, "owner", ".card {}\n", ".card {}\n", SIDE_TAB_CSS));
+    // The finish holds, so the Stop pass shows the findings, with the note that a fix voids it.
+    let first = hook::run_stop_hook(&r, &stop_event(&t.path(), "owner"));
+    assert!(first.stdout.contains("side-tab") || first.stdout.contains("Side-tab"), "{}", first.stdout);
+    assert!(first.stdout.contains("The comp build for index.html has finish --disposition ship recorded. A fix after it voids that finish"), "{}", first.stdout);
+    assert!(first.stdout.contains("/opt/bin/impeccable") && first.stdout.contains(" build-phase finish --disposition ship again"), "{}", first.stdout);
+    // The agent fixes the page in the continuation those findings started.
+    t.write("index.html", "<main>Shipped, then fixed</main>");
+    let active = json!({"session_id":"owner","cwd":t.path(),"hook_event_name":"Stop","stop_hook_active":true}).to_string();
+    let follow_up = hook::run_stop_hook(&r, &active);
+    assert_eq!(follow_up.audit["kind"], "build-completion", "{:?}", follow_up.audit);
+    assert!(follow_up.stdout.contains("A file the recorded finish bound changed after it (index.html)"), "{}", follow_up.stdout);
+    assert!(follow_up.stdout.contains("build-phase finish --disposition ship again before you stop"), "{}", follow_up.stdout);
+}
+
+#[test]
+fn another_hooks_continuation_after_a_shipped_build_is_not_taken_over() {
+    let t = Tmp::new();
+    shipped_build(&t);
+    t.write("index.html", "<main>Changed by someone else's continuation</main>");
+    let active = json!({"session_id":"owner","cwd":t.path(),"hook_event_name":"Stop","stop_hook_active":true}).to_string();
+    let stop = hook::run_stop_hook(&rt(&t.path()), &active);
+    assert!(stop.stdout.is_empty(), "{}", stop.stdout);
+    // A new turn is still told the ship no longer covers the page.
+    let fresh = hook::run_stop_hook(&rt(&t.path()), &stop_event(&t.path(), "owner"));
+    assert!(fresh.stdout.contains("changed after it (index.html)"), "{}", fresh.stdout);
+}
+
+#[test]
+fn the_findings_marker_grants_one_continuation_not_the_build() {
+    let t = Tmp::new();
+    t.write("package.json", "{}");
+    shipped_build(&t);
+    let file = t.write("card.css", SIDE_TAB_CSS);
+    let r = rt(&t.path());
+    hook::run_hook(&r, &edit_with_original(&t.path(), &file, "owner", ".card {}\n", ".card {}\n", SIDE_TAB_CSS));
+    assert!(hook::run_stop_hook(&r, &stop_event(&t.path(), "owner")).stdout.contains("finish --disposition ship recorded"));
+    // The continuation the findings started changes nothing the finish bound.
+    let active = json!({"session_id":"owner","cwd":t.path(),"hook_event_name":"Stop","stop_hook_active":true}).to_string();
+    assert!(hook::run_stop_hook(&r, &active).audit.get("kind").is_none());
+    // A later continuation another hook started changes the page: not ours to take over.
+    t.write("index.html", "<main>Changed in another hook's continuation</main>");
+    let later = hook::run_stop_hook(&r, &active);
+    assert!(!later.stdout.contains("Comp build"), "{}", later.stdout);
+}
+
+#[test]
+fn a_bound_stylesheet_edit_after_a_reminder_earns_another() {
+    let t = Tmp::new();
+    t.write("site.css", "body{}");
+    shipped_build(&t);
+    let path = t.0.join(".impeccable/build/state.json");
+    let mut state: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let css_hash = format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(b"body{}"));
+    state["finish"]["captureInputs"].as_array_mut().unwrap().push(json!({"path":"site.css","sha256":css_hash}));
+    std::fs::write(&path, state.to_string()).unwrap();
+    let r = rt(&t.path());
+    t.write("index.html", "<main>Edited after ship</main>");
+    assert!(hook::run_stop_hook(&r, &stop_event(&t.path(), "owner")).stdout.contains("Comp build"));
+    assert!(hook::run_stop_hook(&r, &stop_event(&t.path(), "owner")).stdout.is_empty());
+    // Only the stylesheet changes now; the entry bytes stay as the last reminder saw them.
+    t.write("site.css", "body{color:red}");
+    let stop = hook::run_stop_hook(&r, &stop_event(&t.path(), "owner"));
+    assert!(stop.stdout.contains("(index.html, site.css)"), "{}", stop.stdout);
+}
+
+#[test]
+fn findings_with_no_shipped_build_carry_no_finish_note() {
+    let t = Tmp::new();
+    t.write("package.json", "{}");
+    let file = t.write("card.css", SIDE_TAB_CSS);
+    let r = rt(&t.path());
+    hook::run_hook(&r, &edit_with_original(&t.path(), &file, "owner", ".card {}\n", ".card {}\n", SIDE_TAB_CSS));
+    let stop = hook::run_stop_hook(&r, &stop_event(&t.path(), "owner"));
+    assert!(!stop.stdout.is_empty());
+    assert!(!stop.stdout.contains("finish --disposition ship"), "{}", stop.stdout);
+}
+
 #[test]
 fn legacy_comp_state_never_implicitly_claims_the_current_session() {
     let t = Tmp::new();
@@ -1056,6 +1157,36 @@ fn git_excludes_land_in_info_exclude_not_gitignore() {
         ensure_hook_git_excludes(&rt(&t2.path()), &t2.path()).mode,
         "none"
     );
+}
+
+#[test]
+fn git_excludes_in_a_linked_worktree_reach_the_exclude_file_git_reads() {
+    let t = Tmp::new();
+    let repo = jsp::join(&[&t.path(), "repo"]);
+    let wt = jsp::join(&[&t.path(), "wt"]);
+    std::fs::create_dir_all(jsp::join(&[&t.path(), "empty-hooks"])).unwrap();
+    std::fs::create_dir_all(&repo).unwrap();
+    let hooks = format!("core.hooksPath={}/empty-hooks", t.path());
+    let git = |dir: &str, args: &[&str]| {
+        std::process::Command::new("git").current_dir(dir)
+            .args(["-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                "-c", "commit.gpgsign=false", "-c", &hooks])
+            .args(args).output().unwrap()
+    };
+    for args in [
+        &["init", "--quiet"][..],
+        &["commit", "--quiet", "--allow-empty", "-m", "init"],
+        &["worktree", "add", "--quiet", "../wt"],
+    ] {
+        let out = git(&repo, args);
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    }
+    // A linked worktree's `.git` is a file; git reads `info/exclude` from the
+    // common dir, never from the per-worktree gitdir the file points at.
+    assert!(impeccable_detect::config::ensure_config_git_exclude(&wt));
+    assert!(git(&wt, &["check-ignore", "-q", ".impeccable/config.local.json"]).status.success());
+    ensure_hook_git_excludes(&rt(&wt), &wt);
+    assert!(git(&wt, &["check-ignore", "-q", ".impeccable/hook.cache.json"]).status.success());
 }
 
 // ── filtering ─────────────────────────────────────────────────────────────
@@ -2169,14 +2300,14 @@ fn admin_on_writes_launcher_manifests_for_every_harness() {
     let codex: Value = serde_json::from_str(&t.read(".codex/hooks.json")).unwrap();
     let entry = &codex["hooks"]["PostToolUse"][0]["hooks"][0];
     assert_eq!(entry["command"], json!("\".agents/skills/melzi/scripts/impeccable\" hook"));
-    assert_eq!(entry["commandWindows"], json!("\".agents/skills/melzi/scripts/impeccable.cmd\" hook"));
+    assert_eq!(entry["commandWindows"], json!(r#"cmd /c if exist ".agents\skills\melzi\scripts\impeccable.cmd" ".agents\skills\melzi\scripts\impeccable.cmd" hook"#));
     assert_eq!(
         entry.as_object().unwrap().keys().cloned().collect::<Vec<_>>(),
         vec!["type", "command", "commandWindows", "timeout", "statusMessage"]
     );
     let stop = &codex["hooks"]["Stop"][0]["hooks"][0];
     assert_eq!(stop["command"], json!("\".agents/skills/melzi/scripts/impeccable\" hook"));
-    assert_eq!(stop["commandWindows"], json!("\".agents/skills/melzi/scripts/impeccable.cmd\" hook"));
+    assert_eq!(stop["commandWindows"], json!(r#"cmd /c if exist ".agents\skills\melzi\scripts\impeccable.cmd" ".agents\skills\melzi\scripts\impeccable.cmd" hook"#));
     assert_eq!(stop["timeout"], json!(30));
 
     let cursor: Value = serde_json::from_str(&t.read(".cursor/hooks.json")).unwrap();
@@ -2238,7 +2369,7 @@ fn admin_on_repairs_legacy_mjs_manifests_to_the_launcher_form() {
     assert_eq!(codex["hooks"]["PostToolUse"].as_array().unwrap().len(), 1);
     assert_eq!(
         codex["hooks"]["PostToolUse"][0]["hooks"][0]["commandWindows"],
-        json!("\".agents/skills/melzi/scripts/impeccable.cmd\" hook")
+        json!(r#"cmd /c if exist ".agents\skills\melzi\scripts\impeccable.cmd" ".agents\skills\melzi\scripts\impeccable.cmd" hook"#)
     );
 
     // A launcher-form manifest written by another checkout is recognized as

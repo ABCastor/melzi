@@ -19,14 +19,36 @@
     background: var(--ok);
   }
 
-  /* FLAG: right-edge variant using inset shorthand + literal color. */
-  .row-stripe { position: relative; }
+  /* FLAG: right-edge variant using inset shorthand + literal color, on a
+     rounded card. */
+  .row-stripe { position: relative; border-radius: 12px; }
   .row-stripe::after {
     content: "";
     position: absolute;
     inset: 0 0 0 auto;
     width: 4px;
     background-color: #3b82f6;
+  }
+
+  /* PASS: the same chromatic stripe on a square host is the old callout rule,
+     not the rounded-card tell. */
+  .note-stripe { position: relative; }
+  .note-stripe::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 6px;
+    background: #0f766e;
+  }
+
+  /* PASS: rounded only along the stripe, so square where it counts. */
+  .tab-stripe { position: relative; border-radius: 12px 0 0 12px; }
+  .tab-stripe::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 7px;
+    background: #b91c1c;
   }
 
   /* PASS: 1px neutral hairline divider (below width threshold + neutral). */
@@ -89,6 +111,8 @@
 <body>
   <div class="card-stripe">Card with pseudo stripe</div>
   <div class="row-stripe">Row with right stripe</div>
+  <div class="note-stripe">Square note with a left rule</div>
+  <div class="tab-stripe">Rounded only under the stripe</div>
   <div class="col">One</div><div class="col">Two</div>
   <div class="timeline">Timeline</div>
   <blockquote>Quoted text</blockquote>

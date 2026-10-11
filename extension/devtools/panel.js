@@ -241,7 +241,6 @@ const FIX_SKILLS = {
   'pure-black-white':        'colorize',
   'gray-on-color':           'colorize',
   'low-contrast':            'colorize, audit',
-  'layout-transition':       'animate, optimize',
   'line-length':             'arrange, typeset',
   'cramped-padding':         'arrange, polish',
   'tight-leading':           'typeset',

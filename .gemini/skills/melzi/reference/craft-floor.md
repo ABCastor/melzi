@@ -41,6 +41,4 @@ Surface habits:
 - Geometric masks standing in for organic contours. A circle, polygon, or radial-gradient cutout approximating a photographic subject's edge is the cheap version of the effect and reads worse than omitting it. Derive an alpha matte from the actual image, or produce a cut-out asset.
 - Light or dark picked by category. Pick it from the use scene: who, where, under what ambient light.
 
-Never animate an image on hover, directly or through its parent. It is not an action target. Give the container the feedback.
-
 The floor holds the mechanics; it never picks the direction. With every check green, spend the page on the committed world, and when torn between refined and committed, commit.

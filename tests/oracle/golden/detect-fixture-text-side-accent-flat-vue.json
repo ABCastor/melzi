@@ -1,0 +1,7 @@
+{
+  "stdout": "",
+  "stderr": "\n<REPO>/tests/fixtures/antipatterns/side-accent-flat.vue\n  line 16: [side-tab] border-left: 4px solid #0f766e\n    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.\n  line 24: [side-tab] border-right: 5px solid #0f766e\n    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.\n\n2 anti-patterns found.\n",
+  "exit": 2,
+  "signal": null,
+  "files": {}
+}

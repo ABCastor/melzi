@@ -18,6 +18,9 @@
   .hexagon { clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%); }
   .arrow { clip-path: polygon(0 20%, 60% 20%, 60% 0, 100% 50%, 60% 100%, 60% 80%, 0 80%); }
   .chevron-eight { clip-path: polygon(0 0, 75% 0, 100% 50%, 75% 100%, 0 100%, 25% 50%, 0 0, 0 0); }
+  /* PASS: a stair-stepped pixel corner. Twelve vertices, all off the 25%
+     grid, but every edge runs horizontal or vertical: a notched rectangle. */
+  .pixel-notch { clip-path: polygon(4px 0%, calc(100% - 4px) 0%, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0% calc(100% - 4px), 0% 4px, 4px 4px); }
   /* PASS: circle / ellipse / inset primitives */
   .avatar { clip-path: circle(50% at 50% 50%); }
   .pill { clip-path: inset(0 round 999px); }
@@ -35,6 +38,7 @@
   <div class="hexagon">Hexagon</div>
   <div class="arrow">Arrow</div>
   <div class="chevron-eight">Chevron eight</div>
+  <div class="pixel-notch">Pixel notch</div>
   <div class="avatar">Avatar</div>
   <div class="pill">Pill</div>
   <div class="matte">Matte</div>

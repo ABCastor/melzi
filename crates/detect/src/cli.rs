@@ -40,6 +40,12 @@ Options:
   --no-inline-ignores Do not honor in-file impeccable-disable* ignore comments
   --no-design-system  Do not load local DESIGN.md / .impeccable/design.json context
   --no-advisory       Suppress advisory findings entirely (e.g. em-dash overuse)
+  --no-consent-hiding URL scans: keep known consent managers' banners
+                      (OneTrust, Cookiebot, ...) on the page instead of hiding
+                      them before the scan
+  --no-overlay-hiding URL scans: keep product tours (driver.js) and
+                      preloaders still covering the page instead of hiding
+                      them before the scan
   --help              Show this help message
 
 Advisory findings:
@@ -244,6 +250,10 @@ struct Ctx<'a> {
     /// JS `hadOperationalFailure`: at least one requested target could not be
     /// scanned, which forces exit 1 (#711).
     had_operational_failure: bool,
+    /// One line per design system that switched a check off for a scanned
+    /// target (a DESIGN.md that declares a purple), and per URL scan note (a
+    /// consent banner the engine hid), in first-seen order.
+    design_notes: Vec<String>,
 }
 
 impl<'a> Ctx<'a> {
@@ -263,11 +273,24 @@ impl<'a> Ctx<'a> {
             &self.cwd,
             &self.home,
         ) {
-            Some(ds) => ScanOptions {
-                design_system: Some(ds),
-                ..self.base.clone()
-            },
+            Some(ds) => {
+                ScanOptions {
+                    design_system: Some(ds),
+                    ..self.base.clone()
+                }
+            }
             None => self.base.clone(),
+        }
+    }
+
+    /// Record the note a design system owes for a target once its scan has
+    /// run: a scan that failed switched nothing off.
+    fn note_scanned(&mut self, options: &ScanOptions) {
+        let Some(ds) = options.design_system.as_deref() else { return };
+        if let Some(note) = crate::design_system::declared_purple_note(ds) {
+            if !self.design_notes.contains(&note) {
+                self.design_notes.push(note);
+            }
         }
     }
 
@@ -317,7 +340,9 @@ impl<'a> Ctx<'a> {
             if let Some(fp) = fp {
                 if !fp.is_empty() && exists(&fp) {
                     let opts = self.scan_options_for(Some(&fp));
-                    return self.detect_local_file(&fp, &opts);
+                    let found = self.detect_local_file(&fp, &opts)?;
+                    self.note_scanned(&opts);
+                    return Ok(found);
                 }
             }
         }
@@ -546,6 +571,8 @@ fn detect_cli(args_in: &[String], io: &mut Io, engines: &Engines) -> Result<i32,
         // The `impeccable` binary installs no rule pack; a library caller that
         // does sets this before handing the options to an engine.
         rule_pack: None,
+        keep_consent_banners: has(&args, "--no-consent-hiding"),
+        keep_overlays: has(&args, "--no-overlay-hiding"),
     };
     let targets: Vec<String> = expand_joined_url_targets(
         args.iter()
@@ -587,6 +614,7 @@ fn detect_cli(args_in: &[String], io: &mut Io, engines: &Engines) -> Result<i32,
         cache: DesignSystemCache::new(),
         stdin_tty,
         had_operational_failure: false,
+        design_notes: Vec::new(),
     };
 
     let mut all: Vec<Finding> = Vec::new();
@@ -670,13 +698,27 @@ fn detect_cli(args_in: &[String], io: &mut Io, engines: &Engines) -> Result<i32,
         } else {
             let text = format_findings(&all, false, stderr_tty);
             ctx.io.err(&format!("{text}\n"));
+            print_design_notes(&mut ctx, true);
         }
         return Ok(exit_code);
     }
     if json_mode {
         ctx.io.out("[]\n");
+    } else if !quiet_mode {
+        print_design_notes(&mut ctx, false);
     }
     Ok(exit_code)
+}
+
+/// Text mode: say which checks a project's DESIGN.md switched off, after the
+/// findings (or alone, when there are none).
+fn print_design_notes(ctx: &mut Ctx, after_findings: bool) {
+    if ctx.design_notes.is_empty() {
+        return;
+    }
+    let lead = if after_findings { "\n" } else { "" };
+    let text = ctx.design_notes.join("\n");
+    ctx.io.err(&format!("{lead}{text}\n"));
 }
 
 /// The `error.message` Node hands `reportLocalScanFailure` for a failed
@@ -724,16 +766,24 @@ fn scan_targets(
                 ctx.base.clone()
             };
             let result = match (shared, ctx.engines.url) {
-                (Some(s), _) => s.detect_url(target, &url_options),
-                (None, Some(u)) => u.detect_url(target, &url_options),
-                (None, None) => crate::engines::UrlEngine::detect_url(
+                (Some(s), _) => s.detect_url_scan(target, &url_options),
+                (None, Some(u)) => u.detect_url_scan(target, &url_options),
+                (None, None) => crate::engines::UrlEngine::detect_url_scan(
                     &crate::engines::MissingUrlEngine,
                     target,
                     &url_options,
                 ),
             };
             match result {
-                Ok(f) => all.extend(f),
+                Ok(scan) => {
+                    ctx.note_scanned(&url_options);
+                    all.extend(scan.findings);
+                    for note in scan.notes {
+                        if !ctx.design_notes.contains(&note) {
+                            ctx.design_notes.push(note);
+                        }
+                    }
+                }
                 Err(e) => {
                     ctx.had_operational_failure = true;
                     ctx.io.err(&format!("Error: {}\n", e.message));
@@ -779,7 +829,7 @@ fn scan_targets(
             // Unreadable directories and files are reported, not silently
             // skipped, and each one forces exit 1 (#711).
             let mut walk_failures: Vec<(String, String)> = Vec::new();
-            let files: Vec<String> = walk_dir_reporting(&resolved, &mut |dir, err| {
+            let files: Vec<String> = walk_dir_reporting(&resolved, &ctx.config.extensions, &mut |dir, err| {
                 walk_failures.push((dir.to_string(), node_scan_error(dir, err)));
             })
             .into_iter()
@@ -829,7 +879,10 @@ fn scan_targets(
                 }
                 let opts = ctx.scan_options_for(Some(file));
                 let mut file_findings = match ctx.detect_local_file(file, &opts) {
-                    Ok(f) => f,
+                    Ok(f) => {
+                        ctx.note_scanned(&opts);
+                        f
+                    }
                     Err(e) => {
                         let message = e.message.clone();
                         ctx.report_local_scan_failure(file, &message);
@@ -857,7 +910,10 @@ fn scan_targets(
             }
             let opts = ctx.scan_options_for(Some(&resolved));
             match ctx.detect_local_file(&resolved, &opts) {
-                Ok(f) => all.extend(f),
+                Ok(f) => {
+                    ctx.note_scanned(&opts);
+                    all.extend(f)
+                }
                 Err(e) => {
                     let message = e.message.clone();
                     ctx.report_local_scan_failure(target, &message);
@@ -928,5 +984,57 @@ mod design_snapshot_tests {
         assert_eq!(parsed["designSystem"]["allowedColorKeys"][0][1]["color"]["r"], 18.0);
         assert_eq!(std::fs::read_to_string(dir.join("DESIGN.md")).unwrap(), source);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod design_note_tests {
+    use super::*;
+    use crate::engines::{HtmlEngine, MissingHtmlEngine};
+
+    struct CleanHtml;
+    impl HtmlEngine for CleanHtml {
+        fn detect_html(
+            &self,
+            _path: &str,
+            _options: &ScanOptions,
+            _stderr: &mut dyn std::io::Write,
+        ) -> Result<Vec<Finding>, EngineError> {
+            Ok(Vec::new())
+        }
+    }
+
+    fn run(dir: &std::path::Path, target: &str, html: &dyn HtmlEngine) -> (i32, String) {
+        let (mut io, captured) = Io::captured_reader(
+            Box::new(std::io::empty()),
+            dir.to_path_buf(),
+            std::collections::HashMap::new(),
+        );
+        let engines = Engines { html, url: None };
+        let code = run_detect(&[target.to_string()], &mut io, &engines);
+        let err = String::from_utf8(captured.stderr.borrow().clone()).unwrap();
+        (code, err)
+    }
+
+    #[test]
+    fn the_purple_note_follows_only_a_scan_that_ran() {
+        let dir = std::env::temp_dir().join(format!("impeccable-design-note-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("DESIGN.md"), "---\ncolors:\n  primary: \"#5c2d91\"\n---\n# Design\n").unwrap();
+        std::fs::write(dir.join("page.html"), "<!doctype html><p>Hi</p>").unwrap();
+        let page = dir.join("page.html").to_string_lossy().into_owned();
+
+        // The file: URL cannot be scanned here (no URL engine), so the check
+        // was never switched off for anything.
+        let (code, err) = run(&dir, &format!("file://{page}"), &MissingHtmlEngine);
+        assert_eq!(code, 1, "{err}");
+        assert!(err.contains("Error: "), "{err}");
+        assert!(!err.contains("check is off"), "{err}");
+
+        // A local scan that ran says so.
+        let (_, err) = run(&dir, &page, &CleanHtml);
+        assert!(err.contains("purple/violet check is off"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

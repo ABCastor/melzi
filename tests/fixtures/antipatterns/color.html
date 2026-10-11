@@ -204,11 +204,14 @@
         <p style="color: white;">bg-black/50 — 50% opacity, not pure black</p>
       </div>
 
-      <h3>Inline &lt;a&gt; without own background (must remain skipped)</h3>
-      <!-- A regular text link inside a paragraph. No own background. SAFE_TAGS
-           must continue to skip these — flagging them would create noise on
-           every text link on the web. The detector exception for styled
-           buttons must not regress to flagging plain inline links. -->
+      <h3>Inline &lt;a&gt; without own background (scored on its text)</h3>
+      <!-- A regular text link inside a paragraph. No own background, and a
+           colour of its own that the paragraph does not carry, so the
+           contrast pass scores it: #aaaaaa on #fafafa is 2.2:1. Only the
+           contrast verdict crosses the SAFE_TAGS gate; the surface rules
+           (gray-on-color, gradient, palette) stay behind it, and a run that
+           merely inherits its paragraph's colour is still the paragraph's
+           finding, reported once. -->
       <p>Read more about this <a href="#" class="inline-link-low" data-test="inline-link">here</a> if you want to learn more about the topic.</p>
 
       <h3>Styled &lt;a&gt; with good contrast (must not flag)</h3>

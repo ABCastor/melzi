@@ -18,6 +18,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 const WS = 'comp-basic';
 
@@ -86,6 +87,160 @@ const cases = [
     steps: [{ args: ['start', '--comp', 'comp.png'] }, { args: ['status'] }],
   },
   { id: 'build-phase-usage', verb: 'build-phase', workspace: WS, args: [], env: env() },
+
+  // The direction round's chosen comp is option one of the comp round: start
+  // records it, the comps gate counts it from .impeccable/mocks/decision/ (an
+  // unrelated decision comp never counts), and an approval on it closes the
+  // gate with the decision path as the approved comp. --decision-comp with
+  // --comp, or naming a missing file, is refused.
+  {
+    id: 'build-phase-decision-comp-option-one', verb: 'build-phase', workspace: WS,
+    files: ['.impeccable/build/state.json', '.impeccable/build/approved-comp.json'], env: env(),
+    setup: (ws) => {
+      fs.mkdirSync(path.join(ws, '.impeccable/mocks/decision'), { recursive: true });
+      fs.copyFileSync(path.join(ws, 'comp.png'), path.join(ws, '.impeccable/mocks/decision/assigned.png'));
+      write(ws, '.impeccable/mocks/decision/assigned.png.json', JSON.stringify({ prompt: 'assigned' }));
+      fs.copyFileSync(path.join(ws, 'build.png'), path.join(ws, '.impeccable/mocks/decision/pick.png'));
+      write(ws, '.impeccable/mocks/decision/pick.png.json', JSON.stringify({ prompt: 'pick', approved: true }));
+    },
+    steps: [
+      { args: ['start', '--comp', 'comp.png', '--decision-comp', '.impeccable/mocks/decision/assigned.png'] },
+      { args: ['start', '--direction', 'seed', '--decision-comp', '.impeccable/mocks/decision/missing.png'] },
+      { args: ['start', '--direction', 'seed', '--decision-comp', '.impeccable/mocks/decision/assigned.png'] },
+      { args: ['advance'] },
+      {
+        setup: (ws) => {
+          for (const n of [2, 3]) {
+            fs.copyFileSync(path.join(ws, 'build.png'), path.join(ws, `.impeccable/mocks/comp-${n}.png`));
+            write(ws, `.impeccable/mocks/comp-${n}.png.json`, JSON.stringify({ prompt: `variation ${n}` }));
+          }
+          write(ws, '.impeccable/mocks/decision/assigned.png.json', JSON.stringify({ prompt: 'assigned', approved: true }));
+        },
+        args: ['advance'],
+      },
+    ],
+  },
+
+  // The approved comp is a fixed reference: start keeps a copy, comp-spec binds
+  // the same pixels, and once the comp is edited (build.png copied over it, the
+  // shape of compositing plates into it) the gate, a re-measure and comp-diff
+  // all refuse before measuring. restore-comp puts the approved pixels back and
+  // the spec gate measures again (its own readings, not the refusal).
+  {
+    id: 'build-phase-approved-comp-edited', verb: 'build-phase', workspace: WS,
+    files: ['.impeccable/build/approved-comp.json'], env: env(),
+    steps: [
+      { args: ['start', '--comp', 'comp.png'] },
+      { verb: 'comp-spec', args: ['--comp', 'comp.png', '--regions', 'regions.json'] },
+      { setup: (ws) => fs.copyFileSync(path.join(ws, 'build.png'), path.join(ws, 'comp.png')), args: ['advance'] },
+      { verb: 'comp-spec', args: ['--comp', 'comp.png', '--regions', 'regions.json'] },
+      { verb: 'comp-diff', args: ['--comp', 'comp.png', '--build', 'build.png', '--spec', '.impeccable/build/spec.json', '--no-files'] },
+      { args: ['restore-comp'] },
+      { args: ['advance'] },
+    ],
+  },
+
+  // build-phase responsive (workspace comp-responsive: a menu column ending in a
+  // sign-off line; spec.json and a state at the responsive phase are staged
+  // under .impeccable/build/, which git ignores in fixtures). A desktop capture whose
+  // column grew pushes the sign-off 40px down past the first viewport: the gate
+  // calls it displaced, prints the repair crops, and on the third failed attempt
+  // leads with the route to the user. A capture without the line calls it missing.
+  {
+    id: 'build-phase-responsive-displaced', verb: 'build-phase', workspace: 'comp-responsive',
+    setup: (ws) => {
+      fs.mkdirSync(path.join(ws, '.impeccable/review'), { recursive: true });
+      fs.mkdirSync(path.join(ws, '.impeccable/build'), { recursive: true });
+      fs.copyFileSync(path.join(ws, 'spec.json'), path.join(ws, '.impeccable/build/spec.json'));
+      fs.copyFileSync(path.join(ws, 'state.json'), path.join(ws, '.impeccable/build/state.json'));
+      fs.copyFileSync(path.join(ws, 'desktop-pushed.png'), path.join(ws, '.impeccable/review/desktop.png'));
+      fs.copyFileSync(path.join(ws, 'mobile.png'), path.join(ws, '.impeccable/review/mobile.png'));
+    },
+    env: env(),
+    steps: [{ args: ['advance', '--min', '0.1'] }, { args: ['advance', '--min', '0.1'] }, { args: ['advance', '--min', '0.1'] }],
+  },
+  {
+    id: 'build-phase-responsive-missing', verb: 'build-phase', workspace: 'comp-responsive',
+    setup: (ws) => {
+      fs.mkdirSync(path.join(ws, '.impeccable/review'), { recursive: true });
+      fs.mkdirSync(path.join(ws, '.impeccable/build'), { recursive: true });
+      fs.copyFileSync(path.join(ws, 'spec.json'), path.join(ws, '.impeccable/build/spec.json'));
+      fs.copyFileSync(path.join(ws, 'state.json'), path.join(ws, '.impeccable/build/state.json'));
+      fs.copyFileSync(path.join(ws, 'desktop-gone.png'), path.join(ws, '.impeccable/review/desktop.png'));
+      fs.copyFileSync(path.join(ws, 'mobile.png'), path.join(ws, '.impeccable/review/mobile.png'));
+    },
+    args: ['advance', '--min', '0.1'], env: env(),
+  },
+
+  // build-phase after a native ship: the finish binds every file the final
+  // capture read (captureInputs), so a later font edit, entry bytes unchanged,
+  // voids it. status prints the NEXT line for each state; completion lists the
+  // changed paths. A review-phase status prints the review NEXT.
+  {
+    id: 'build-phase-shipped-then-edited', verb: 'build-phase', workspace: WS,
+    env: env(),
+    steps: [
+      {
+        setup: (ws) => {
+          const sha = (rel) => crypto.createHash('sha256').update(fs.readFileSync(path.join(ws, rel))).digest('hex');
+          write(ws, 'index.html', '<main><h1>Shipped</h1></main>\n');
+          write(ws, 'fonts/face.ttf', 'font v1');
+          const phases = Object.fromEntries(['comps', 'spec', 'plates', 'hero', 'sections', 'motion', 'responsive', 'review']
+            .map((p) => [p, { status: 'closed', attempts: 1, gate: { ok: true, summary: 'oracle' } }]));
+          write(ws, '.impeccable/build/state.json', JSON.stringify({
+            tool: 'build-phase', version: 2, startedAt: '2026-10-04T00:00:00.000Z', comp: 'comp.png', breakpoint: '768x512',
+            artifact: 'index.html', phase: 'review', capturePolicy: 'native-html-v1', sessionId: 'oracle-build', phases,
+            finish: { disposition: 'ship', at: '2026-10-04T00:00:00.000Z', phaseAtFinish: 'review', artifactSha256: sha('index.html'),
+              captureInputs: [{ path: 'index.html', sha256: sha('index.html') }, { path: 'fonts/face.ttf', sha256: sha('fonts/face.ttf') }] },
+          }, null, 2));
+        },
+        args: ['status'],
+      },
+      { setup: (ws) => write(ws, 'fonts/face.ttf', 'font v2'), args: ['status'] },
+      { args: ['completion', '--session-id', 'oracle-build'] },
+    ],
+  },
+  {
+    id: 'build-phase-review-next-native', verb: 'build-phase', workspace: WS,
+    setup: (ws) => write(ws, '.impeccable/build/state.json', JSON.stringify({
+      tool: 'build-phase', version: 2, startedAt: '2026-10-04T00:00:00.000Z', comp: 'comp.png', breakpoint: '768x512',
+      artifact: 'index.html', phase: 'review', capturePolicy: 'native-html-v1', phases: {},
+    }, null, 2)),
+    args: ['status'], env: env(),
+  },
+
+  // component-review plan: the v3 packet derives from the measured spec. The
+  // spec fixture has one plate region (art), one non-container chrome (top,
+  // a plan item) and one text region (body, a code region).
+  { id: 'component-review-usage', verb: 'component-review', workspace: WS, args: [], env: env() },
+  {
+    id: 'component-review-plan-missing-plates', verb: 'component-review', workspace: WS,
+    setup: (ws) => write(ws, '.impeccable/build/spec.json', fs.readFileSync(path.join(ws, 'spec.json'))),
+    args: ['plan'], env: env(),
+  },
+  {
+    id: 'component-review-plan', verb: 'component-review', workspace: WS,
+    setup: (ws) => {
+      write(ws, '.impeccable/build/spec.json', fs.readFileSync(path.join(ws, 'spec.json')));
+      write(ws, 'assets/plates/art.png', fs.readFileSync(path.join(ws, 'comp.png')));
+    },
+    args: ['plan'], files: ['.impeccable/review/components.json'], env: env(),
+  },
+  // Absolute paths inside the project and backslashed ones come back project-relative
+  // with forward slashes (comp-spec may record either).
+  {
+    id: 'component-review-plan-absolute-paths', verb: 'component-review', workspace: WS,
+    setup: (ws) => {
+      const spec = JSON.parse(fs.readFileSync(path.join(ws, 'spec.json'), 'utf8'));
+      spec.comp = path.join(fs.realpathSync(ws), 'comp.png');
+      for (const r of spec.regions) if (r.id === 'art') r.plate = 'assets\\plates\\art.png';
+      write(ws, '.impeccable/build/spec.json', JSON.stringify(spec));
+      write(ws, 'assets/plates/art.png', fs.readFileSync(path.join(ws, 'comp.png')));
+    },
+    args: ['plan'], files: ['.impeccable/review/components.json'], env: env(),
+    // The spec names the staged workspace, so its digest is run-dependent.
+    normalize: [['("specSha256": ")[0-9a-f]{64}', 'g', '$1<SHA256>']],
+  },
 ];
 
 export default cases;

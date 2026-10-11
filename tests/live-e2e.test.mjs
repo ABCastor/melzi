@@ -61,6 +61,7 @@ import {
   readComputedFontWeight,
   runLiveChromeBottomBarSmoke,
   setTuneRange,
+  typeConfigurePrompt,
   waitForApplyDockHidden,
   waitForBarHidden,
   waitForComputedFontWeight,
@@ -346,6 +347,8 @@ for (const { name, fixture } of fixtures) {
             });
             t.diagnostic(`Bar after pick: ${JSON.stringify(barText)}`);
           }
+
+          await typeConfigurePrompt(page, 'make it bolder');
 
           t.diagnostic('Clicking Go');
           await clickGo(page);

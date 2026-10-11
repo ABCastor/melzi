@@ -49,9 +49,9 @@ const title = 'Astro inset shadow stripe regression';
 </main>
 
 <style is:inline>
-  [data-case="Kinpaku Edge"] { box-shadow: inset 3px 0 0 var(--ks-kinpaku-deep); }
-  [data-case="Patina Edge"] { box-shadow: inset 3px 0 0 var(--ks-patina-deep); }
-  [data-case="Accent Edge"] { box-shadow: inset -4px 0 0 var(--brand-accent); }
+  [data-case="Kinpaku Edge"] { border-radius: 12px; box-shadow: inset 3px 0 0 var(--ks-kinpaku-deep); }
+  [data-case="Patina Edge"] { border-radius: 12px; box-shadow: inset 3px 0 0 var(--ks-patina-deep); }
+  [data-case="Accent Edge"] { border-radius: 12px; box-shadow: inset -4px 0 0 var(--brand-accent); }
   [data-case="Signal Blue Edge"] { box-shadow: inset 0 5px 0 var(--signal-blue); }
   [data-case="Neutral Shadow Token"] { box-shadow: inset 3px 0 0 var(--shadow-color); }
   [data-case="Current Color Edge"] { box-shadow: inset 3px 0 0 currentColor; }
@@ -63,10 +63,10 @@ const title = 'Astro inset shadow stripe regression';
 
   /* Literal colors: authored CSS spells neutrals as hex and keywords, not as
      the computed rgb()/oklch() forms a browser emits. */
-  [data-case="Chromatic Hex Edge"] { box-shadow: inset 4px 0 0 #6366f1; }
-  [data-case="Named Red Edge"] { box-shadow: inset 4px 0 0 red; }
-  [data-case="Chromatic Rgb Edge"] { box-shadow: inset 4px 0 0 rgb(99, 102, 241); }
-  [data-case="Chromatic Oklch Edge"] { box-shadow: inset 4px 0 0 oklch(65% 0.18 250); }
+  [data-case="Chromatic Hex Edge"] { border-radius: 12px; box-shadow: inset 4px 0 0 #6366f1; }
+  [data-case="Named Red Edge"] { border-radius: 12px; box-shadow: inset 4px 0 0 red; }
+  [data-case="Chromatic Rgb Edge"] { border-radius: 12px; box-shadow: inset 4px 0 0 rgb(99, 102, 241); }
+  [data-case="Chromatic Oklch Edge"] { border-radius: 12px; box-shadow: inset 4px 0 0 oklch(65% 0.18 250); }
   [data-case="Black Hex Edge"] { box-shadow: inset 4px 0 0 #000; }
   [data-case="Black Named Edge"] { box-shadow: inset 4px 0 0 black; }
   [data-case="Gray Hex Edge"] { box-shadow: inset 4px 0 0 #e5e7eb; }
@@ -75,24 +75,29 @@ const title = 'Astro inset shadow stripe regression';
   [data-case="Shorthand Neutral Hex Edge"] { box-shadow: inset 4px 0 0 #1118; }
 
   /* `inset` is order-independent per spec; these paint the same stripe as above. */
-  [data-case="Trailing Inset Edge"] { box-shadow: 4px 0 0 #6366f1 inset; }
-  [data-case="Trailing Inset Token Edge"] { box-shadow: 4px 0 0 var(--brand-accent) inset; }
+  [data-case="Trailing Inset Edge"] { border-radius: 12px; box-shadow: 4px 0 0 #6366f1 inset; }
+  [data-case="Trailing Inset Token Edge"] { border-radius: 12px; box-shadow: 4px 0 0 var(--brand-accent) inset; }
   /* The keyword must only be stripped standalone: this token merely contains it. */
-  [data-case="Inset Named Token Edge"] { box-shadow: inset 4px 0 0 var(--inset-accent); }
+  [data-case="Inset Named Token Edge"] { border-radius: 12px; box-shadow: inset 4px 0 0 var(--inset-accent); }
   [data-case="Trailing Inset Neutral Edge"] { box-shadow: 4px 0 0 #000 inset; }
 
   /* box-shadow takes <length>{2,4}: blur and spread are optional and default to
      0, so these paint the same stripe as the four-length forms above. */
-  [data-case="Two Length Edge"] { box-shadow: inset 4px 0 var(--brand-accent); }
+  [data-case="Two Length Edge"] { border-radius: 12px; box-shadow: inset 4px 0 var(--brand-accent); }
   [data-case="Two Length Trailing Inset Edge"] { box-shadow: 0 5px #6366f1 inset; }
-  [data-case="Important Edge"] { box-shadow: inset 4px 0 var(--brand-accent) !important; }
-  [data-case="Cascade Override Edge"] { box-shadow: none; box-shadow: inset 4px 0 red; }
+  [data-case="Important Edge"] { border-radius: 12px; box-shadow: inset 4px 0 var(--brand-accent) !important; }
+  [data-case="Cascade Override Edge"] { border-radius: 12px; box-shadow: none; box-shadow: inset 4px 0 red; }
   [data-case="Cascade Cancelled Edge"] { box-shadow: inset 4px 0 red; box-shadow: none; }
-  [data-case="Color First Edge"] { box-shadow: red 4px 0 inset; }
-  [data-case="Color First Var Edge"] { box-shadow: var(--brand-accent) 4px 0 0 inset; }
+  [data-case="Color First Edge"] { border-radius: 12px; box-shadow: red 4px 0 inset; }
+  [data-case="Color First Var Edge"] { border-radius: 12px; box-shadow: var(--brand-accent) 4px 0 0 inset; }
   [data-case="Two Length Neutral Edge"] { box-shadow: inset 4px 0 #000; }
   [data-case="Space Rgb Neutral Edge"] { box-shadow: inset 4px 0 rgb(0 0 0); }
   [data-case="Two Length Blurred Edge"] { box-shadow: inset 4px 0 5px var(--brand-accent); }
+
+  /* A left or right stripe is the tell only on a rounded card: every left or
+     right flag case above rounds its box, and this one squares itself off. The
+     text engine reads this style block only, so the case has no article. */
+  [data-case="Square Box Edge"] { border-radius: 0; box-shadow: inset 4px 0 0 #6366f1; }
 
   /* Commented-out rules are not live CSS.
   [data-case="Commented Out Edge"] { box-shadow: inset 4px 0 0 var(--brand-accent); }

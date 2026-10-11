@@ -205,4 +205,35 @@ mod tests {
         let bare = parse_inline_ignores(Some("<!-- impeccable-disable -->"));
         assert_eq!(bare.file, vec!["*"]);
     }
+
+    /// A directive naming a rule the registry retired still parses and still
+    /// waives a finding carrying that id: inline ignores read the id off the
+    /// finding and never consult the registry, so a config written against an
+    /// older release keeps working instead of failing the scan.
+    #[test]
+    fn retired_rule_id_still_parses() {
+        let d = parse_inline_ignores(Some("<!-- impeccable-disable image-hover-transform -->"));
+        assert_eq!(d.file, vec!["image-hover-transform"]);
+
+        struct Hit(&'static str);
+        impl IgnorableFinding for Hit {
+            fn antipattern(&self) -> Option<&str> {
+                Some(self.0)
+            }
+            fn line_number(&self) -> f64 {
+                0.0
+            }
+        }
+        assert!(is_inline_ignored(&Hit("image-hover-transform"), &d));
+        assert!(!is_inline_ignored(&Hit("bounce-easing"), &d));
+
+        // `layout-transition`, retired on 2026-10-07, named beside a live rule.
+        let d = parse_inline_ignores(Some(
+            "<!-- impeccable-disable layout-transition, bounce-easing -->",
+        ));
+        assert_eq!(d.file, vec!["layout-transition", "bounce-easing"]);
+        assert!(is_inline_ignored(&Hit("layout-transition"), &d));
+        assert!(is_inline_ignored(&Hit("bounce-easing"), &d));
+        assert!(!is_inline_ignored(&Hit("dark-glow"), &d));
+    }
 }

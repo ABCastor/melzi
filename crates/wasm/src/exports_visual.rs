@@ -109,6 +109,14 @@ pub fn vc_raster_finish(node: u32, sample_json: &str) -> String {
     out(&with_dom(|dom| vc::raster_finish(dom, node, parse(sample_json))))
 }
 
+/// A picture's sample finished for the stack walk: faded by its own box's
+/// opacity, or ending the walk where it could not be read
+/// (`visual::media_sample`). `node` is the picture, `el` the text.
+#[wasm_bindgen]
+pub fn vc_media_sample(node: u32, el: u32, sample_json: &str) -> String {
+    out(&with_dom(|dom| vc::media_sample(dom, node, el, parse(sample_json))))
+}
+
 /// `sampleDrawablePixel` canvas sizing: `{ width, height, scaleX, scaleY }`.
 #[wasm_bindgen]
 pub fn vc_raster_plan(intrinsic_w: f64, intrinsic_h: f64) -> String {
@@ -154,16 +162,20 @@ pub fn vc_css_plan(node: u32, text_color_json: &str) -> String {
     serde_json::to_string(&with_dom(|dom| vc::css_plan(dom, node, tc.as_ref()))).unwrap_or_default()
 }
 
-/// url path: `{ status: 'unresolved', reason: 'image unavailable' }`.
+/// url path, no image loaded: `{ status: 'unresolved', reason: 'image
+/// unavailable' }`, or the sample that ends the walk when the image's stated
+/// placement covers neither the candidate `el`'s text nor `node`'s box.
 #[wasm_bindgen]
-pub fn vc_css_url_no_image() -> String {
-    out(&vc::css_url_no_image())
+pub fn vc_css_url_no_image(node: u32, el: u32, size: &str, position: &str) -> String {
+    out(&with_dom(|dom| vc::css_url_no_image(dom, node, el, size, position)))
 }
 
 /// url path: source point on the loaded image (`{ point }` or `{ sample }`).
+/// `el` is the candidate whose text is being sampled: an image that covers
+/// neither its own box nor that text answers with a sample that ends the walk.
 #[wasm_bindgen]
-pub fn vc_css_url_source_point(node: u32, intrinsic_w: f64, intrinsic_h: f64, size: &str, position: &str, x: f64, y: f64) -> String {
-    match with_dom(|dom| vc::css_url_source_point(dom, node, intrinsic_w, intrinsic_h, size, position, x, y)) {
+pub fn vc_css_url_source_point(node: u32, el: u32, intrinsic_w: f64, intrinsic_h: f64, size: &str, position: &str, x: f64, y: f64) -> String {
+    match with_dom(|dom| vc::css_url_source_point(dom, node, el, intrinsic_w, intrinsic_h, size, position, x, y)) {
         Ok((px, py)) => json!({ "point": { "x": px, "y": py } }).to_string(),
         Err(sample) => json!({ "sample": sample }).to_string(),
     }
@@ -185,6 +197,20 @@ pub fn vc_sample_is_opaque(sample_json: &str) -> bool {
 #[wasm_bindgen]
 pub fn vc_alpha_composite(sample_json: &str, under_json: &str) -> String {
     out(&vc::alpha_composite(parse(sample_json), &parse(under_json)))
+}
+
+/// The walk's stop at paint it cannot read (an `unreadable` stack node).
+#[wasm_bindgen]
+pub fn vc_unreadable_stack_sample(node: u32) -> String {
+    out(&with_dom(|dom| vc::unreadable_stack_sample(dom, node)))
+}
+
+/// The walk's compositing fold: the translucent samples it passed through
+/// (topmost first) over the opaque sample beneath them.
+#[wasm_bindgen]
+pub fn vc_composite_stack(pending_json: &str, ground_json: &str) -> String {
+    let pending: Vec<Value> = serde_json::from_str(pending_json).unwrap_or_default();
+    out(&vc::composite_stack(&pending, &parse(ground_json)))
 }
 
 /// The walk's final unresolved sample from the collected reasons (`[string]`).

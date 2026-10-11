@@ -14,10 +14,13 @@ use crate::adapters::{
     check_element_colors, check_element_glow, check_element_gpt_border_shadow,
     check_element_hero_eyebrow, check_element_hover_contrast, check_element_icon_tile,
     check_element_italic_serif, check_element_motion, check_element_oversized_h1,
-    check_element_radial_spotlight, check_kicker_above_heading_from_doc,
-    check_numbered_section_labels_from_doc, scoped_ignore_active,
+    check_element_radial_spotlight, check_element_stripe_child,
+    check_kicker_above_heading_from_doc, check_numbered_section_labels_from_doc,
+    scoped_ignore_active,
 };
-use crate::background::{resolve_background, resolve_border_radius_px, sv};
+use crate::background::{
+    resolve_background, resolve_border_radius_scalar_px, resolve_side_accent_corners, sv,
+};
 use crate::cascade::{build_static_style_map, collect_static_css_text};
 use crate::dom::{StaticDocument, StaticElement};
 use crate::page::{
@@ -26,8 +29,9 @@ use crate::page::{
 };
 use crate::profile::{self, Meta, ProfileSink};
 use crate::quality::{check_element_quality, check_page_quality_from_doc, pf0};
+use impeccable_core::checks::css_scan::{side_stripe_index, CssHostIndex};
 use impeccable_core::checks::html_patterns::{check_html_patterns, HtmlPatternCorpora};
-use impeccable_core::checks::rules::RuleHit;
+use impeccable_core::checks::rules::{is_rounded_away_from_side, RuleHit, SafeTagTextSeen};
 use impeccable_core::findings::{try_finding, Finding};
 use impeccable_core::inline_ignores::apply_inline_ignores;
 use impeccable_core::page::is_full_page;
@@ -44,6 +48,11 @@ pub trait DesignSystemHook {
     fn collect_static(&self, doc: &StaticDocument, file_path: &str) -> Vec<Finding>;
     /// JS `mergeDesignSystemFindings(staticDesignFindings, sourceDesignFindings)`.
     fn merge(&self, static_findings: Vec<Finding>, source_findings: Vec<Finding>) -> Vec<Finding>;
+    /// Drop the findings of checks the design system switches off (the
+    /// purple forms of ai-color-palette when DESIGN.md declares a purple).
+    /// Runs over every built-in finding, before a rule pack and inline
+    /// ignores.
+    fn drop_switched_off(&self, _findings: &mut Vec<Finding>) {}
 }
 
 /// JS `runTextContentAnalyzers(html, filePath, options)` from the regex
@@ -109,6 +118,7 @@ const STATIC_ELEMENT_RULES: &[(&str, &str)] = &[
     ("dark-glow", "*"),
     ("motion-rules", "*"),
     ("icon-tile-stack", "h1,h2,h3,h4,h5,h6"),
+    ("stripe-child", "div,span"),
     ("italic-serif-display", "h1,h2"),
     ("hero-eyebrow-chip", "h1"),
     ("broken-image", "img"),
@@ -119,14 +129,19 @@ const STATIC_ELEMENT_RULES: &[(&str, &str)] = &[
     ("radial-spotlight-glow", "*"),
 ];
 
-fn run_rule(rule_id: &str, el: &StaticElement<'_>, tag: &str) -> Vec<RuleHit> {
+fn run_rule(
+    rule_id: &str,
+    el: &StaticElement<'_>,
+    tag: &str,
+    color_seen: &mut SafeTagTextSeen,
+) -> Vec<RuleHit> {
     let style = el.style();
     match rule_id {
         "border-rules" => {
-            let radius = resolve_border_radius_px(style, pf0(sv(style, "width")));
+            let radius = resolve_border_radius_scalar_px(style, pf0(sv(style, "width")));
             check_element_borders(tag, style, radius, el)
         }
-        "color-rules" => check_element_colors(el, style, tag, None),
+        "color-rules" => check_element_colors(el, style, tag, None, color_seen),
         "hover-color-rules" => check_element_hover_contrast(el, style, tag),
         "dark-glow" => {
             let base = el.parent_element().unwrap_or(*el);
@@ -134,13 +149,14 @@ fn run_rule(rule_id: &str, el: &StaticElement<'_>, tag: &str) -> Vec<RuleHit> {
         }
         "motion-rules" => check_element_motion(tag, style),
         "icon-tile-stack" => check_element_icon_tile(el, tag),
+        "stripe-child" => check_element_stripe_child(el, style),
         "italic-serif-display" => check_element_italic_serif(el, style, tag),
         "hero-eyebrow-chip" => check_element_hero_eyebrow(el, style, tag),
         "broken-image" => check_element_broken_image(el),
         "quality-rules" => check_element_quality(el, style, tag),
         "oversized-h1" => check_element_oversized_h1(el, tag),
         "clipped-overflow-container" => check_element_clipped_overflow(el, style),
-        "gpt-thin-border-wide-shadow" => check_element_gpt_border_shadow(style),
+        "gpt-thin-border-wide-shadow" => check_element_gpt_border_shadow(el, style),
         "radial-spotlight-glow" => check_element_radial_spotlight(el, style),
         _ => Vec::new(),
     }
@@ -209,6 +225,11 @@ pub fn detect_html_source(
     );
     let css_text = collect_static_css_text(&doc, &file_dir, profile, fp, options.warn);
     build_static_style_map(&mut doc, css_text.as_str(), profile, fp);
+    // A stylesheet the engine could not read may round any card it never saw
+    // a radius for; the side-accent gate keeps those findings.
+    if crate::cascade::has_unread_stylesheet(&doc, &file_dir) {
+        doc.set_unread_stylesheet();
+    }
     let doc = doc;
 
     let mut findings: Vec<Finding> = Vec::new();
@@ -216,19 +237,39 @@ pub fn detect_html_source(
 
     for (rule_id, selector) in STATIC_ELEMENT_RULES {
         let elements = doc.query_selector_all(selector);
+        // One document, one set of already-reported SAFE_TAGS text colours.
+        let mut color_seen = SafeTagTextSeen::default();
         for el in &elements {
             let tag = el.tag_lower();
             let hits = profile::findings(
                 profile,
                 Meta::new("element", rule_id, fp),
                 |h: &RuleHit| h.id.as_str(),
-                || run_rule(rule_id, el, &tag),
+                || run_rule(rule_id, el, &tag, &mut color_seen),
             );
             for h in hits {
                 if scoped_ignore_active(el, &h.id) {
                     continue;
                 }
-                if let Some(f) = mk(&h.id, &h.snippet) {
+                // A bounce by name whose keyframes the stylesheet shows and
+                // that only pulse (a loader dot scaling from nothing to its
+                // size and back) neither moves nor overshoots.
+                if h.id == "bounce-easing"
+                    && h.snippet.strip_prefix("animation: ").is_some_and(|names| {
+                        impeccable_core::checks::css_scan::bounce_names_only_pulse(names, |name| {
+                            impeccable_core::checks::css_scan::css_keyframes_only_pulse(&css_text, name)
+                        })
+                    })
+                {
+                    continue;
+                }
+                if let Some(mut f) = mk(&h.id, &h.snippet) {
+                    // A hit's own severity (a contrast ratio just under its
+                    // bar) overrides the registry's.
+                    if let Some(sev) = h.severity.filter(|s| !s.is_empty()) {
+                        f.severity = sev;
+                        impeccable_core::findings::derive_advisory_flag(&mut f);
+                    }
                     findings.push(f);
                 }
             }
@@ -260,16 +301,31 @@ pub fn detect_html_source(
                 f,
             )
         };
+        let flat_type_severity = crate::page::flat_type_hierarchy_severity_for_doc(&doc);
+        for h in page("typography-rules", &|| check_static_page_typography(&doc)) {
+            if let Some(mut f) = mk(&h.id, &h.snippet) {
+                if h.id == "flat-type-hierarchy" {
+                    if let Some(sev) = flat_type_severity {
+                        f.severity = sev.to_string();
+                        impeccable_core::findings::derive_advisory_flag(&mut f);
+                    }
+                }
+                findings.push(f);
+            }
+        }
         let mut push_hits = |hits: Vec<RuleHit>| {
             for h in hits {
-                if let Some(f) = mk(&h.id, &h.snippet) {
+                if let Some(mut f) = mk(&h.id, &h.snippet) {
+                    // A page check's own severity (an inner card in a
+                    // mockup) overrides the registry's.
+                    if let Some(sev) = h.severity.filter(|s| !s.is_empty()) {
+                        f.severity = sev;
+                        impeccable_core::findings::derive_advisory_flag(&mut f);
+                    }
                     findings.push(f);
                 }
             }
         };
-        push_hits(page("typography-rules", &|| {
-            check_static_page_typography(&doc)
-        }));
         push_hits(page("kicker-above-heading", &|| {
             check_kicker_above_heading_from_doc(&doc)
         }));
@@ -311,11 +367,15 @@ pub fn detect_html_source(
             || {
                 check_html_patterns(html, Some(&corpora))
                     .into_iter()
-                    .filter(|item| item.id != "bounce-easing" && item.id != "layout-transition")
+                    .filter(|item| item.id != "bounce-easing")
                     .collect()
             },
         );
+        // The style text's rule blocks, read once for every stripe no element
+        // on the page matches.
+        let host_index = once_cell::unsync::OnceCell::new();
         for f in pattern_hits {
+            let mut hosts = Vec::new();
             if let Some(selector) = f.selector.as_deref() {
                 let stripped = PSEUDO_STRIP_RE.replace_all(selector, "");
                 let stripped = impeccable_core::js::trim(&stripped);
@@ -329,6 +389,28 @@ pub fn detect_html_source(
                     {
                         continue;
                     }
+                    hosts = matches;
+                }
+            }
+            // A stripe on any edge from the style-text scans reports only
+            // on a card rounded away from it: read off the cascade for the
+            // elements the rule paints, else off the host rule's own
+            // declarations when no element on the page matches.
+            if let Some(side) = side_stripe_index(&f) {
+                let rounded = if hosts.is_empty() {
+                    host_index
+                        .get_or_init(|| CssHostIndex::new(&corpora.style_text))
+                        .side_stripe_on_rounded_host(&f)
+                } else {
+                    hosts.iter().any(|el| {
+                        let style = el.style();
+                        let corners =
+                            resolve_side_accent_corners(el, style, pf0(sv(style, "width")));
+                        is_rounded_away_from_side(corners.as_ref(), side)
+                    })
+                };
+                if !rounded {
+                    continue;
                 }
             }
             if let Some(mut item) = mk(&f.id, &f.snippet) {
@@ -353,6 +435,10 @@ pub fn detect_html_source(
                 }
             }
         }
+    }
+
+    if let Some(ds) = options.design_system {
+        ds.drop_switched_off(&mut findings);
     }
 
     // A rule pack sees the page after every built-in pass (element rules, the

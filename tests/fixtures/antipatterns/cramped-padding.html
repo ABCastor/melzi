@@ -90,9 +90,42 @@
     .pass-button-std { padding: 8px 16px; background: #3b82f6; color: white; border: 0; border-radius: 6px; font-size: 14px; cursor: pointer; }
     .pass-input-std { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 16px; width: 100%; box-sizing: border-box; }
 
+    /* ── FLAG: fixed-height box whose text really does fill it ── */
+    .flag-tight-band { width: 260px; height: 36px; display: flex; align-items: center; padding: 0; background: #f1f5f9; border-radius: 4px; font-size: 16px; line-height: 18px; }
+
+    /* ── PASS: the label is centred by the layout, not by padding ── */
+    .pass-centred-cta { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 32px; background: #2563eb; color: white; border: 0; border-radius: 6px; font-size: 14px; line-height: 20px; text-decoration: none; }
+    .pass-centred-band { display: flex; align-items: center; justify-content: center; width: 420px; height: 40px; padding: 0; background: #111827; color: #f9fafb; font-size: 14px; line-height: 20px; }
+
+    /* ── PASS: the only side boundary is a transparent focus-ring border ── */
+    .pass-transparent-border-row { width: 420px; padding: 20px 0; border: 1px solid transparent; background: transparent; font-size: 18px; line-height: 26px; }
+
     /* ── PASS: big text with proportional padding ── */
     .pass-heading-good { padding: 16px; background: #f1f5f9; border-radius: 8px; font-size: 24px; font-weight: 600; line-height: 1.2; }
     .pass-hero-good { padding: 20px 32px; background: #f1f5f9; border-radius: 8px; font-size: 32px; font-weight: 700; line-height: 1.2; }
+
+    /* ── FLAG: a small chip whose glyphs really do touch its edges ── */
+    .flag-touching-chip { display: flex; align-items: center; width: 180px; height: 20px; padding: 0 8px; background: #fde68a; border-radius: 4px; }
+    .flag-touching-chip span { font-size: 16px; line-height: 16px; }
+
+    /* ── FLAG: a chip of 28px or more keeps the content-area measure ── */
+    /* A 14px label on a 20px line, 2px from the top: the content area sits
+       about 3px off the top edge, the em box 4.5px off. Under 27.5px the em
+       box is what counts and the chip passes; at 28px or 27.6px it is not a
+       small chip and reports on top, as it did before taste call r3-20. */
+    .flag-price-chip, .flag-price-chip-subpixel, .pass-price-chip { display: flex; align-items: flex-start; width: 120px; box-sizing: border-box; padding: 2px 8px; background: #e0f2fe; color: #0c4a6e; border-radius: 4px; }
+    .flag-price-chip { height: 28px; }
+    .flag-price-chip-subpixel { height: 27.6px; }
+    .pass-price-chip { height: 27px; }
+    .flag-price-chip span, .flag-price-chip-subpixel span, .pass-price-chip span { font-size: 14px; line-height: 20px; }
+
+    /* ── PASS: a small chip whose line box already holds the glyphs off the edge ── */
+    .pass-step-chip { display: inline-flex; align-items: center; height: 24px; box-sizing: border-box; padding: 2px 8px; background: #ffaa01; color: #1a1a1a; border-radius: 4px; }
+    .pass-step-chip span { font-size: 14px; line-height: 20px; font-weight: 500; }
+
+    /* ── PASS: an inline highlight that wraps is two one-line fragments ── */
+    .pass-highlight-copy { width: 240px; font-size: 14px; line-height: 26px; margin: 0; }
+    .pass-highlight { background: #fef08a; padding: 0 5px; }
   </style>
 </head>
 <body>
@@ -136,6 +169,28 @@
       <div class="case">
         <span class="case-label">32px hero, 6px vertical / 16px horizontal padding</span>
         <div class="flag-hero-tight">Hero Section With Tight Vertical Padding</div>
+      </div>
+
+      <h3>Fixed-height box the text fills</h3>
+      <div class="case">
+        <span class="case-label">260x36px flex row, padding 0, 16px text on an 18px line box: two lines run edge to edge</span>
+        <div class="flag-tight-band">Two full lines of label text inside a 36px band</div>
+      </div>
+
+      <h3>Small chip whose text touches the edge (browser engine only)</h3>
+      <div class="case">
+        <span class="case-label">20px chip, padding 0: the 16px glyphs reach within 2px of the top and bottom</span>
+        <div class="flag-touching-chip"><span>Limited edition</span></div>
+      </div>
+
+      <h3>Chip of 28px or more, measured by its content area (browser engine only)</h3>
+      <div class="case">
+        <span class="case-label">28px price chip, padding 2px 8px, 14px label on a 20px line at the top: a 28px chip is not under 28px, so its text is measured by the content area, about 3px off the top</span>
+        <div class="flag-price-chip"><span>1,250 SAR</span></div>
+      </div>
+      <div class="case">
+        <span class="case-label">the same chip at 27.6px: still not under the 27.5px bound</span>
+        <div class="flag-price-chip-subpixel"><span>1,250 SAR</span></div>
       </div>
 
       <h3>Cramped multi-line code block</h3>
@@ -212,6 +267,22 @@
         <input type="text" class="pass-input-std" value="Standard input with adequate padding">
       </div>
 
+      <h3>Labels centred by the layout</h3>
+      <div class="case">
+        <span class="case-label">40px-tall inline-flex CTA, padding 0 32px: the 14px label keeps 12px of air on both sides</span>
+        <a class="pass-centred-cta" href="#">Book a free consultation</a>
+      </div>
+      <div class="case">
+        <span class="case-label">420x40px announcement band, padding 0: the 14px line is centred on both axes</span>
+        <div class="pass-centred-band">We are hiring across every engineering team</div>
+      </div>
+
+      <h3>Transparent focus-ring border</h3>
+      <div class="case">
+        <span class="case-label">420px accordion trigger, padding 20px 0, border 1px solid transparent: no side edge is drawn</span>
+        <div class="pass-transparent-border-row">What does the free plan include?</div>
+      </div>
+
       <h3>Big text with proportional padding</h3>
       <div class="case">
         <span class="case-label">24px heading, 16px padding</span>
@@ -220,6 +291,23 @@
       <div class="case">
         <span class="case-label">32px hero, 20px / 32px padding</span>
         <div class="pass-hero-good">Hero With Big Padding</div>
+      </div>
+
+      <h3>Small chip inset by its line box (browser engine only)</h3>
+      <div class="case">
+        <span class="case-label">24px step chip, padding 2px 8px, 14px label on a 20px line: the glyphs sit 5px off the top and bottom. The static engine reads only the declared padding and still reports it.</span>
+        <div class="pass-step-chip"><span>Point 1</span></div>
+      </div>
+
+      <div class="case">
+        <span class="case-label">the price chip at 27px, under the 27.5px bound: measured by its glyphs, whose em box sits 4.5px off the top. The static engine reads only the declared padding and still reports it.</span>
+        <div class="pass-price-chip"><span>1,250 SAR</span></div>
+      </div>
+
+      <h3>Inline highlight across two lines</h3>
+      <div class="case">
+        <span class="case-label">an inline highlight with no vertical padding wraps onto two lines: each fragment is one 21px line, not one 43px box</span>
+        <div class="pass-highlight-copy">Every estimate is checked against the <span class="pass-highlight">carrier's own estimating guide before it ships</span> to the customer.</div>
       </div>
     </div>
   </div>

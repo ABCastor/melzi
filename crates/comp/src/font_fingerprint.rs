@@ -692,7 +692,11 @@ fn measure(bin: &Bin, lines: &[Line]) -> Option<Measured> {
                     while yy < ln.y1 && ink[yy * w + x] == 1 {
                         yy += 1;
                     }
-                    vruns.push(v_len(x, y0, yy) / cap);
+                    let l = v_len(x, y0, yy);
+                    vruns.push(l / cap);
+                    if l < cap * 0.35 {
+                        thins.push(l / cap);
+                    }
                 } else {
                     yy += 1;
                 }
@@ -763,23 +767,6 @@ fn measure(bin: &Bin, lines: &[Line]) -> Option<Measured> {
         }
         if run_rows > 0.0 {
             per_run_density.push((run_count / run_rows) / ((x_r - x_l) as f64 / cap));
-        }
-        for x in x_l..x_r {
-            let mut yy = ln.y0;
-            while yy < ln.y1 {
-                if ink[yy * w + x] == 1 {
-                    let y0 = yy;
-                    while yy < ln.y1 && ink[yy * w + x] == 1 {
-                        yy += 1;
-                    }
-                    let l = v_len(x, y0, yy);
-                    if l < cap * 0.35 {
-                        thins.push(l / cap);
-                    }
-                } else {
-                    yy += 1;
-                }
-            }
         }
         // serif
         let run_at = |yy: usize, x: usize| -> f64 {

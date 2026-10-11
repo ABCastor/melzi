@@ -475,3 +475,45 @@ fn viewport_capture_does_not_switch_responsive_picture_sources() {
         );
     }
 }
+
+/// Chrome opens sockets it leaves idle and writes some requests seconds after
+/// connecting. Neither may hold up another request or lose its own, and
+/// dropping the server ends every connection it still holds.
+#[test]
+fn snapshot_server_serves_around_idle_and_late_connections_and_closes_them_on_drop() {
+    use std::{
+        io::{Read, Write},
+        net::TcpStream,
+        sync::Arc,
+        time::{Duration, Instant},
+    };
+    let f = Fixture::new();
+    let snapshot = Arc::new(HtmlSnapshot::freeze(f.selection()).unwrap());
+    let server = snapshot.serve().unwrap();
+    let url = server.entry_url();
+    let host = url.strip_prefix("http://").unwrap().split('/').next().unwrap().to_string();
+    let get = |stream: &mut TcpStream| {
+        stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        write!(stream, "GET /index.html HTTP/1.1\r\nHost: {host}\r\n\r\n").unwrap();
+        let mut response = Vec::new();
+        stream.read_to_end(&mut response).unwrap();
+        String::from_utf8_lossy(&response).into_owned()
+    };
+    // Accepted first and never written to: a serial server would answer the
+    // next connection only after giving up on this one.
+    let mut idle = TcpStream::connect(&host).unwrap();
+    std::thread::sleep(Duration::from_millis(50));
+    let started = Instant::now();
+    assert!(get(&mut TcpStream::connect(&host).unwrap()).starts_with("HTTP/1.1 200 OK"));
+    assert!(started.elapsed() < Duration::from_millis(1500), "an idle connection held up a request");
+    // Connected now, written later than the old 2 s idle limit.
+    let mut late = TcpStream::connect(&host).unwrap();
+    std::thread::sleep(Duration::from_millis(2500));
+    assert!(get(&mut late).starts_with("HTTP/1.1 200 OK"), "a late request lost its connection");
+    drop(server);
+    idle.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let closed = Instant::now();
+    let mut buf = [0u8; 16];
+    assert!(matches!(idle.read(&mut buf), Ok(0) | Err(_)));
+    assert!(closed.elapsed() < Duration::from_secs(4), "dropping the server left a connection open");
+}

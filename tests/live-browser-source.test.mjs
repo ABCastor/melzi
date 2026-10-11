@@ -545,17 +545,22 @@ describe('live-browser source contracts', () => {
     );
     assert.match(
       SOURCE,
-      /function sanitizedContextOuterHTML\(el, maxLength\)[\s\S]*?stripManualEditRuntimeState\(clone\);/,
-      'manual copy edit prompt context should strip browser-only edit markers before staging HTML',
+      /function sanitizedContextClone\(el\) \{\s*const clone = cloneWithoutChrome\(el\);\s*stripManualEditRuntimeState\(clone\);/,
+      'staged context should drop chrome parked in a picked modal dialog and strip browser-only edit markers',
     );
     assert.match(
       SOURCE,
-      /outerHTML: sanitizedContextOuterHTML\(el, 10000\),/,
+      /filter: \(node\) => node !== topLayerHost,/,
+      'element captures should leave out chrome parked in a picked modal dialog',
+    );
+    assert.match(
+      SOURCE,
+      /function extractContext\(el\)[\s\S]*?const clone = sanitizedContextClone\(el\);[\s\S]*?outerHTML: \(clone\.outerHTML \|\| ''\)\.slice\(0, 10000\),/,
       'staged element context should not include live edit runtime attributes',
     );
     assert.match(
       SOURCE,
-      /function copyEditLeafContext\(el, originalText, newText\)[\s\S]*?outerHTML: sanitizedContextOuterHTML\(el, 3000\) \|\| null,/,
+      /function copyEditLeafContext\(el, originalText, newText\)[\s\S]*?const clone = sanitizedContextClone\(el\);[\s\S]*?outerHTML: \(clone\.outerHTML \|\| ''\)\.slice\(0, 3000\) \|\| null,/,
       'staged leaf context should not include live edit runtime attributes',
     );
     assert.match(
@@ -1417,5 +1422,35 @@ describe('live-browser source contracts', () => {
       /setTimeout\([\s\S]{0,260}?injectVariantsFromSource\(msg\.file, msg\.id, \{ generationCompleted: true \}\)[\s\S]{0,40}?\}, 750\)/,
       'done should source-inject via the 750ms fallback for harnesses without HMR',
     );
+  });
+
+  it('never submits on the Enter that commits an IME candidate (#856)', () => {
+    const imeSrc = SOURCE.match(/function isImeKeydown\(e\) \{[\s\S]*?\n  \}/)?.[0];
+    const annotSrc = SOURCE.match(/function onAnnotInputKey\(e\) \{[\s\S]*?\n  \}/)?.[0];
+    const calls = [];
+    const onAnnotInputKey = runInNewContext(`${imeSrc}\n(${annotSrc})`, {
+      finalizeEditingPin: () => calls.push('finalize'),
+    });
+    const press = (isComposing, keyCode) => {
+      const ev = {
+        key: 'Enter', isComposing, keyCode, prevented: false,
+        preventDefault() { this.prevented = true; }, stopPropagation() {},
+      };
+      onAnnotInputKey(ev);
+      return ev;
+    };
+    assert.equal(press(true, 13).prevented, false, 'the IME must still receive the key');
+    // Safari fires the committing keydown after compositionend, so only keyCode says so.
+    press(false, 229);
+    assert.deepEqual(calls, []);
+    press(false, 13);
+    assert.deepEqual(calls, ['finalize']);
+
+    const handlers = SOURCE.match(/(?:input|pageChatInput)\.addEventListener\('keydown', \(e\) => \{[\s\S]*?\n    \}\);/g);
+    assert.equal(handlers?.length, 3, 'configure, insert and steer inputs');
+    for (const handler of handlers) {
+      assert.match(handler, /e\.key === 'Enter' && !isImeKeydown\(e\)/);
+      assert.doesNotMatch(handler, /e\.key === 'Enter'(?! && !isImeKeydown\(e\))/);
+    }
   });
 });

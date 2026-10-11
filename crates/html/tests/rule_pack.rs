@@ -62,7 +62,7 @@ impl StaticRulePack for TestPack {
 /// the pack is about.
 const PAGE: &str = r#"<!DOCTYPE html>
 <html><head><title>t</title><style>
-.card { border-left: 4px solid #6366f1; background: #fff; }
+.card { border-left: 4px solid #6366f1; border-radius: 10px; background: #fff; }
 </style></head>
 <body>
 <div class="card">A card</div>

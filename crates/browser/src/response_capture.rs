@@ -1,7 +1,7 @@
 //! Opt-in, bounded CDP response evidence. This proves observed bytes, not paint.
 use base64::Engine;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub(crate) const MAX_BODY: usize = 16 * 1024 * 1024;
 pub(crate) const MAX_TOTAL: usize = 64 * 1024 * 1024;
@@ -43,6 +43,8 @@ pub struct ResponseEvidence {
 pub(crate) struct ResponseCapture {
     records: Vec<ResponseRecord>,
     active: HashMap<String, usize>,
+    /// Requests the browser made for itself (the tab icon), never the page.
+    browser_initiated: HashSet<String>,
     pub revision: u64,
     truncated: bool,
     body_bytes: usize,
@@ -80,6 +82,18 @@ fn string(v: &Value, key: &str) -> String {
     v.get(key).and_then(Value::as_str).unwrap_or("").to_owned()
 }
 
+/// The browser's own fetch for the tab icon: no parser, script or preload
+/// initiated it and it is not a navigation, so CDP reports it as type `Other`
+/// with an `other` initiator. Every request the document makes carries its own
+/// type or initiator (a `<link rel=prefetch>` is `Other` from the `parser`).
+/// Chrome sends it after the load event, on its own schedule, and it paints
+/// nothing, so it is neither a page dependency nor a change to the page.
+fn browser_initiated(p: &Value) -> bool {
+    string(p, "type") == "Other"
+        && p.pointer("/initiator/type").and_then(Value::as_str) == Some("other")
+        && string(p, "requestId") != string(p, "loaderId")
+}
+
 impl ResponseCapture {
     pub fn event(&mut self, method: &str, p: &Value) {
         if !matches!(
@@ -91,8 +105,18 @@ impl ResponseCapture {
         ) {
             return;
         }
-        self.revision += 1;
         let id = string(p, "requestId");
+        if self.browser_initiated.contains(&id) {
+            return;
+        }
+        if method == "Network.requestWillBeSent" && !id.is_empty() && browser_initiated(p) {
+            if self.browser_initiated.len() < MAX_RECORDS {
+                self.browser_initiated.insert(id);
+                return;
+            }
+            self.truncated = true;
+        }
+        self.revision += 1;
         if id.is_empty() {
             self.truncated = true;
             return;
@@ -295,6 +319,23 @@ mod tests {
         assert!(e.responses.iter().all(|r| r.ambiguous_url));
         assert!(e.responses[0].body.is_none());
         assert_eq!(e.responses[1].body, Some(vec![0, 255]));
+    }
+    #[test]
+    fn browser_icon_fetch_is_neither_a_dependency_nor_a_change() {
+        let mut t = ResponseCapture::default();
+        let sent = |id: &str, url: &str, kind: &str, initiator: &str| json!({"requestId":id,"loaderId":"current","request":{"url":url},"frameId":"main","type":kind,"initiator":{"type":initiator}});
+        t.event("Network.requestWillBeSent", &sent("current", "http://x/", "Document", "other"));
+        let before = t.revision;
+        // Chrome's tab-icon fetch, after load, on the main frame's loader.
+        t.event("Network.requestWillBeSent", &sent("9.2", "http://x/favicon.ico", "Other", "other"));
+        t.event("Network.responseReceived", &json!({"requestId":"9.2","response":{"url":"http://x/favicon.ico","status":404,"mimeType":"text/plain"}}));
+        t.event("Network.loadingFinished", &json!({"requestId":"9.2"}));
+        assert_eq!(t.revision, before, "the icon fetch must not read as the page changing");
+        assert_eq!(t.urls("main", "current"), vec!["http://x/"]);
+        // The document's own requests keep counting, even an `Other` one.
+        t.event("Network.requestWillBeSent", &sent("9.3", "http://x/next.js", "Other", "parser"));
+        assert_eq!(t.revision, before + 1);
+        assert_eq!(t.urls("main", "current"), vec!["http://x/", "http://x/next.js"]);
     }
     #[test]
     fn incomplete_failed_and_wrong_document_are_explicit() {

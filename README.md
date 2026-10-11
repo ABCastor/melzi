@@ -4,7 +4,7 @@
 
 Design review skills and interface checks for AI coding tools.
 
-Melzi gives your coding tool a vocabulary for reviewing a frontend: typography, layout, colour, motion, accessibility, and the repeated patterns that make generated interfaces look alike. Its skill has 21 canonical commands, including `/melzi critique`, `/melzi audit`, `/melzi polish`, and `/melzi live`. A native detector checks source files and rendered pages against 61 rules.
+Melzi gives your coding tool a vocabulary for reviewing a frontend: typography, layout, colour, motion, accessibility, and the repeated patterns that make generated interfaces look alike. Its skill has 21 canonical commands, including `/melzi critique`, `/melzi audit`, `/melzi polish`, and `/melzi live`. A native detector checks source files and rendered pages against 59 rules.
 
 ## Build and use
 

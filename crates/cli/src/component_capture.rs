@@ -11,6 +11,10 @@ use serde_json::{Value, json};
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 pub struct NativeComponentCapturer;
+/// Milliseconds since the epoch, for pinning a capture's clock.
+pub(crate) fn now_ms() -> f64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.)
+}
 fn hash(bytes: &[u8]) -> String {
     // The PNG module and review store use the same SHA-256; avoid a second hash contract.
     use sha2::{Digest, Sha256};
@@ -54,7 +58,8 @@ fn crop_viewport(png: &[u8], width: u32, height: u32, clip: [f64; 4]) -> Result<
         &image, rect.x as f64, rect.y as f64, rect.w as f64, rect.h as f64,
     ), &[])
 }
-fn render_page(
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_page(
     browser: &mut Browser,
     snapshot: Arc<HtmlSnapshot>,
     width: u32,
@@ -63,6 +68,8 @@ fn render_page(
     isolation: Option<&Value>,
     assembled: bool,
     check_fonts: bool,
+    measure_raster: bool,
+    clock_ms: f64,
 ) -> Result<(Vec<u8>, Value), String> {
     let server = if assembled { snapshot.serve_assembled()? } else { snapshot.serve()? };
     let url = server.entry_url();
@@ -72,6 +79,7 @@ fn render_page(
         page.set_viewport(Viewport { width, height })
             .map_err(|e| e.message)?;
         page.set_reduced_motion(true).map_err(|e| e.message)?;
+        page.pin_clock(clock_ms).map_err(|e| e.message)?;
         page.begin_response_capture().map_err(|e| e.message)?;
         page.goto(&url, "networkidle0", Duration::from_secs(20))
             .map_err(|e| e.message)?;
@@ -86,6 +94,10 @@ fn render_page(
           return {html:document.documentElement.outerHTML,svg:document.querySelectorAll('svg').length,images:document.images.length,controls:document.querySelectorAll('button,input,select,textarea,a[href]').length};
         })()"#.replace("ASSEMBLED", if assembled { "true" } else { "false" });
         let dom=page.evaluate_value_in_world(&world,&inspect).map_err(|e|e.message)?;
+        // Only the entry capture asks; review proofs keep their shape.
+        let raster_coverage = if measure_raster {
+            Some(page.evaluate_value_in_world(&world, &format!("({})()", include_str!("raster_coverage.js"))).map_err(|e| e.message)?)
+        } else { None };
         let urls = page.observed_response_urls().map_err(|e| e.message)?;
         let evidence = page.response_evidence(&urls).map_err(|e| e.message)?;
         if evidence.truncated
@@ -98,12 +110,6 @@ fn render_page(
         let mut dependency_errors = std::collections::BTreeSet::new();
         for record in &evidence.responses {
             if record.url.starts_with("data:image/") {
-                continue;
-            }
-            if record.url == format!("{origin}/favicon.ico")
-                && record.status == Some(404.)
-                && snapshot.bytes("favicon.ico").is_none()
-            {
                 continue;
             }
             let Some(target) = record.url.strip_prefix(&origin) else {
@@ -189,6 +195,10 @@ fn render_page(
             proof["capturedDomSha256"] = json!(hash(captured_dom.as_str().unwrap().as_bytes()));
         }
         proof["fonts"] = fonts;
+        proof["clock"] = json!({"pinnedEpochMs": clock_ms.floor() as i64, "policy": "the page's Date starts at the pinned instant and advances in real time"});
+        if let Some(coverage) = raster_coverage {
+            proof["rasterCoverage"] = coverage;
+        }
         if assembled {
             proof["kind"] = json!("assembled-page");
             proof["scriptPolicy"] = json!("pinned-local-and-inline; network-api-and-workers-disabled");
@@ -239,11 +249,14 @@ impl ComponentCapturer for NativeComponentCapturer {
         if reference_size["width"] != width || reference_size["height"] != height {
             return Err("comp dimensions do not match its image".into());
         }
-        let env = std::env::vars().collect();
+        let env = impeccable_common::process_env();
         let exe =
             discovery::find_browser(&env).map_err(|e| format!("browser unavailable: {e:?}"))?;
         let mut browser = Browser::launch(&exe, &[], false).map_err(|e| e.message)?;
         let version = browser.version().map_err(|e| e.message)?;
+        // One instant for every view of this round, recorded in each proof, so a
+        // gate capture of an approved view can render the same time of day.
+        let clock_ms = now_ms();
         let result = (|| {
             let mut files = BTreeMap::new();
             let mut evidence = Vec::new();
@@ -299,7 +312,7 @@ impl ComponentCapturer for NativeComponentCapturer {
                     let (png, proof) = if let Some(saved) = cache.get(&cache_key) {
                         saved.clone()
                     } else {
-                        let captured = match render_page(&mut browser, snapshot, width, height, &c["box"], isolation.as_ref(), assembled, check_fonts) {
+                        let captured = match render_page(&mut browser, snapshot, width, height, &c["box"], isolation.as_ref(), assembled, check_fonts, false, clock_ms) {
                             Ok(captured) => captured,
                             Err(error) => {
                                 errors.push(format!("{id} {key}: {error}"));

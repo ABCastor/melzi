@@ -17,12 +17,19 @@ use std::{
 
 pub struct CdpAssetRenderer {
     env: HashMap<String, String>,
+    clock_ms: Option<f64>,
 }
 impl CdpAssetRenderer {
     pub fn from_process_env() -> Self {
         Self {
-            env: std::env::vars().collect(),
+            env: impeccable_common::process_env(),
+            clock_ms: None,
         }
+    }
+    /// Pin the page's clock (see `Page::pin_clock`) for every capture this renderer makes.
+    pub fn pinned_at(mut self, epoch_ms: f64) -> Self {
+        self.clock_ms = Some(epoch_ms);
+        self
     }
 }
 impl AssetRenderer for CdpAssetRenderer {
@@ -36,8 +43,11 @@ impl AssetRenderer for CdpAssetRenderer {
         &mut self,
         requests: &[AssetCaptureRequest],
     ) -> Result<Vec<AssetCapture>, String> {
-        if requests.is_empty() || requests.len() > 32 {
-            return Err("capture batch must contain 1 to 32 regions".into());
+        if requests.is_empty() || requests.len() > crate::capture_snapshot::MAX_CAPTURE_REGIONS {
+            return Err(format!(
+                "capture batch must contain 1 to {} regions",
+                crate::capture_snapshot::MAX_CAPTURE_REGIONS
+            ));
         }
         let request = &requests[0];
         for item in requests {
@@ -70,6 +80,9 @@ impl AssetRenderer for CdpAssetRenderer {
             .map_err(|e| e.message)?;
             page.set_reduced_motion(request.reduced_motion)
                 .map_err(|e| e.message)?;
+            if let Some(clock_ms) = self.clock_ms {
+                page.pin_clock(clock_ms).map_err(|e| e.message)?;
+            }
             page.begin_response_capture().map_err(|e| e.message)?;
             page.goto(&request.url, "load", Duration::from_secs(30))
                 .map_err(|e| e.message)?;

@@ -14,6 +14,7 @@
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; max-width: 1200px; margin: 0 auto; }
     .col h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 16px; color: #475569; }
     .col h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin: 24px 0 8px; color: #64748b; }
+    .note { font-size: 12px; margin: 6px 0 12px; color: #cbd5e1; }
     .dark-context { background: #111827; padding: 16px; border-radius: 12px; }
     .dark-context + .dark-context { margin-top: 12px; }
     /* Card variants: explicit dark vs light pairings, both WCAG AA compliant */
@@ -55,6 +56,15 @@
     .photo-opaque-grad { background: linear-gradient(#111827, #0b1220), url('/fixtures/antipatterns/missing-photo.png'); padding: 16px; border-radius: 12px; }
     .glow-photo-opaque { box-shadow: 0 6px 22px rgba(249, 115, 22, 0.5); }
 
+    /* ── FLAG: glows that clear the perceptibility floor ── */
+    /* 24px of blur at 60% alpha around a 197x40 CTA: 14.4px of light, and a
+       halo well inside twice the button's own area. */
+    .glow-cta { display: block; width: 197px; height: 40px; box-shadow: 0 0 24px rgba(0, 169, 255, 0.6); }
+    /* A stacked elevation ramp on a 96x96 tile. Its first blurred layer is
+       under the floor on its own; the layer that carries the light is not, so
+       the glow is reported from that layer instead of being passed over. */
+    .glow-ramp { display: block; width: 96px; height: 96px; box-shadow: 0 0.7px 0.7px -0.67px rgba(64, 120, 168, 0.37), 0 6.87px 6.87px -2.67px rgba(64, 120, 168, 0.31), 0 13.65px 13.65px -3.33px rgba(64, 120, 168, 0.247); }
+
     /* ── PASS: same dark/light backgrounds, but neutral or no glow ── */
     .light-colored-shadow { box-shadow: 0 2px 4px rgba(59, 130, 246, 0.15); }
     .dark-normal-shadow { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); }
@@ -90,6 +100,26 @@
     .photo-translucent-offset { box-shadow: 0 6px 22px rgba(244, 63, 94, 0.45); }
     /* Offset neutral text-shadow on dark card: legibility aid, not a glow */
     .dark-text-offset h4 { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+
+    /* ── PASS: chromatic halos too faint to see ── */
+    /* A 3x23px typing caret at 38% alpha, caught half faded mid-blink:
+       10px of blur times 0.38 times 0.56 is 2.1px of light. */
+    .caret-halo { display: block; width: 3px; height: 23px; opacity: 0.56; background: #9b7be8; box-shadow: 0 0 10px 1.5px rgba(155, 123, 232, 0.38); }
+    /* 10% alpha over 20px of blur on a 393x42 row: 2px of light. */
+    .faint-tint { display: block; width: 393px; height: 42px; box-shadow: 0 4px 20px rgba(149, 100, 255, 0.1); }
+    /* A negative spread that swallows its own blur: the light never leaves
+       the box, whatever the alpha says. */
+    .spread-swallowed { display: block; width: 280px; height: 148px; box-shadow: 0 0 40px -22px rgba(52, 211, 153, 0.4); }
+    /* A dropdown parked at opacity 0 until it opens: nothing is on screen. */
+    .hidden-menu { display: block; width: 252px; height: 123px; opacity: 0; box-shadow: 0 0 24px rgba(0, 74, 212, 0.2); }
+
+    /* ── PASS (browser): halo out of scale with a tiny element ── */
+    /* These clear the strength floor and fail on scale: the lit ring covers
+       several times the element's own area, which is an indicator's light
+       rather than a treatment on a surface. Only the browser engine can see
+       it; a file scan has no layout, so it still reports these two. */
+    .status-led { display: block; width: 6px; height: 6px; border-radius: 50%; background: #5cbd68; box-shadow: 0 0 8px rgba(92, 189, 104, 0.5); }
+    .pulse-dot { display: block; width: 5px; height: 8px; border-radius: 3px; background: #ffbb65; box-shadow: 0 0 8px rgba(255, 187, 101, 0.7); }
   </style>
 </head>
 <body>
@@ -172,6 +202,14 @@
           <h4>Opaque dark gradient covers the photo</h4>
           <p>box-shadow: 0 6px 22px rgba(249, 115, 22, 0.5)</p>
         </div>
+      </div>
+
+      <h3>Glows above the perceptibility floor</h3>
+      <div class="dark-context">
+        <div class="glow-cta"></div>
+        <p class="note">197x40 CTA, 0 0 24px rgba(0, 169, 255, 0.6).</p>
+        <div class="glow-ramp"></div>
+        <p class="note">96x96 tile under a six-layer tinted elevation ramp.</p>
       </div>
     </div>
 
@@ -275,6 +313,26 @@
       <div class="card card-light elevated-warm-light">
         <h4>Warm deep shadow</h4>
         <p>Large spread neutral shadow.</p>
+      </div>
+
+      <h3>Chromatic halos under the perceptibility floor</h3>
+      <div class="dark-context">
+        <div class="caret-halo"></div>
+        <p class="note">3x23px typing caret, half faded mid-blink.</p>
+        <div class="faint-tint"></div>
+        <p class="note">393x42 row, 0 4px 20px rgba(149, 100, 255, 0.1).</p>
+        <div class="spread-swallowed"></div>
+        <p class="note">280x148 panel, 0 0 40px -22px rgba(52, 211, 153, 0.4).</p>
+        <div class="hidden-menu"></div>
+        <p class="note">252x123 dropdown at opacity 0.</p>
+      </div>
+
+      <h3>Halo out of scale with a tiny element (browser only)</h3>
+      <div class="dark-context">
+        <div class="status-led"></div>
+        <p class="note">6x6px status LED with an 8px halo: four times its area.</p>
+        <div class="pulse-dot"></div>
+        <p class="note">5x8px pulse on a connector: five times its area.</p>
       </div>
     </div>
   </div>

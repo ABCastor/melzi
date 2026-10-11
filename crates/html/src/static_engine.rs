@@ -150,6 +150,10 @@ impl DesignSystemHook for DetectDesignSystemHook<'_> {
     fn merge(&self, static_findings: Vec<Finding>, source_findings: Vec<Finding>) -> Vec<Finding> {
         merge_design_system_findings(vec![static_findings, source_findings])
     }
+
+    fn drop_switched_off(&self, findings: &mut Vec<Finding>) {
+        impeccable_detect::design_system::drop_declared_purple_findings(findings, Some(self.design_system));
+    }
 }
 
 static WS_RUN_RE: Lazy<Regex> = Lazy::new(|| Regex::new(&format!("{}+", js::WS)).unwrap());

@@ -10,6 +10,50 @@ use std::path::{Path, PathBuf};
 
 const MODULES: &[&str] = &["shared.color", "shared.inline-ignores", "rules.checks"];
 
+/// Rules the registry has retired since the snapshot was recorded. The
+/// snapshot is read-only (`tests/oracle/vectors/README.md`), so a retired
+/// rule's recorded hits stay in it as history and the replay drops them from
+/// both sides of the comparison instead. Every other hit on the same line
+/// still has to match, so a retirement cannot quietly cover a regression in a
+/// neighbouring rule.
+///
+/// `image-hover-transform` was retired after the corpus review: hover zoom on
+/// a card image is a long-standing convention, not a generated-UI tell. Both
+/// sides are filtered because the vectors cover rule-agnostic passes too:
+/// `applyInlineIgnores` is handed findings as data and hands back whatever it
+/// was given, retired id or not, which is the behavior a config naming a
+/// retired rule depends on.
+///
+/// `layout-transition` was retired on 2026-10-07 (decision
+/// r8-t5-layout-transition-retire): advisory since the first review, and on
+/// two judged cohorts since then not one of its findings was harmful. Its
+/// hits sit in the `checkMotion`, `checkHtmlPatterns` and regex-matcher
+/// vectors beside `bounce-easing` hits, which still have to match.
+const RETIRED_RULE_IDS: &[&str] = &["image-hover-transform", "layout-transition"];
+
+/// Drops top-level findings carrying a retired rule id. Vectors name the rule
+/// `id` (pattern findings) or `antipattern` (findings); a result that is not a
+/// list of findings is returned untouched.
+fn without_retired(v: &Value) -> Value {
+    let Value::Array(items) = v else {
+        return v.clone();
+    };
+    Value::Array(
+        items
+            .iter()
+            .filter(|item| {
+                !item
+                    .get("id")
+                    .or_else(|| item.get("antipattern"))
+                    .and_then(|id| id.as_str())
+                    .map(|id| RETIRED_RULE_IDS.contains(&id))
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .collect(),
+    )
+}
+
 /// The repo root. `IMPECCABLE_PUBLIC_REPO` overrides it for an out-of-tree
 /// checkout.
 fn repo_root() -> PathBuf {
@@ -148,7 +192,7 @@ fn replay_recorded_vectors() {
                     .and_then(|a| a.as_array())
                     .cloned()
                     .unwrap_or_default();
-                let expected = rec.get("result").cloned().unwrap_or(Value::Null);
+                let expected = without_retired(&rec.get("result").cloned().unwrap_or(Value::Null));
                 match call(module, &fn_name, &args) {
                     None => {
                         fail += 1;
@@ -161,6 +205,7 @@ fn replay_recorded_vectors() {
                         }
                     }
                     Some(actual) => {
+                        let actual = without_retired(&actual);
                         if same(&canon(&actual), &canon(&expected)) {
                             pass += 1;
                         } else {

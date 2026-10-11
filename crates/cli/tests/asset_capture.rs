@@ -22,114 +22,119 @@ fn native_capture_distinguishes_paint_from_file_presence() {
     let origin = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
     let asset = image.clone();
     std::thread::spawn(move || {
+        // One thread per connection, so a socket Chrome opens and leaves idle
+        // never holds the page's requests behind its read timeout.
         for mut stream in listener.incoming().flatten() {
-            stream
-                .set_read_timeout(Some(Duration::from_secs(2)))
-                .unwrap();
-            let mut bytes = [0u8; 4096];
-            let n = stream.read(&mut bytes).unwrap_or(0);
-            let line = String::from_utf8_lossy(&bytes[..n]);
-            let path = line.split_whitespace().nth(1).unwrap_or("/");
-            let (mime, body) = if path == "/transparent.png" {
-                ("image/png", transparent_response.clone())
-            } else if path == "/art.png" || path == "/lazy.png" {
-                ("image/png", asset.clone())
-            } else if path == "/collision/art.png" {
-                ("image/png", wrong.clone())
-            } else {
-                let mode = path.trim_start_matches('/');
-                let parent = match mode {
-                    "hidden" => "visibility:hidden",
-                    "opacity" | "pseudo-hidden" => "opacity:0",
-                    "clip" => "clip-path:inset(100%)",
-                    _ => "",
-                };
-                let position = match mode {
-                    "shift" => "left:70px",
-                    "footer" => "top:500px",
-                    _ => "",
-                };
-                let img = if mode == "pseudo-url-only" {
-                    "<div id=art style='position:relative;width:80px;height:80px'></div><style>#art::before{content:'';position:absolute;inset:0;background:url(/art.png) center/cover}</style>"
-                } else if mode.starts_with("pseudo-") && mode != "pseudo-neighbor" {
-                    "<div id=art style='position:relative;width:80px;height:80px'></div><style>#art::before{content:'';position:absolute;inset:0;background-image:linear-gradient(transparent,transparent),url(/art.png);background-size:cover}</style>"
-                } else if mode == "layered-duplicate" {
-                    "<div id=art style='width:80px;height:80px;background-image:url(/art.png),url(/art.png);background-size:cover'></div>"
-                } else if mode == "decoration" {
-                    "<img id='art' width='80' height='80' src='/transparent.png' style='background:red;box-shadow:0 0 4px blue'>"
-                } else if mode == "background" {
-                    "<div id='art' style='width:80px;height:80px;background:url(/art.png) center/cover'></div>"
-                } else if mode == "wrong" || mode == "footer-trap" {
-                    "<img id='art' width='80' height='80' src='/collision/art.png'>"
+            let (transparent_response, asset, wrong) = (transparent_response.clone(), asset.clone(), wrong.clone());
+            std::thread::spawn(move || {
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(60)))
+                    .unwrap();
+                let mut bytes = [0u8; 4096];
+                let n = stream.read(&mut bytes).unwrap_or(0);
+                let line = String::from_utf8_lossy(&bytes[..n]);
+                let path = line.split_whitespace().nth(1).unwrap_or("/");
+                let (mime, body) = if path == "/transparent.png" {
+                    ("image/png", transparent_response.clone())
+                } else if path == "/art.png" || path == "/lazy.png" {
+                    ("image/png", asset.clone())
+                } else if path == "/collision/art.png" {
+                    ("image/png", wrong.clone())
                 } else {
-                    "<img id='art' width='80' height='80' src='/art.png'>"
+                    let mode = path.trim_start_matches('/');
+                    let parent = match mode {
+                        "hidden" => "visibility:hidden",
+                        "opacity" | "pseudo-hidden" => "opacity:0",
+                        "clip" => "clip-path:inset(100%)",
+                        _ => "",
+                    };
+                    let position = match mode {
+                        "shift" => "left:70px",
+                        "footer" => "top:500px",
+                        _ => "",
+                    };
+                    let img = if mode == "pseudo-url-only" {
+                        "<div id=art style='position:relative;width:80px;height:80px'></div><style>#art::before{content:'';position:absolute;inset:0;background:url(/art.png) center/cover}</style>"
+                    } else if mode.starts_with("pseudo-") && mode != "pseudo-neighbor" {
+                        "<div id=art style='position:relative;width:80px;height:80px'></div><style>#art::before{content:'';position:absolute;inset:0;background-image:linear-gradient(transparent,transparent),url(/art.png);background-size:cover}</style>"
+                    } else if mode == "layered-duplicate" {
+                        "<div id=art style='width:80px;height:80px;background-image:url(/art.png),url(/art.png);background-size:cover'></div>"
+                    } else if mode == "decoration" {
+                        "<img id='art' width='80' height='80' src='/transparent.png' style='background:red;box-shadow:0 0 4px blue'>"
+                    } else if mode == "background" {
+                        "<div id='art' style='width:80px;height:80px;background:url(/art.png) center/cover'></div>"
+                    } else if mode == "wrong" || mode == "footer-trap" {
+                        "<img id='art' width='80' height='80' src='/collision/art.png'>"
+                    } else {
+                        "<img id='art' width='80' height='80' src='/art.png'>"
+                    };
+                    let cover = if mode == "duplicate" {
+                        "<img src=/art.png style='position:absolute;inset:0;width:80px;height:80px'>"
+                    } else if mode == "covered" || mode == "pseudo-covered" {
+                        "<div style='position:absolute;inset:0;background:white'></div>"
+                    } else {
+                        ""
+                    };
+                    let extra = match mode {
+                        "many-text-pseudos" => "<div id=text-only style='position:absolute;top:500px'></div><style>.marker::before,.marker::after{content:'x'}</style><script>for(let i=0;i<300;i++){const el=document.createElement('span');el.className='marker';document.querySelector('#text-only').append(el)}</script>",
+                        "pseudo-specificity" => "<style>#art#art#art::before{background-image:url(/art.png)!important}</style>",
+                        "pseudo-mutating" => "<script>setInterval(()=>{if(getComputedStyle(document.querySelector('#art'),'::before').backgroundImage.includes('none'))document.body.dataset.touched='yes'},0)</script>",
+                        "pseudo-neighbor" => {
+                            "<style>#art::before{content:''}</style><div style='position:absolute;left:20px;top:20px;width:80px;height:20px' class='ribbon'></div><style>.ribbon::before{content:'';position:absolute;inset:0;background-image:linear-gradient(white,white)}</style>"
+                        }
+                        "canvas-cover" => {
+                            "<canvas id='cover' width='80' height='80' style='position:absolute;left:20px;top:20px;width:80px;height:80px'></canvas><script>const c=document.querySelector('#cover').getContext('2d');c.fillStyle='blue';c.fillRect(0,0,80,80)</script>"
+                        }
+                        "canvas-only" => {
+                            "<canvas id='cover' width='80' height='80' style='position:absolute;left:20px;top:20px;width:80px;height:80px'></canvas><script>document.querySelector('#art').remove();const i=new Image();i.onload=()=>document.querySelector('#cover').getContext('2d').drawImage(i,0,0,80,80);i.src='/art.png'</script>"
+                        }
+                        "tiny-token" => "<style>#art{width:1px!important;height:1px!important}</style>",
+                        "many" => {
+                            "<script>for(let i=0;i<17;i++){const el=document.querySelector('#art').cloneNode(true);el.style.cssText='position:absolute;left:20px;top:20px';document.body.append(el);}</script>"
+                        }
+                        "closed-shadow" => {
+                            "<div id=shadow style='position:absolute;left:20px;top:20px;width:80px;height:80px'></div><script>document.querySelector('#shadow').attachShadow({mode:'closed'}).innerHTML='<span>hidden tree</span>';</script>"
+                        }
+                        "poison" => {
+                            "<script>const real=Element.prototype.getBoundingClientRect;Element.prototype.getBoundingClientRect=function(){const r=real.call(this);return this.id==='art'?new DOMRect(r.x+100,r.y,r.width,r.height):r;};</script>"
+                        }
+                        "state-probe" => {
+                            "<style>body[data-inspector] #art{display:none}</style><script>setInterval(()=>{if(Object.getOwnPropertyNames(window).some(k=>k.startsWith('__impeccable_capture_')))document.body.dataset.inspector='found';},0);</script>"
+                        }
+                        "lazy" => {
+                            "<img loading=lazy src=/lazy.png style='position:absolute;top:10000px;width:80px;height:80px'>"
+                        }
+                        "canvas" => {
+                            "<canvas style='position:absolute;left:20px;top:20px;width:80px;height:80px'></canvas>"
+                        }
+                        "footer-trap" => {
+                            "<img src='/art.png' style='position:absolute;top:500px;left:20px;width:80px;height:80px'>"
+                        }
+                        "mutating" => {
+                            "<script>new MutationObserver(()=>document.body.dataset.touched='yes').observe(document.querySelector('#art'),{attributes:true});</script>"
+                        }
+                        "ambiguous" => {
+                            "<script>fetch('/art.png',{cache:'no-store'}).then(r=>r.arrayBuffer()).then(()=>document.body.dataset.fetched='yes');</script>"
+                        }
+                        "rotated-overlap" => "<style>#art{transform:rotate(-2.3deg);box-shadow:0 1px 4px #0005;border-radius:3.7px}#wrap::before{content:'';position:absolute;inset:-10.3px;background:url(/art.png) center/cover;opacity:.3}</style>",
+                        "transition" => "<style>#art{transition:object-position 100ms linear}</style>",
+                        "animated" => {
+                            "<style>@keyframes slide{to{transform:translateX(20px)}}#wrap{animation:slide 2s infinite alternate}</style>"
+                        }
+                        _ => "",
+                    };
+                    let html = format!(
+                        "<!doctype html><style>body{{margin:0;background:white}}#wrap{{position:absolute;left:20px;top:20px;width:80px;height:80px}}</style><div id='wrap' style='{parent};{position}'>{img}{cover}</div>{extra}"
+                    );
+                    ("text/html", html.into_bytes())
                 };
-                let cover = if mode == "duplicate" {
-                    "<img src=/art.png style='position:absolute;inset:0;width:80px;height:80px'>"
-                } else if mode == "covered" || mode == "pseudo-covered" {
-                    "<div style='position:absolute;inset:0;background:white'></div>"
-                } else {
-                    ""
-                };
-                let extra = match mode {
-                    "many-text-pseudos" => "<div id=text-only style='position:absolute;top:500px'></div><style>.marker::before,.marker::after{content:'x'}</style><script>for(let i=0;i<300;i++){const el=document.createElement('span');el.className='marker';document.querySelector('#text-only').append(el)}</script>",
-                    "pseudo-specificity" => "<style>#art#art#art::before{background-image:url(/art.png)!important}</style>",
-                    "pseudo-mutating" => "<script>setInterval(()=>{if(getComputedStyle(document.querySelector('#art'),'::before').backgroundImage.includes('none'))document.body.dataset.touched='yes'},0)</script>",
-                    "pseudo-neighbor" => {
-                        "<style>#art::before{content:''}</style><div style='position:absolute;left:20px;top:20px;width:80px;height:20px' class='ribbon'></div><style>.ribbon::before{content:'';position:absolute;inset:0;background-image:linear-gradient(white,white)}</style>"
-                    }
-                    "canvas-cover" => {
-                        "<canvas id='cover' width='80' height='80' style='position:absolute;left:20px;top:20px;width:80px;height:80px'></canvas><script>const c=document.querySelector('#cover').getContext('2d');c.fillStyle='blue';c.fillRect(0,0,80,80)</script>"
-                    }
-                    "canvas-only" => {
-                        "<canvas id='cover' width='80' height='80' style='position:absolute;left:20px;top:20px;width:80px;height:80px'></canvas><script>document.querySelector('#art').remove();const i=new Image();i.onload=()=>document.querySelector('#cover').getContext('2d').drawImage(i,0,0,80,80);i.src='/art.png'</script>"
-                    }
-                    "tiny-token" => "<style>#art{width:1px!important;height:1px!important}</style>",
-                    "many" => {
-                        "<script>for(let i=0;i<17;i++){const el=document.querySelector('#art').cloneNode(true);el.style.cssText='position:absolute;left:20px;top:20px';document.body.append(el);}</script>"
-                    }
-                    "closed-shadow" => {
-                        "<div id=shadow style='position:absolute;left:20px;top:20px;width:80px;height:80px'></div><script>document.querySelector('#shadow').attachShadow({mode:'closed'}).innerHTML='<span>hidden tree</span>';</script>"
-                    }
-                    "poison" => {
-                        "<script>const real=Element.prototype.getBoundingClientRect;Element.prototype.getBoundingClientRect=function(){const r=real.call(this);return this.id==='art'?new DOMRect(r.x+100,r.y,r.width,r.height):r;};</script>"
-                    }
-                    "state-probe" => {
-                        "<style>body[data-inspector] #art{display:none}</style><script>setInterval(()=>{if(Object.getOwnPropertyNames(window).some(k=>k.startsWith('__impeccable_capture_')))document.body.dataset.inspector='found';},0);</script>"
-                    }
-                    "lazy" => {
-                        "<img loading=lazy src=/lazy.png style='position:absolute;top:10000px;width:80px;height:80px'>"
-                    }
-                    "canvas" => {
-                        "<canvas style='position:absolute;left:20px;top:20px;width:80px;height:80px'></canvas>"
-                    }
-                    "footer-trap" => {
-                        "<img src='/art.png' style='position:absolute;top:500px;left:20px;width:80px;height:80px'>"
-                    }
-                    "mutating" => {
-                        "<script>new MutationObserver(()=>document.body.dataset.touched='yes').observe(document.querySelector('#art'),{attributes:true});</script>"
-                    }
-                    "ambiguous" => {
-                        "<script>fetch('/art.png',{cache:'no-store'}).then(r=>r.arrayBuffer()).then(()=>document.body.dataset.fetched='yes');</script>"
-                    }
-                    "rotated-overlap" => "<style>#art{transform:rotate(-2.3deg);box-shadow:0 1px 4px #0005;border-radius:3.7px}#wrap::before{content:'';position:absolute;inset:-10.3px;background:url(/art.png) center/cover;opacity:.3}</style>",
-                    "transition" => "<style>#art{transition:object-position 100ms linear}</style>",
-                    "animated" => {
-                        "<style>@keyframes slide{to{transform:translateX(20px)}}#wrap{animation:slide 2s infinite alternate}</style>"
-                    }
-                    _ => "",
-                };
-                let html = format!(
-                    "<!doctype html><style>body{{margin:0;background:white}}#wrap{{position:absolute;left:20px;top:20px;width:80px;height:80px}}</style><div id='wrap' style='{parent};{position}'>{img}{cover}</div>{extra}"
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: {mime}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
+                    body.len()
                 );
-                ("text/html", html.into_bytes())
-            };
-            let _ = write!(
-                stream,
-                "HTTP/1.1 200 OK\r\nContent-Type: {mime}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
-                body.len()
-            );
-            let _ = stream.write_all(&body);
+                let _ = stream.write_all(&body);
+            });
         }
     });
     let mut renderer = CdpAssetRenderer::from_process_env();

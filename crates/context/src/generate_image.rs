@@ -245,6 +245,73 @@ fn parse_size(s: &str) -> (usize, usize) {
     (1536, 1024)
 }
 
+/// How long one `--ref <url>` download may take, connect to last byte.
+const REF_DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The largest reference image a URL may hand back.
+const MAX_IMAGE_BYTES: u64 = 30 * 1024 * 1024;
+
+/// Whether a `--ref` value (or a card image) is a URL rather than a path.
+pub(crate) fn is_url(s: &str) -> bool {
+    s.starts_with("https://") || s.starts_with("http://")
+}
+
+/// The URL without its query and fragment.
+fn url_path(url: &str) -> &str {
+    let end = url.find(['?', '#']).unwrap_or(url.len());
+    &url[..end]
+}
+
+fn sniffed_type(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        Some("image/jpeg")
+    } else {
+        None
+    }
+}
+
+/// Downloads one png, webp, or jpeg image. The bytes' signature decides the
+/// type and is required: a `200` HTML page behind a `.webp` URL or an image
+/// Content-Type (a soft 404, an auth wall, a proxy interstitial) is refused
+/// rather than uploaded or kept as an image. `redirects` is how many the
+/// request may follow. The error is a short reason with no OS-specific text;
+/// the caller names the URL.
+pub(crate) fn fetch_image(url: &str, timeout: std::time::Duration, redirects: u32) -> Result<(Vec<u8>, &'static str), String> {
+    use std::io::Read;
+    let agent = crate::http::agent_builder().timeout_connect(timeout).timeout(timeout).redirects(redirects).build();
+    let response = match agent.get(url).call() {
+        Ok(r) => r,
+        Err(ureq::Error::Status(code, _)) => return Err(format!("HTTP {}", code)),
+        Err(_) => return Err("the request failed".into()),
+    };
+    if !(200..300).contains(&response.status()) {
+        return Err(format!("HTTP {}", response.status()));
+    }
+    let mut bytes = Vec::new();
+    if response.into_reader().take(MAX_IMAGE_BYTES + 1).read_to_end(&mut bytes).is_err() {
+        return Err("the response was cut short".into());
+    }
+    if bytes.len() as u64 > MAX_IMAGE_BYTES {
+        return Err("the image is larger than 30 MB".into());
+    }
+    if bytes.is_empty() {
+        return Err("the response was empty".into());
+    }
+    sniffed_type(&bytes).map(|t| (bytes, t)).ok_or_else(|| "the response is not a png, webp, or jpeg image".into())
+}
+
+/// The multipart file name for a URL ref: its last path segment.
+fn url_file_name(url: &str) -> String {
+    let rest = url_path(url).split_once("://").map(|(_, r)| r).unwrap_or("");
+    let segment = rest.split_once('/').map(|(_, p)| p.rsplit('/').next().unwrap_or("")).unwrap_or("");
+    let name: String = segment.chars().filter(|c| !c.is_control() && *c != '"' && *c != '\\').collect();
+    if name.is_empty() { "ref".to_string() } else { name }
+}
+
 pub fn run(args: &[String], io: &mut Io) -> i32 {
     run_with_api_base(args, io, "https://api.openai.com/v1")
 }
@@ -298,6 +365,7 @@ fn run_with_api_base(args: &[String], io: &mut Io, api_base: &str) -> i32 {
             return 1;
         }
         io.out(&format!("IMAGE: {} ({}x{}, fake synthetic comp, $0.00, no API call)\n", out, w, h));
+        note_generated_slot(io, &out);
         return 0;
     }
     let Some(key) = env.get("OPENAI_API_KEY").filter(|k| !k.is_empty()).cloned() else {
@@ -346,21 +414,33 @@ fn run_with_api_base(args: &[String], io: &mut Io, api_base: &str) -> i32 {
             field("output_format", "png");
         }
         for r in &refs {
-            let bytes = match std::fs::read(abs(r)) {
-                Ok(b) => b,
-                Err(e) => {
-                    io.err(&format!("Error: {}\n", node_read_error(r, &e)));
-                    return 1;
+            // A URL ref (a catalog world's card image, say) is downloaded
+            // and attached like a file; nothing is written when one fails.
+            let (bytes, ty, filename) = if is_url(r) {
+                match fetch_image(r, REF_DOWNLOAD_TIMEOUT, 5) {
+                    Ok((bytes, ty)) => (bytes, ty, url_file_name(r)),
+                    Err(reason) => {
+                        io.err(&format!("generate-image: could not download --ref {}: {}; nothing was generated.\n", r, reason));
+                        return 1;
+                    }
                 }
-            };
-            let ty = if r.ends_with(".png") {
-                "image/png"
-            } else if r.ends_with(".webp") {
-                "image/webp"
             } else {
-                "image/jpeg"
+                let bytes = match std::fs::read(abs(r)) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        io.err(&format!("Error: {}\n", node_read_error(r, &e)));
+                        return 1;
+                    }
+                };
+                let ty = if r.ends_with(".png") {
+                    "image/png"
+                } else if r.ends_with(".webp") {
+                    "image/webp"
+                } else {
+                    "image/jpeg"
+                };
+                (bytes, ty, r.rsplit('/').next().unwrap_or(r).to_string())
             };
-            let filename = r.rsplit('/').next().unwrap_or(r);
             body.extend_from_slice(
                 format!("--{}\r\nContent-Disposition: form-data; name=\"image[]\"; filename=\"{}\"\r\nContent-Type: {}\r\n\r\n", boundary, filename, ty).as_bytes(),
             );
@@ -441,6 +521,7 @@ fn run_with_api_base(args: &[String], io: &mut Io, api_base: &str) -> i32 {
         }
         let _ = std::fs::write(abs(&format!("{}.json", out)), json_pretty(&Value::Object(m)));
     }
+    note_generated_slot(io, &out);
     io.out(&format!(
         "IMAGE: {} ({}, {}, {}, billed to your OpenAI key); {} at {}.json\n",
         out,
@@ -451,6 +532,17 @@ fn run_with_api_base(args: &[String], io: &mut Io, api_base: &str) -> i32 {
         out
     ));
     0
+}
+
+/// A written image that fills a decision page's declared slot counts as that
+/// hand's comp even when its bytes match what sat there before (the same
+/// prompt regenerates the same bytes). A failed record is reported, not fatal:
+/// the image itself was written.
+fn note_generated_slot(io: &mut Io, out: &str) {
+    let cwd = io.cwd.to_string_lossy().into_owned();
+    if let Err(e) = crate::serve_question::record_generated(&cwd, out) {
+        io.err(&format!("generate-image: could not mark {} as generated for its decision page ({}); a --wait may report it stale\n", out, e));
+    }
 }
 
 fn base64_decode(s: &str) -> Vec<u8> {
@@ -485,6 +577,7 @@ mod tests {
     use std::time::Duration;
 
     fn round_trip(edit: bool, override_model: Option<&str>, background: Option<&str>) {
+        let _proxy_lock = crate::http::PROXY_ENV_LOCK.lock().unwrap();
         let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
         let api_base = format!("http://{}", server.server_addr());
         let temp = std::env::temp_dir().join(format!("impeccable-image-{}-{}", std::process::id(), server.server_addr().to_ip().unwrap().port()));
@@ -560,6 +653,151 @@ mod tests {
         let stdout = String::from_utf8(captured.stdout.borrow().clone()).unwrap();
         assert!(stdout.contains(&format!("{model}, billed to your OpenAI key")));
         assert!(stdout.contains("prompt embedded + sidecar"));
+    }
+
+    /// Serves `GET` requests from `routes` (path -> status, content type,
+    /// body) and answers one `POST` with a generated image; returns every
+    /// request it saw as (method, path, body).
+    fn serve(server: tiny_http::Server, routes: Vec<(&'static str, u16, &'static str, Vec<u8>)>, requests: usize) -> std::thread::JoinHandle<Vec<(String, String, String)>> {
+        std::thread::spawn(move || {
+            let mut seen = Vec::new();
+            while seen.len() < requests {
+                let Some(mut request) = server.recv_timeout(Duration::from_secs(10)).unwrap() else { break };
+                let mut bytes = Vec::new();
+                request.as_reader().read_to_end(&mut bytes).unwrap();
+                let (method, path) = (request.method().to_string(), request.url().to_string());
+                seen.push((method.clone(), path.clone(), String::from_utf8_lossy(&bytes).into_owned()));
+                if method == "POST" {
+                    request.respond(tiny_http::Response::from_string(r#"{"data":[{"b64_json":"iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCAYAAAD5PA/NAAAAGklEQVR4nGP4////f7mAigYGBgaG/////wMAUdQJXhk2RAEAAAAASUVORK5CYII="}]}"#)).unwrap();
+                } else if let Some((_, status, ty, body)) = routes.iter().find(|r| r.0 == path) {
+                    let mut response = tiny_http::Response::from_data(body.clone()).with_status_code(*status);
+                    if !ty.is_empty() {
+                        response = response.with_header(tiny_http::Header::from_bytes(&b"Content-Type"[..], ty.as_bytes()).unwrap());
+                    }
+                    request.respond(response).unwrap();
+                } else {
+                    request.respond(tiny_http::Response::from_string("not found").with_status_code(404)).unwrap();
+                }
+            }
+            seen
+        })
+    }
+
+    fn temp(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("impeccable-image-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn url_refs_are_downloaded_attached_and_recorded_as_urls() {
+        let _proxy_lock = crate::http::PROXY_ENV_LOCK.lock().unwrap();
+        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", server.server_addr());
+        let dir = temp("url-ref");
+        std::fs::write(dir.join("local.png"), png_fake("local", 8, 8)).unwrap();
+        let webp = [&b"RIFF\x10\0\0\0WEBPVP8 "[..], &[0u8; 8][..]].concat();
+        let handle = serve(
+            server,
+            vec![
+                // The bytes decide the type, whatever the header and the
+                // URL's extension say (or do not say).
+                ("/cards/world.webp?v=2", 200, "image/webp; charset=binary", webp),
+                ("/cards/world-hero.png", 200, "application/octet-stream", png_fake("hero", 8, 8)),
+                ("/cards/blob", 200, "", vec![0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]),
+                ("/cards/mislabeled.webp", 200, "image/webp", png_fake("mislabeled", 8, 8)),
+            ],
+            5,
+        );
+        let (board, hero, blob, mislabeled) = (format!("{base}/cards/world.webp?v=2"), format!("{base}/cards/world-hero.png"), format!("{base}/cards/blob"), format!("{base}/cards/mislabeled.webp"));
+        let env = Env::from([("OPENAI_API_KEY".into(), "test-key".into())]);
+        let (mut io, captured) = Io::captured("", dir.clone(), env);
+        let args: Vec<String> = ["--prompt", "Comp with cards", "--out", "comp.png", "--ref", &board, "--ref", "local.png", "--ref", &hero, "--ref", &blob, "--ref", &mislabeled].iter().map(|s| s.to_string()).collect();
+        let exit = run_with_api_base(&args, &mut io, &base);
+        let seen = handle.join().unwrap();
+        let stderr = String::from_utf8(captured.stderr.borrow().clone()).unwrap();
+        assert_eq!(exit, 0, "{stderr}");
+        let paths: Vec<(&str, &str)> = seen.iter().map(|r| (r.0.as_str(), r.1.as_str())).collect();
+        assert_eq!(paths, vec![("GET", "/cards/world.webp?v=2"), ("GET", "/cards/world-hero.png"), ("GET", "/cards/blob"), ("GET", "/cards/mislabeled.webp"), ("POST", "/images/edits")]);
+        let body = &seen[4].2;
+        assert!(body.contains("name=\"image[]\"; filename=\"world.webp\"\r\nContent-Type: image/webp\r\n\r\nRIFF"), "{body}");
+        assert!(body.contains("name=\"image[]\"; filename=\"local.png\"\r\nContent-Type: image/png\r\n"), "{body}");
+        assert!(body.contains("name=\"image[]\"; filename=\"world-hero.png\"\r\nContent-Type: image/png\r\n"), "{body}");
+        assert!(body.contains("name=\"image[]\"; filename=\"blob\"\r\nContent-Type: image/jpeg\r\n"), "{body}");
+        assert!(body.contains("name=\"image[]\"; filename=\"mislabeled.webp\"\r\nContent-Type: image/png\r\n"), "{body}");
+        // The sidecar records each ref as it was given: the URL itself.
+        let sidecar: Value = serde_json::from_slice(&std::fs::read(dir.join("comp.png.json")).unwrap()).unwrap();
+        assert_eq!(sidecar["refs"], serde_json::json!([board, "local.png", hero, blob, mislabeled]));
+        assert!(dir.join("comp.png").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_failed_url_ref_names_the_url_and_writes_nothing() {
+        let _proxy_lock = crate::http::PROXY_ENV_LOCK.lock().unwrap();
+        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", server.server_addr());
+        let dir = temp("url-ref-fail");
+        let handle = serve(server, vec![("/cards/page.html", 200, "text/html", b"<html>blocked</html>".to_vec()), ("/cards/world.webp", 200, "image/webp", b"<html>sign in</html>".to_vec())], 3);
+        let run_ref = |url: &str| {
+            let env = Env::from([("OPENAI_API_KEY".into(), "test-key".into())]);
+            let (mut io, captured) = Io::captured("", dir.clone(), env);
+            let args: Vec<String> = ["--prompt", "p", "--out", "comp.png", "--ref", url].iter().map(|s| s.to_string()).collect();
+            let exit = run_with_api_base(&args, &mut io, &base);
+            let err = String::from_utf8(captured.stderr.borrow().clone()).unwrap();
+            let out = String::from_utf8(captured.stdout.borrow().clone()).unwrap();
+            (exit, err, out)
+        };
+        // A missing image, then a page that is not an image.
+        let missing = format!("{base}/cards/gone.webp");
+        let (exit, err, out) = run_ref(&missing);
+        assert_eq!((exit, out.as_str()), (1, ""));
+        assert_eq!(err, format!("generate-image: could not download --ref {missing}: HTTP 404; nothing was generated.\n"));
+        let page = format!("{base}/cards/page.html");
+        let (exit, err, _) = run_ref(&page);
+        assert_eq!(exit, 1);
+        assert_eq!(err, format!("generate-image: could not download --ref {page}: the response is not a png, webp, or jpeg image; nothing was generated.\n"));
+        // A 200 page behind an image URL and an image Content-Type is still not an image.
+        let wall = format!("{base}/cards/world.webp");
+        let (exit, err, _) = run_ref(&wall);
+        assert_eq!(exit, 1);
+        assert_eq!(err, format!("generate-image: could not download --ref {wall}: the response is not a png, webp, or jpeg image; nothing was generated.\n"));
+        // Only the three downloads reached the server: no generation request.
+        let seen = handle.join().unwrap();
+        assert!(seen.iter().all(|r| r.0 == "GET"), "{seen:?}");
+        // An unreachable host reads the same on every OS.
+        let (exit, err, _) = run_ref("http://127.0.0.1:9/ref.png");
+        assert_eq!(exit, 1);
+        assert_eq!(err, "generate-image: could not download --ref http://127.0.0.1:9/ref.png: the request failed; nothing was generated.\n");
+        assert!(!dir.join("comp.png").exists() && !dir.join("comp.png.json").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn fake_mode_never_requests_a_url_ref() {
+        let _proxy_lock = crate::http::PROXY_ENV_LOCK.lock().unwrap();
+        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/cards/world.webp", server.server_addr());
+        let dir = temp("url-ref-fake");
+        let env = Env::from([("IMPECCABLE_IMAGE_GEN_FAKE".into(), "1".into()), ("OPENAI_API_KEY".into(), "test-key".into())]);
+        let (mut io, captured) = Io::captured("", dir.clone(), env);
+        let args: Vec<String> = ["--prompt", "p", "--out", "comp.png", "--ref", &url].iter().map(|s| s.to_string()).collect();
+        assert_eq!(run(&args, &mut io), 0);
+        assert!(String::from_utf8(captured.stdout.borrow().clone()).unwrap().contains("fake synthetic comp"));
+        assert!(server.recv_timeout(Duration::from_millis(300)).unwrap().is_none());
+        assert!(dir.join("comp.png").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn url_file_names_and_types() {
+        assert_eq!(url_file_name("https://x.test/cards/a-hero.webp?v=1#f"), "a-hero.webp");
+        assert_eq!(url_file_name("https://x.test/"), "ref");
+        assert_eq!(url_file_name("https://x.test"), "ref");
+        assert_eq!(sniffed_type(b"<html>"), None);
+        assert_eq!(sniffed_type(b"RIFF\x10\0\0\0WEBPVP8 "), Some("image/webp"));
+        assert!(is_url("http://a") && is_url("https://a") && !is_url("refs/a.png") && !is_url("ftp://a"));
     }
 
     #[test]

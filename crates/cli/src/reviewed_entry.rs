@@ -1,6 +1,9 @@
-//! A human-approved assembled capture is evidence for text styling, never a
+//! A human-approved assembled capture is bound by what it looks like, not by the
+//! bytes that drew it: build-phase compares it with the current capture, so later
+//! shared-CSS edits keep it while the first viewport still matches. It is evidence
+//! for the first viewport's scores, never a
 //! replacement for native integrity, missing-region, or overall fidelity gates.
-use crate::entry_capture::CdpEntryRenderer;
+use crate::entry_capture::{CaptureClock, CdpEntryRenderer};
 use impeccable_comp_verbs::asset_capture::capture_sha256;
 use impeccable_comp_verbs::entry_capture::{
     ApprovedReference, CapturedEntry, EntryEvidence, EntryRenderer, EntryRequest,
@@ -43,11 +46,7 @@ fn file(root: &Path, path: &str) -> Result<Vec<u8>, String> {
 }
 /// Read only private native session state. The host selects the session; neither
 /// a model-written receipt nor a saved build-phase report is an authority.
-fn reference(
-    session: &Path,
-    r: &EntryRequest,
-    evidence: &EntryEvidence,
-) -> Result<ApprovedReference, String> {
+fn reference(session: &Path, r: &EntryRequest) -> Result<ApprovedReference, String> {
     let root = r.root.canonicalize().map_err(|e| e.to_string())?;
     if session
         .canonicalize()
@@ -91,13 +90,14 @@ fn reference(
     let sources = state["sources"]
         .as_object()
         .ok_or("missing review sources")?;
-    for (path, hash) in sources {
-        if hash.as_str() != Some(&capture_sha256(&file(&root, path)?)) {
-            return Err(format!("reviewed source changed: {path}"));
-        }
-    }
     if !sources.contains_key(&r.artifact) || !sources.contains_key(&r.reference) {
         return Err("review must bind entry and original comp".into());
+    }
+    // Only the reference is bound by bytes: the comp the user judged against must be
+    // the comp the gates measure. Page sources may change; build-phase holds the
+    // approval to the pixels of the current first viewport instead.
+    if sources[&r.reference].as_str() != Some(&capture_sha256(&file(&root, &r.reference)?)) {
+        return Err(format!("reviewed comp changed: {}", r.reference));
     }
     let comp_url = packet["comp"]["url"]
         .as_str()
@@ -110,40 +110,6 @@ fn reference(
         )
     {
         return Err("reviewed reference differs".into());
-    }
-    // A newly added served file must not borrow an earlier approval.
-    for input in evidence.report["manifest"]["files"]
-        .as_array()
-        .ok_or("missing current native inputs")?
-    {
-        let path = input["path"].as_str().ok_or("invalid input")?;
-        let raster = matches!(
-            Path::new(path).extension().and_then(|s| s.to_str()),
-            Some("png" | "jpg" | "jpeg" | "webp" | "avif" | "gif")
-        );
-        if input["served"] == true
-            && !raster
-            && sources.get(input["path"].as_str().ok_or("invalid input")?) != Some(&input["sha256"])
-        {
-            return Err("native inputs differ from reviewed inputs".into());
-        }
-    }
-    // Available but unused raster variants are not dependencies. Every raster
-    // actually observed at the captured breakpoint must belong to the approval.
-    for frame in &evidence.frames {
-        for region in &frame.regions {
-            for binding in region.receipt["resourceBindings"]
-                .as_array()
-                .ok_or("missing observed raster bindings")?
-            {
-                if !sources
-                    .values()
-                    .any(|h| h == &binding["responseSha256"] && h.is_string())
-                {
-                    return Err("unreviewed raster contributes to current page".into());
-                }
-            }
-        }
     }
     let hash = capture["screenshotSha256"]
         .as_str()
@@ -162,18 +128,25 @@ fn reference(
     if capture_sha256(&png) != hash {
         return Err("reviewed screenshot changed".into());
     }
-    Ok(ApprovedReference {
-        png,
-        proof: json!({"schema":"human-assembled-reference-v1","requestId":packet["id"],"packetRevision":packet["revision"],"sha256":hash,"scope":"Text styling accepted in a source-bound assembled-page review; all other gates retained"}),
-    })
+    let mut proof = json!({"schema":"human-assembled-reference-v1","requestId":packet["id"],"packetRevision":packet["revision"],"sha256":hash,"scope":"First viewport accepted in an assembled-page review; valid while the current capture matches this screenshot; material gates retained"});
+    // The instant the approved screenshot's clock was pinned to (reviews captured
+    // before pinning carry none); gate captures render at the same instant.
+    if let Some(clock) = capture["clock"]["pinnedEpochMs"].as_f64().filter(|c| c.is_finite()) {
+        proof["pinnedClockMs"] = json!(clock.floor() as i64);
+    }
+    Ok(ApprovedReference { png, proof })
 }
 impl EntryRenderer for ReviewedEntryRenderer {
     fn capture_entry(&self, r: &EntryRequest) -> Result<Box<dyn CapturedEntry>, String> {
-        let source = CdpEntryRenderer.capture_entry(r)?;
         let candidate = self
             .session
             .as_ref()
-            .map(|s| reference(s, r, source.evidence()));
+            .map(|s| reference(s, r));
+        // A code-only page must not load or inline the screenshot the user approved.
+        let approved_png: Vec<&[u8]> = candidate.iter().filter_map(|c| c.as_ref().ok()).map(|a| a.png.as_slice()).collect();
+        let clock = candidate.iter().filter_map(|c| c.as_ref().ok()).find_map(|a| a.proof["pinnedClockMs"].as_f64())
+            .map(|epoch_ms| CaptureClock { epoch_ms, from_review: true }).unwrap_or_else(CaptureClock::now);
+        let source = CdpEntryRenderer.capture_at(r, &approved_png, clock)?;
         let mut report = source.evidence().report.clone();
         if let Some(Err(reason)) = &candidate {
             report["humanTextReview"] = json!({"status":"not-current","reason":reason});
@@ -225,11 +198,7 @@ impl CapturedEntry for ReviewedEntry {
     fn verify_current(&self) -> Result<(), String> {
         self.source.verify_current()?;
         if let Some(a) = &self.approved {
-            let current = reference(
-                self.session.as_ref().unwrap(),
-                &self.request,
-                self.source.evidence(),
-            )?;
+            let current = reference(self.session.as_ref().unwrap(), &self.request)?;
             if current.png != a.png || current.proof != a.proof {
                 return Err("human review changed during capture".into());
             }
@@ -255,7 +224,7 @@ impl ReviewedEntryRenderer {
 mod tests {
     use super::*;
     #[test]
-    fn approval_is_bound_to_reviewed_sources_and_the_native_capture() {
+    fn approval_is_bound_to_the_reviewed_screenshot_and_comp_not_page_bytes() {
         let dir = std::env::temp_dir().join(format!("review-reference-{}", std::process::id()));
         let root = dir.join("project");
         let session = dir.join("session");
@@ -281,12 +250,8 @@ mod tests {
             reference: "comp.png".into(),
             stage: impeccable_comp_verbs::entry_capture::EntryStage::Responsive,
         };
-        let evidence = EntryEvidence {
-            report: json!({"manifest":{"files":[{"path":"index.html","sha256":page,"served":true}]}}),
-            frames: vec![],
-        };
         assert_eq!(
-            reference(&session, &request, &evidence).unwrap().png,
+            reference(&session, &request).unwrap().png,
             b"png"
         );
         for (pointer, value) in [
@@ -304,25 +269,21 @@ mod tests {
             *broken.pointer_mut(pointer).unwrap() = value;
             save(&broken);
             assert!(
-                reference(&session, &request, &evidence).is_err(),
+                reference(&session, &request).is_err(),
                 "{pointer}"
             );
         }
         save(&state);
+        // Page edits keep the approval: build-phase compares pixels, not bytes.
         fs::write(root.join("index.html"), b"changed").unwrap();
-        assert!(reference(&session, &request, &evidence).is_err());
-        fs::write(root.join("index.html"), b"page").unwrap();
-        let mut added = EntryEvidence {
-            report: evidence.report.clone(),
-            frames: vec![],
-        };
-        added.report["manifest"]["files"]
-            .as_array_mut()
-            .unwrap()
-            .push(json!({"path":"late.css","sha256":"new","served":true}));
-        assert!(reference(&session, &request, &added).is_err());
+        fs::write(root.join("late.css"), b"new").unwrap();
+        assert_eq!(reference(&session, &request).unwrap().png, b"png");
+        // A different comp does not.
+        fs::write(root.join("comp.png"), b"other comp").unwrap();
+        assert!(reference(&session, &request).is_err());
+        fs::write(root.join("comp.png"), b"comp").unwrap();
         fs::write(session.join("blobs").join(&png), b"replaced").unwrap();
-        assert!(reference(&session, &request, &evidence).is_err());
+        assert!(reference(&session, &request).is_err());
         let _ = fs::remove_dir_all(dir);
     }
 }

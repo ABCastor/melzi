@@ -7,9 +7,14 @@ use crate::adapters::{class_selector, StyleRef};
 use crate::background::{read_own_background_color, resolve_border_radius_px, sv};
 use crate::dom::{StaticDocument, StaticElement};
 use crate::quality::{has_nonblank_direct_text, pf0};
+use impeccable_core::checks::embedded_content::{
+    control_of, is_media_control_name, is_output_chrome, is_play_name, visible_chars, Control,
+    CAPTION_MAX_CHARS,
+};
 use impeccable_core::checks::measures::{cream_from_class_list, is_cream_color};
 use impeccable_core::checks::rules::{
-    check_flat_type_hierarchy_samples, is_card_like_from_props, type_hierarchy_role, RuleHit,
+    check_flat_type_hierarchy_samples, flat_type_hierarchy_severity, is_card_like_from_props,
+    parse_font_weight, type_hierarchy_role, RuleHit,
     TypeSample, TYPE_HIERARCHY_SELECTOR,
 };
 use impeccable_core::checks::text_rules::{
@@ -102,6 +107,17 @@ fn is_rendered_type_element(el: &StaticElement<'_>) -> bool {
 
 /// JS: checks.mjs#checkFlatTypeHierarchyFromDoc over the static document.
 pub fn check_flat_type_hierarchy_from_doc(doc: &StaticDocument) -> Vec<RuleHit> {
+    check_flat_type_hierarchy_samples(&flat_type_samples_from_doc(doc))
+}
+
+/// The severity [`check_flat_type_hierarchy_from_doc`]'s finding reports at
+/// (see `flat_type_hierarchy_severity`): advisory when weight separates the
+/// roles.
+pub fn flat_type_hierarchy_severity_for_doc(doc: &StaticDocument) -> Option<&'static str> {
+    flat_type_hierarchy_severity(&flat_type_samples_from_doc(doc))
+}
+
+fn flat_type_samples_from_doc(doc: &StaticDocument) -> Vec<TypeSample> {
     let mut samples: Vec<TypeSample> = Vec::new();
     for el in doc.query_selector_all(TYPE_HIERARCHY_SELECTOR) {
         if js::trim(&el.text_content()).is_empty() || !is_rendered_type_element(&el) {
@@ -114,9 +130,10 @@ pub fn check_flat_type_hierarchy_from_doc(doc: &StaticDocument) -> Vec<RuleHit> 
         samples.push(TypeSample {
             role: type_hierarchy_role(&el.tag_lower()),
             size: font_size,
+            weight: parse_font_weight(sv(el.style(), "fontWeight")),
         });
     }
-    check_flat_type_hierarchy_samples(&samples)
+    samples
 }
 
 // ─── Nested cards ───────────────────────────────────────────────────────────
@@ -126,8 +143,22 @@ static SHADOW_CLASS_RE: Lazy<Regex> = Lazy::new(|| {
 });
 static BOX_SHADOW_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new("(?i)box-shadow").expect("BOX_SHADOW_RE"));
-static BORDER_CLASS_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?-u:\b)border(?-u:\b)").expect("BORDER_CLASS_RE"));
+/// A utility class that draws a border on every side: `border`, `border-2`,
+/// `border-px`, `border-[3px]`, with any variant prefix (`md:border`) or `!`.
+/// A side utility (`border-t`, `border-b-[4px]`, `border-x`) draws one or two
+/// edges, and a colour or style utility (`border-black`, `border-dashed`)
+/// draws none, so neither makes a card. The ASCII `\b` this replaces matched all of them,
+/// since `-` is a word boundary.
+static BORDER_CLASS_TOKEN_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^border(?:-[0-9]+|-px|-\[[0-9.]+(?:px|rem|em)\])?$").expect("BORDER_CLASS_TOKEN_RE")
+});
+
+fn class_draws_four_sided_border(cls: &str) -> bool {
+    cls.split(|c: char| c.is_ascii_whitespace()).any(|token| {
+        let utility = token.rsplit(':').next().unwrap_or(token);
+        BORDER_CLASS_TOKEN_RE.is_match(utility.trim_start_matches('!'))
+    })
+}
 static ROUNDED_CLASS_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?-u:\b)rounded(?:-sm|-md|-lg|-xl|-2xl|-full)?(?-u:\b)").expect("ROUNDED_CLASS_RE")
 });
@@ -194,13 +225,210 @@ pub fn is_card_like(el: &StaticElement<'_>) -> bool {
     let has_shadow = (!box_shadow.is_empty() && box_shadow != "none")
         || SHADOW_CLASS_RE.is_match(cls)
         || BOX_SHADOW_RE.is_match(raw_style);
-    let has_border = BORDER_CLASS_RE.is_match(cls);
+    let has_border = class_draws_four_sided_border(cls);
     let width_px = pf0(sv(style, "width"));
     let has_radius = resolve_border_radius_px(style, width_px) > 0.0
         || ROUNDED_CLASS_RE.is_match(cls)
         || BORDER_RADIUS_RE.is_match(raw_style);
     let has_bg = BG_CLASS_RE.is_match(cls) || bg_decl_not_transparent(raw_style);
     is_card_like_from_props(has_shadow, has_border, has_radius, has_bg)
+}
+
+/// Tags whose text is set in a monospace face by the user agent: the static
+/// cascade has no UA stylesheet, so the tag stands in for the face.
+const MONOSPACE_TAGS: [&str; 5] = ["pre", "code", "samp", "kbd", "output"];
+
+/// The controls inside `el` (itself included), with the name each reads by:
+/// its `aria-label`, else its `title`, else its text (the URL engine's
+/// `controls_in`).
+fn controls_in<'a>(el: &StaticElement<'a>) -> Vec<(StaticElement<'a>, Control, String)> {
+    let mut nodes = vec![*el];
+    nodes.extend(el.query_selector_all("*"));
+    nodes
+        .into_iter()
+        .filter_map(|n| {
+            let kind = control_of(&n.tag_lower(), n.get_attribute("type"), n.get_attribute("role"))?;
+            let name = n
+                .get_attribute("aria-label")
+                .or_else(|| n.get_attribute("title"))
+                .map(str::to_string)
+                .unwrap_or_else(|| n.text_content());
+            Some((n, kind, name))
+        })
+        .collect()
+}
+
+/// Whether `el` frames embedded content that is its main child rather than
+/// holding a second card (decision r4-p17-nested-cards-embedded-content).
+/// "Inner boxes that hold ordinary text and controls still report", so each
+/// reading also asks what else the box holds, as the URL engine does:
+///
+/// - a media player: an `<audio>` or `<video>` drawn with `controls`, or a
+///   play or pause button beside a seek control; every control in the box is
+///   the player's own and the text outside them is caption-length;
+/// - a figure: an `<svg>` or a `<canvas>` with a caption, read here as a
+///   `<figure>` or a `<figcaption>` since the file scan has no layout to
+///   measure the figure's share of the box; the text beside the figure is
+///   caption-length and no control sits outside it;
+/// - a monospace output block (see `is_output_block`) whose box holds no
+///   control but its own chrome (a copy button, an icon button).
+fn frames_embedded_content(el: &StaticElement<'_>, outer: &StaticElement<'_>) -> bool {
+    let controls = controls_in(el);
+    // Media the cascade hides (`hidden`, `display: none`) shows no player,
+    // as the URL engine, which needs the player's box, also finds.
+    let player_media = el
+        .query_selector_all("audio[controls], video[controls]")
+        .iter()
+        .any(is_rendered_type_element);
+    let custom_player = controls
+        .iter()
+        .any(|(_, kind, name)| *kind == Control::Button && is_play_name(name))
+        && (controls.iter().any(|(_, kind, _)| *kind == Control::Seek)
+            || el.query_selector("progress").is_some());
+    if (player_media || custom_player)
+        && controls.iter().all(|(_, kind, name)| {
+            *kind == Control::Seek || (*kind == Control::Button && is_media_control_name(name))
+        })
+    {
+        let total = visible_chars(&el.text_content());
+        let inside: usize = controls
+            .iter()
+            .filter(|(c, _, _)| !controls.iter().any(|(o, _, _)| o != c && o.contains(c)))
+            .map(|(c, _, _)| visible_chars(&c.text_content()))
+            .sum();
+        if total.saturating_sub(inside) <= CAPTION_MAX_CHARS {
+            return true;
+        }
+    }
+    if el.tag_lower() == "figure" || el.query_selector("figcaption").is_some() {
+        let total = visible_chars(&el.text_content());
+        let figure = el.query_selector_all("svg, canvas").into_iter().any(|figure| {
+            let caption = total.saturating_sub(visible_chars(&figure.text_content()));
+            caption > 0
+                && caption <= CAPTION_MAX_CHARS
+                && controls.iter().all(|(c, _, _)| figure.contains(c))
+        });
+        if figure {
+            return true;
+        }
+    }
+    controls
+        .iter()
+        .all(|(c, kind, name)| is_output_chrome(*kind, name, &c.text_content()))
+        && is_output_block(el, outer)
+}
+
+/// Inline tags a run of text passes through; the static cascade has no UA
+/// stylesheet, so a declared `display` is read first and the tag stands in
+/// for the default.
+const INLINE_TAGS: [&str; 16] = [
+    "a", "abbr", "b", "br", "code", "em", "i", "kbd", "mark", "s", "samp", "small", "span",
+    "strong", "sub", "sup",
+];
+
+/// The file scan's reading of a monospace output block (r4-p17), as the URL
+/// engine's `is_output_block`: one element holds 60% of the box's text, 90%
+/// of that is in a monospace tag or face, and it is one run of text (a
+/// monospace tag, preserved white space, or inline runs holding 80% of it).
+fn is_output_block(el: &StaticElement<'_>, outer: &StaticElement<'_>) -> bool {
+    let mono_face = |e: &StaticElement<'_>| {
+        impeccable_core::checks::text_rules::is_monospace_family(sv(e.style(), "fontFamily"))
+    };
+    if mono_face(outer) {
+        return false;
+    }
+    let mut nodes = vec![*el];
+    nodes.extend(el.query_selector_all("*"));
+    if nodes.len() > 2000 {
+        return false;
+    }
+    let index: std::collections::HashMap<ego_tree::NodeId, usize> =
+        nodes.iter().enumerate().map(|(i, n)| (n.id(), i)).collect();
+    let mut text = vec![0usize; nodes.len()];
+    let mut mono = vec![0usize; nodes.len()];
+    let mut run = vec![0usize; nodes.len()];
+    let mono_at = |i: usize| {
+        let mut cur = Some(nodes[i]);
+        while let Some(c) = cur {
+            if MONOSPACE_TAGS.contains(&c.tag_lower().as_str()) || mono_face(&c) {
+                return true;
+            }
+            if c == *el {
+                break;
+            }
+            cur = c.parent_element();
+        }
+        false
+    };
+    for (i, node) in nodes.iter().enumerate() {
+        let own = node.direct_text().chars().filter(|c| !c.is_whitespace()).count();
+        text[i] = own;
+        run[i] = own;
+        if own > 0 && mono_at(i) {
+            mono[i] = own;
+        }
+    }
+    for i in (1..nodes.len()).rev() {
+        let Some(&parent) = nodes[i].parent_element().and_then(|p| index.get(&p.id())) else {
+            continue;
+        };
+        text[parent] += text[i];
+        mono[parent] += mono[i];
+        let display = sv(nodes[i].style(), "display");
+        let inline = if display.is_empty() {
+            INLINE_TAGS.contains(&nodes[i].tag_lower().as_str())
+        } else {
+            matches!(display, "inline" | "contents")
+        };
+        if inline {
+            run[parent] += run[i];
+        }
+    }
+    let total = text[0];
+    total > 0
+        && nodes.iter().enumerate().any(|(i, node)| {
+            if (text[i] as f64) < total as f64 * 0.6 || (mono[i] as f64) < text[i] as f64 * 0.9 {
+                return false;
+            }
+            let ws = sv(node.style(), "whiteSpace");
+            MONOSPACE_TAGS.contains(&node.tag_lower().as_str())
+                || ws.starts_with("pre")
+                || ws == "break-spaces"
+                || run[i] as f64 >= text[i] as f64 * 0.8
+        })
+}
+
+/// Whether `el` is a dialog: a `<dialog>`, `role="dialog"` or
+/// `role="alertdialog"`, or `aria-modal="true"`.
+fn is_dialog_el(el: &StaticElement<'_>) -> bool {
+    let role_dialog = el.get_attribute("role").is_some_and(|role| {
+        role.split_ascii_whitespace()
+            .any(|t| matches!(js::to_lower_case(t).as_str(), "dialog" | "alertdialog"))
+    });
+    let modal = el
+        .get_attribute("aria-modal")
+        .is_some_and(|v| js::to_lower_case(js::trim(v)) == "true");
+    el.tag_lower() == "dialog" || role_dialog || modal
+}
+
+/// Whether the outer card is a dialog (r4-p17): the dialog itself, or the
+/// first card-like box inside one (a modal's panel inside its overlay). A
+/// card further in, inside the dialog's panel, is an ordinary card.
+fn is_dialog_card(outer: &StaticElement<'_>) -> bool {
+    if is_dialog_el(outer) {
+        return true;
+    }
+    let mut cur = outer.parent_element();
+    while let Some(a) = cur {
+        if is_dialog_el(&a) {
+            return true;
+        }
+        if is_card_like(&a) {
+            return false;
+        }
+        cur = a.parent_element();
+    }
+    false
 }
 
 /// JS: checks.mjs#checkPageLayout(doc, win)
@@ -233,7 +461,9 @@ pub fn check_page_layout(doc: &StaticDocument) -> Vec<RuleHit> {
         let mut parent = el.parent_element();
         while let Some(p) = parent {
             if is_card_like(&p) {
-                flagged.push(*el);
+                if !is_dialog_card(&p) && !frames_embedded_content(el, &p) {
+                    flagged.push(*el);
+                }
                 break;
             }
             parent = p.parent_element();
@@ -244,10 +474,16 @@ pub fn check_page_layout(doc: &StaticDocument) -> Vec<RuleHit> {
             .iter()
             .any(|other| other != el && el.contains(other));
         if !is_ancestor_of_flagged {
-            findings.push(RuleHit::new(
+            let mut hit = RuleHit::new(
                 "nested-cards",
                 format!("Card inside card ({})", el.tag_lower()),
-            ));
+            );
+            // A mockup's panels report as advisory
+            // (decision r6-t3-nested-cards-mockups).
+            if crate::decorative_text::box_in_mockup(el) {
+                hit.severity = Some(impeccable_core::checks::rules::ADVISORY_SEVERITY.to_string());
+            }
+            findings.push(hit);
         }
     }
     findings
@@ -338,10 +574,15 @@ pub fn check_repeated_container_text_from_doc(doc: &StaticDocument) -> Vec<RuleH
                     break;
                 }
                 let raw_cls = js::trim(c.get_attribute("class").unwrap_or(""));
+                // A class that carries an id names one instance, not a spot,
+                // as in the browser engine.
                 let mut cls: Vec<&str> = if raw_cls.is_empty() {
                     Vec::new()
                 } else {
-                    WS_RE.split(raw_cls).filter(|s| !s.is_empty()).collect()
+                    WS_RE
+                        .split(raw_cls)
+                        .filter(|s| !s.is_empty() && !impeccable_core::checks::text_rules::is_id_like_class(s))
+                        .collect()
                 };
                 cls.sort_by(|a, b| a.encode_utf16().cmp(b.encode_utf16()));
                 let cls = cls.join(".");
@@ -419,4 +660,19 @@ pub fn check_cream_palette(doc: &StaticDocument) -> Vec<RuleHit> {
         }
     }
     findings
+}
+
+#[cfg(test)]
+mod tests {
+    use super::class_draws_four_sided_border;
+
+    #[test]
+    fn only_all_sided_width_utilities_draw_a_card_border() {
+        for cls in ["border", "card border-2", "md:border", "!border", "border-px", "rounded border-[3px]"] {
+            assert!(class_draws_four_sided_border(cls), "{cls}");
+        }
+        for cls in ["border-t", "border-b-[4px]", "border-x", "border-black", "border-dashed", "border-t-px"] {
+            assert!(!class_draws_four_sided_border(cls), "{cls}");
+        }
+    }
 }

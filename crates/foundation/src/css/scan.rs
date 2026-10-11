@@ -46,6 +46,37 @@ fn u8_at(s: &str, i: usize) -> Option<u8> {
     s.as_bytes().get(i).copied()
 }
 
+/// The vendor prefixes a property token may carry and still be the property.
+const VENDOR_PREFIXES: [&[u8]; 4] = [b"-webkit-", b"-moz-", b"-ms-", b"-o-"];
+
+/// Whether the property name that starts at byte `start` of `text` is a name
+/// of its own rather than the tail of a longer identifier. A regex word
+/// boundary treats a hyphen as a break, so `--bprogress-box-shadow:` reads as
+/// `box-shadow:`, and `border-width` or `line-height` inside a `transition`
+/// list read as `width` and `height`. The byte before the name must not be a
+/// hyphen or an identifier character; a vendor prefix (`-webkit-box-shadow`)
+/// belongs to the property and passes when it starts cleanly itself.
+pub fn starts_css_property_token(text: &str, start: usize) -> bool {
+    let bytes = text.as_bytes();
+    let clean = |at: usize| {
+        at == 0 || {
+            let b = bytes[at - 1];
+            !(b == b'-' || is_word_byte(b) || b >= 0x80)
+        }
+    };
+    if start > bytes.len() {
+        return false;
+    }
+    if clean(start) {
+        return true;
+    }
+    VENDOR_PREFIXES.iter().any(|prefix| {
+        start >= prefix.len()
+            && bytes[start - prefix.len()..start].eq_ignore_ascii_case(prefix)
+            && clean(start - prefix.len())
+    })
+}
+
 // ─── collectCssCustomProps ──────────────────────────────────────────────────
 re!(
     CUSTOM_PROP_RE,
@@ -231,11 +262,14 @@ fn brace_body(content: &str, from: usize, i: usize, closed: bool) -> &str {
     &content[from..e.max(from)]
 }
 
+// The percentage may sit inside a `calc()`, the usual gap-compensated loop
+// (`translateX(calc(-100% - 32px))`); the first percentage is the travel.
 re!(
     TRANSLATE_X_PCT_RE,
     format!(
-        r"{B}{translate}(?:[xX]|3[dD])?\({WS}*(-?[0-9.]+)%",
-        translate = ci("translate")
+        r"{B}{translate}(?:[xX]|3[dD])?\({WS}*(?:{calc}\({WS}*)?(-?[0-9.]+)%",
+        translate = ci("translate"),
+        calc = ci("calc")
     )
 );
 

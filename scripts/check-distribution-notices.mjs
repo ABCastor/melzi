@@ -39,8 +39,11 @@ function checkDirectory(directory, rootDir) {
   }
 }
 export function checkDistributions(rootDir, distDir) {
+  // The Codex plugin root, as scripts/lib/openai-plugin.js builds it. Written as
+  // path segments like that file: a literal `openai/<name>` path reads as a command to
+  // the brand rules, which renamed it to a folder the build never writes.
   const directories = [...Object.values(PROVIDERS).map(config => config.provider),
-    'universal', 'cursor-plugin', 'vscode', 'openai/impeccable'];
+    'universal', 'cursor-plugin', 'vscode', path.join('openai', 'impeccable')];
   for (const directory of directories) checkDirectory(path.join(distDir, directory), rootDir);
   if (fs.existsSync(path.join(rootDir, 'plugin'))) checkDirectory(path.join(rootDir, 'plugin'), rootDir);
   const archives = fs.readdirSync(distDir).filter(name => /\.(zip|vsix)$/.test(name));

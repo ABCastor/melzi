@@ -37,8 +37,8 @@ impl RulePack for TestPack {
     }
 }
 
-const SOURCE: &str = ".card { border-left: 4px solid #6366f1; }\n";
-const PAGE: &str = "<!DOCTYPE html>\n<html><head><title>t</title><style>\n.card { border-left: 4px solid #6366f1; }\n</style></head>\n<body><div class=\"card\">A card</div></body></html>\n";
+const SOURCE: &str = ".card { border-left: 4px solid #6366f1; border-radius: 10px; }\n";
+const PAGE: &str = "<!DOCTYPE html>\n<html><head><title>t</title><style>\n.card { border-left: 4px solid #6366f1; border-radius: 10px; }\n</style></head>\n<body><div class=\"card\">A card</div></body></html>\n";
 
 fn ids(json: &str) -> Vec<String> {
     serde_json::from_str::<Vec<Value>>(json)
@@ -89,7 +89,7 @@ fn html_export_shape() {
 #[test]
 fn inline_ignores_option() {
     let waived =
-        ".card { /* impeccable-disable-line side-tab */ border-left: 4px solid #6366f1; }\n";
+        ".card { /* impeccable-disable-line side-tab */ border-left: 4px solid #6366f1; border-radius: 10px; }\n";
     assert!(ids(&detect_text_json(waived, "a.css", "{}")).is_empty());
     assert!(!ids(&detect_text_json(
         waived,

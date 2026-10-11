@@ -51,8 +51,11 @@ impl BrowserFinding {
         }
     }
     /// `{ type: f.id, detail: f.snippet }` from a Section 3 hit.
+    /// The hit's own severity, when it carries one, travels with it.
     pub fn from_hit(hit: &crate::rules::types::RuleHit) -> Self {
-        BrowserFinding::new(hit.id.clone(), hit.snippet.clone())
+        let mut f = BrowserFinding::new(hit.id.clone(), hit.snippet.clone());
+        f.severity = hit.severity.clone();
+        f
     }
     /// `{ type: f.id, detail: f.snippet }` from a measures Finding.
     pub fn from_measure(f: &crate::css::measures::Finding) -> Self {
@@ -201,6 +204,19 @@ pub struct HiddenTextMeasure {
     #[serde(with = "crate::js::json_number")]
     pub hidden_chars: f64,
     pub hidden_samples: Vec<String>,
+    /// Text inside sliders that never started (every slide hidden), left
+    /// out of both counts: whether a visitor meets it is a question about
+    /// the capture, not the page (corpus decision r6-t6-hidden-scroll-linked).
+    /// Omitted from the JSON when zero.
+    #[serde(default, skip_serializing_if = "is_zero", with = "crate::js::json_number")]
+    pub unstarted_slider_chars: f64,
+    /// Up to three of those sliders' text, 40 characters each.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unstarted_slider_samples: Vec<String>,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
 }
 
 /// The result of `collectBrowserFindings()`: the group map in insertion

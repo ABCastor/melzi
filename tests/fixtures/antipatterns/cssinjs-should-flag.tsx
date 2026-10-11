@@ -25,7 +25,8 @@ export const Hero = styled.section`
   }
 `;
 
-// emotion css: bounce animation + layout transition
+// emotion css: bounce animation. The width transition beside it is quiet:
+// the layout-transition rule was retired on 2026-10-07.
 export const animatedPanel = css`
   animation: bounce 1s infinite;
   transition: width 0.3s ease;

@@ -26,7 +26,6 @@ pub fn to_fixed(v: f64, digits: usize) -> String {
     if v.abs() >= 1e21 {
         return js_number_to_string(v);
     }
-    let neg = v < 0.0 || (v == 0.0 && v.is_sign_negative() && false);
     let a = v.abs();
     // Exact decimal expansion (doubles have at most 1074 fractional digits).
     let exact = format!("{:.1100}", a);
@@ -38,7 +37,7 @@ pub fn to_fixed(v: f64, digits: usize) -> String {
     if round_up {
         // propagate carry
         let mut carry = true;
-        for d in kept.iter_mut().rev() {
+        for d in kept.iter_mut().rev().chain(int_digits.iter_mut().rev()) {
             if !carry {
                 break;
             }
@@ -50,29 +49,13 @@ pub fn to_fixed(v: f64, digits: usize) -> String {
             }
         }
         if carry {
-            for d in int_digits.iter_mut().rev() {
-                if !carry {
-                    break;
-                }
-                if *d == 9 {
-                    *d = 0;
-                } else {
-                    *d += 1;
-                    carry = false;
-                }
-            }
-            if carry {
-                int_digits.insert(0, 1);
-            }
+            int_digits.insert(0, 1);
         }
     }
     let mut s = String::new();
     let int_s: String = int_digits.iter().map(|d| (b'0' + d) as char).collect();
-    let is_zero = int_digits.iter().all(|d| *d == 0) && kept.iter().all(|d| *d == 0);
-    if neg && !is_zero {
-        s.push('-');
-    } else if neg && is_zero && v < 0.0 {
-        // JS: (-0.0001).toFixed(2) === "-0.00"
+    // JS keeps the sign of negative values rounded to zero, but not -0 itself.
+    if v < 0.0 {
         s.push('-');
     }
     s.push_str(&int_s);
@@ -333,6 +316,11 @@ mod tests {
         assert_eq!(to_fixed(22.5, 0), "23");
         assert_eq!(to_fixed(0.65, 3), "0.650");
         assert_eq!(to_fixed(359.99, 1), "360.0");
+        assert_eq!(to_fixed(9.5, 0), "10");
+        assert_eq!(to_fixed(99.999, 2), "100.00");
+        assert_eq!(to_fixed(-99.999, 2), "-100.00");
+        assert_eq!(to_fixed(-0.0001, 2), "-0.00");
+        assert_eq!(to_fixed(-0.0, 2), "0.00");
     }
     #[test]
     fn iso() {

@@ -72,8 +72,22 @@
       border-radius: 10px;
     }
 
-    .flag-left-plain {
-      border-left: 4px solid #0f766e;
+    .flag-left-tab {
+      border-left: 6px solid #0f766e;
+      border-radius: 0 10px 10px 0;
+    }
+
+    .flag-left-longhand {
+      border-left-width: 4px;
+      border-left-style: solid;
+      border-left-color: #b45309;
+      border-top-right-radius: 10px;
+      border-bottom-right-radius: 10px;
+    }
+
+    .flag-left-calc {
+      border-left: 9px solid #4338ca;
+      border-radius: calc(5px + 5px);
     }
 
     .flag-top {
@@ -116,12 +130,21 @@
       border-left: 4px solid #2563eb;
     }
 
-    .flag-square-top {
+    .pass-square-callout {
+      border-left: 4px solid #0f766e;
+    }
+
+    .pass-round-under-stripe {
+      border-left: 7px solid #b91c1c;
+      border-radius: 10px 0 0 10px;
+    }
+
+    .pass-square-top {
       border-top: 4px solid #7c3aed;
       border-radius: 0;
     }
 
-    .flag-square-bottom {
+    .pass-square-bottom {
       border-bottom: 3px solid #ea580c;
       border-radius: 0;
     }
@@ -166,9 +189,19 @@
         <p>The right-side version is the same visual trope mirrored.</p>
       </div>
 
-      <div class="case flag-left-plain">
-        <h3>Thick colored side border without radius</h3>
-        <p>A thick chromatic side stripe still reads as a tab even without rounded corners.</p>
+      <div class="case flag-left-tab">
+        <h3>Card rounded away from its left stripe</h3>
+        <p>The stripe runs down the square edge and the far corners are rounded: the tab shape.</p>
+      </div>
+
+      <div class="case flag-left-longhand">
+        <h3>Card rounded by corner longhands</h3>
+        <p>The utility-class form writes border-top-right-radius and border-bottom-right-radius instead of the shorthand; the card is just as round.</p>
+      </div>
+
+      <div class="case flag-left-calc">
+        <h3>Card whose radius is a calc expression</h3>
+        <p>A radius the engine cannot resolve is unknown, not square, so the stripe on it is still reported.</p>
       </div>
 
       <div class="case flag-top">
@@ -210,14 +243,24 @@
         <p>A live status region carries a colored side bar as a severity accent, not a decorative side tab.</p>
       </div>
 
-      <div class="case flag-square-top">
-        <h3>Square top border</h3>
-        <p>A chromatic top stripe on a card is the horizontal variant of the side tab.</p>
+      <div class="case pass-square-callout">
+        <h3>Square callout with a left rule</h3>
+        <p>A side rule on square corners is the old callout convention: a quote, a note, a table row marker.</p>
       </div>
 
-      <div class="case flag-square-bottom">
+      <div class="case pass-round-under-stripe">
+        <h3>Rounded only where the stripe runs</h3>
+        <p>The corners away from the stripe are square, so the card does not read as a rounded tab.</p>
+      </div>
+
+      <div class="case pass-square-top">
+        <h3>Square top border</h3>
+        <p>A chromatic top band on a square box is a rule across a section, not a card's accent (r6-t2).</p>
+      </div>
+
+      <div class="case pass-square-bottom">
         <h3>Square bottom border</h3>
-        <p>A chromatic bottom stripe on a badge or card is the same decorative tell.</p>
+        <p>A chromatic bottom band on a square box is the same rule, and stays silent too.</p>
       </div>
 
       <div class="case" role="tablist">

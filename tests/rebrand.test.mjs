@@ -64,6 +64,13 @@ describe('rebrand: the transform is honest about what it owns', () => {
       'https://x.com/impeccable_ai',
       'Base work: **Impeccable** by Paul Bakaus',
       'a fork of Impeccable, Apache-2.0',
+      '// Modified from Impeccable: typed Melzi launcher and distribution contracts.',
+      'Melzi is a modified fork of [Impeccable](https://github.com/pbakaus/impeccable) by Paul Bakaus.',
+      'Apache-2.0; a modified fork of Impeccable by Paul Bakaus.',
+      'It does not install upstream Impeccable engine packages.',
+      "Do not reuse upstream Impeccable's signing identity or certificate claims.",
+      "the launcher does not automatically install or download Impeccable's engine.",
+      "This document describes Impeccable's retained verification protocol.",
       'impeccable frontend design',
     ];
     for (const s of UPSTREAM_OWNED) {

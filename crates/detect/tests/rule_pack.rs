@@ -41,9 +41,9 @@ impl RulePack for TestPack {
     }
 }
 
-/// A file with one built-in finding (the CSS-in-JS side stripe on line 2) and
-/// one line for the pack.
-const SOURCE: &str = "const Card = styled.div`\n  border-left: 4px solid red;\n`;\nexport const copy = \"TODO(pack) write the real headline\";\n";
+/// A file with one built-in finding (the CSS-in-JS side stripe on a rounded
+/// card, line 2) and one line for the pack.
+const SOURCE: &str = "const Card = styled.div`\n  border-left: 4px solid red; border-radius: 8px;\n`;\nexport const copy = \"TODO(pack) write the real headline\";\n";
 
 fn scan(rule_pack: Option<&'static dyn RulePack>) -> Vec<Finding> {
     detect_text(

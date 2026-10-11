@@ -51,6 +51,30 @@ export default [
       { verb: 'hook', stdin: stop() },
     ],
   },
+  // A DESIGN.md that declares a purple switches ai-color-palette's purple
+  // forms off for the project's edits too (corpus decision
+  // r3-23-ai-color-palette-brand-hue); without one the Stop review reports
+  // the purple heading.
+  ...['purple', 'none'].map((design) => ({
+    id: `hook-stop-purple-heading-design-${design}`, workspace: 'hook-project', files: CACHE_FILES,
+    normalize: [['("stopBaseline":\\{"version":1,"engine":")[^"]+', 'g', '$1<ENGINE_VERSION>']],
+    setup(ws) {
+      if (design === 'purple') {
+        fs.writeFileSync(`${ws}/DESIGN.md`, '---\ncolors:\n  primary: "#6d28d9"\n---\n# Brand\n');
+      }
+      fs.writeFileSync(`${ws}/src/Hero.tsx`, 'export const Hero = () => <h1 className="text-purple-700 text-5xl">Featured</h1>;\n');
+    },
+    steps: [
+      { verb: 'hook', stdin: claudeEdit('src/Hero.tsx', {
+        tool_name: 'Write',
+        tool_response: {
+          type: 'create', filePath: `${WS}/src/Hero.tsx`, originalFile: null,
+          content: 'export const Hero = () => <h1 className="text-purple-700 text-5xl">Featured</h1>;\n',
+        },
+      }) },
+      { verb: 'hook', stdin: stop() },
+    ],
+  })),
   // --- hook.mjs: per-edit ---
   { id: 'hook-edit-tsx-fresh', verb: 'hook', workspace: 'hook-project', stdin: claudeEdit('src/components/Card.tsx'), files: CACHE_FILES },
   { id: 'hook-edit-css-fresh', verb: 'hook', workspace: 'hook-project', stdin: claudeEdit('src/components/Card.module.css'), files: CACHE_FILES },

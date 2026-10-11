@@ -3,6 +3,8 @@ pub mod asset_capture;
 
 pub mod capture_snapshot;
 
+pub mod component_capture;
+
 pub mod entry_capture;
 
 pub mod capture_service;

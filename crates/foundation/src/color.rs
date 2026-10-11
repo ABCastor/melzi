@@ -202,6 +202,32 @@ pub fn contrast_ratio(c1: &Rgba, c2: &Rgba) -> f64 {
     (math_max(l1, l2) + 0.05) / (math_min(l1, l2) + 0.05)
 }
 
+/// A contrast ratio the way a snippet prints it next to its threshold. One
+/// decimal; two when one decimal would round a failing ratio up to the bar;
+/// and those two cut, not rounded, when rounding them would reach it too. A
+/// ratio under the bar never prints as the bar: 4.4983 against 4.5 prints
+/// `4.49`, where one decimal read `4.5` and two read `4.50`. A ratio at or
+/// above the bar, and a ratio one decimal already keeps under it, print one
+/// decimal as they always did.
+pub fn ratio_label(ratio: f64, threshold: f64) -> String {
+    let one = js::to_fixed(ratio, 1);
+    if !ratio.is_finite() || ratio < 0.0 || !(ratio < threshold) || string_to_number(&one) < threshold {
+        return one;
+    }
+    let two = js::to_fixed(ratio, 2);
+    if string_to_number(&two) < threshold {
+        return two;
+    }
+    // The exact decimal digits, cut after the second place. A double under
+    // the bar sits far enough below it that thirty places never carry into
+    // the second.
+    let exact = format!("{ratio:.30}");
+    match exact.split_once('.') {
+        Some((int_part, frac)) => format!("{int_part}.{}", &frac[..2]),
+        None => two,
+    }
+}
+
 // ─── Color-function token extraction ────────────────────────────────────────
 
 /// JS `COLOR_FUNCTION_NAMES`.
@@ -351,8 +377,20 @@ pub fn lightness_saturation(c: &Rgba) -> (f64, f64) {
 /// ceiling, and 0.93 as lightness, which is where the eye puts it.
 pub fn is_gray_ink(c: &Rgba) -> bool {
     let (l, s) = lightness_saturation(c);
-    s < 0.2 && l > 0.2 && l < 0.85
+    s < 0.2 && l > GRAY_INK_MIN_LIGHTNESS && l < GRAY_INK_MAX_LIGHTNESS
 }
+
+/// The lightness at and over which a neutral ink is near-white, not gray.
+pub const GRAY_INK_MAX_LIGHTNESS: f64 = 0.85;
+
+/// The lightness at and under which a neutral ink is near-black, not gray.
+///
+/// `#393939` (0.22) on a yellow fill and `#413c38` (0.24) on a green one
+/// read at 6 to 8:1 as body ink, not as a washed-out gray. 0.3 is where the
+/// Tailwind neutrals split: every `-700` and darker (`gray-700` `#374151` at
+/// 0.27, `neutral-700` `#404040` at 0.25) is under it, every `-600` and
+/// lighter (`gray-600` `#4b5563` at 0.34) is over it.
+pub const GRAY_INK_MIN_LIGHTNESS: f64 = 0.3;
 
 /// JS `getHue(c)`.
 pub fn get_hue(c: Option<&Rgba>) -> f64 {
@@ -1037,6 +1075,41 @@ pub fn is_no_paint_color_value(value: Option<&str>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Near-black ink on a colour is ink, not gray: `#393939` and `#413c38`
+    /// sit under the 0.3 floor, `gray-600` over it.
+    #[test]
+    fn near_black_is_not_gray_ink() {
+        let hex = |r: f64, g: f64, b: f64| Rgba::new(r, g, b, 1.0);
+        assert!(!is_gray_ink(&hex(57.0, 57.0, 57.0))); // #393939
+        assert!(!is_gray_ink(&hex(65.0, 60.0, 56.0))); // #413c38
+        assert!(!is_gray_ink(&hex(55.0, 65.0, 81.0))); // gray-700 #374151
+        assert!(is_gray_ink(&hex(75.0, 85.0, 99.0))); // gray-600 #4b5563
+        assert!(is_gray_ink(&hex(77.0, 77.0, 77.0))); // #4d4d4d
+        assert!(is_gray_ink(&hex(138.0, 143.0, 140.0))); // #8a8f8c
+    }
+
+    #[test]
+    fn a_failing_ratio_never_prints_as_its_bar() {
+        // context.dev: #777778 on #070709 is 4.4992:1, printed `4.50:1 (need 4.5:1)`.
+        let near = contrast_ratio(&Rgba::new(119.0, 119.0, 120.0, 1.0), &Rgba::new(7.0, 7.0, 9.0, 1.0));
+        assert!(near < 4.5 && near > 4.499);
+        assert_eq!(ratio_label(near, 4.5), "4.49");
+        // Two decimals already under the bar keep rounding, as they did.
+        assert_eq!(ratio_label(4.4861, 4.5), "4.49");
+        assert_eq!(ratio_label(4.4929, 4.5), "4.49");
+        assert_eq!(ratio_label(4.499_999_999_999_999, 4.5), "4.49");
+        assert_eq!(ratio_label(2.998, 3.0), "2.99");
+        assert_eq!(ratio_label(2.96, 3.0), "2.96");
+        // One decimal under the bar, at it, or above it: one decimal.
+        assert_eq!(ratio_label(4.44, 4.5), "4.4");
+        assert_eq!(ratio_label(1.7, 3.0), "1.7");
+        assert_eq!(ratio_label(4.5, 4.5), "4.5");
+        assert_eq!(ratio_label(4.62, 4.5), "4.6");
+        assert_eq!(ratio_label(18.4, 4.5), "18.4");
+        // No threshold to print against: one decimal.
+        assert_eq!(ratio_label(4.498, f64::NAN), "4.5");
+    }
 
     #[test]
     fn regexes_compile() {

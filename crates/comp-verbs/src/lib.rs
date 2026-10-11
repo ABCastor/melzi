@@ -14,10 +14,12 @@
 //! its catalog (`IMPECCABLE_CATALOG_DIR`, then the skill's shipped copy); it is
 //! never committed to the engine repo. See [`font_match`].
 
+pub mod approved_comp;
 pub mod build_phase;
 pub mod completion;
 pub mod comp_diff;
 pub mod comp_spec;
+pub mod displacement;
 mod map_inspection;
 pub mod font_match;
 mod util;

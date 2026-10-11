@@ -1,0 +1,7 @@
+{
+  "stdout": "",
+  "stderr": "\n<REPO>/tests/fixtures/antipatterns/side-accent-nested.sass\n  line 10: [side-tab] border-left: 3px solid #0f766e\n    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.\n  line 16: [side-tab] border-right: 5px solid #0f766e\n    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.\n  line 22: [side-tab] border-left: 7px solid #0f766e\n    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.\n\n3 anti-patterns found.\n",
+  "exit": 2,
+  "signal": null,
+  "files": {}
+}

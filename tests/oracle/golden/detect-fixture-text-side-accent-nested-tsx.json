@@ -1,0 +1,7 @@
+{
+  "stdout": "",
+  "stderr": "\n<REPO>/tests/fixtures/antipatterns/side-accent-nested.tsx\n  line 25: [side-tab] border-left: 5px solid #0f766e\n    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.\n  line 11: [side-tab] &::before — absolute 3px pseudo-element stripe (left: 0)\n    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.\n  line 55: [side-tab] &::before — absolute 7px pseudo-element stripe (left: 0)\n    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.\n  line 69: [side-tab] &::after — absolute 8px pseudo-element stripe (right: 0)\n    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.\n\n4 anti-patterns found.\n",
+  "exit": 2,
+  "signal": null,
+  "files": {}
+}

@@ -733,6 +733,47 @@ pub struct DesignSystem {
     pub has_font_sizes: bool,
 }
 
+impl DesignSystem {
+    /// The first colour DESIGN.md (or its sidecar) declares that is a purple
+    /// or violet, with the label it was declared under (`colors.primary`).
+    pub fn declared_purple(&self) -> Option<(&str, &Rgba)> {
+        self.allowed_color_keys.iter().find_map(|(_, entry)| {
+            impeccable_core::checks::rules::is_declared_purple(&entry.color)
+                .then(|| (entry.labels.first().map(String::as_str).unwrap_or(""), &entry.color))
+        })
+    }
+}
+
+/// Drop the purple/violet forms of ai-color-palette when the design system
+/// declares a purple: a project that chose purple on purpose does not get it
+/// reported as the AI palette tell (corpus decision
+/// r3-23-ai-color-palette-brand-hue). The cyan-on-dark forms stand. Returns
+/// how many findings were dropped.
+pub fn drop_declared_purple_findings(findings: &mut Vec<Finding>, ds: Option<&DesignSystem>) -> usize {
+    let Some(ds) = ds.filter(|ds| ds.present) else { return 0 };
+    if ds.declared_purple().is_none() {
+        return 0;
+    }
+    let before = findings.len();
+    findings.retain(|f| !impeccable_core::checks::rules::is_purple_palette_finding(&f.antipattern, &f.snippet));
+    before - findings.len()
+}
+
+/// The note the CLI prints when a scanned target's design system switched
+/// the purple check off: which file declared which purple.
+pub fn declared_purple_note(ds: &DesignSystem) -> Option<String> {
+    let (label, color) = ds.declared_purple()?;
+    let source = ds
+        .source_path
+        .as_deref()
+        .or(ds.sidecar_path.as_deref())
+        .unwrap_or("DESIGN.md");
+    Some(format!(
+        "Note: ai-color-palette's purple/violet check is off: {source} declares {label} ({}).",
+        impeccable_core::color::color_to_hex(Some(color))
+    ))
+}
+
 fn add_design_color(out: &mut DesignSystem, value: &str, label: Option<&str>) {
     let Some(parsed) = parse_design_color(value) else {
         return;
@@ -2337,6 +2378,55 @@ mod tests {
     }
 
     const DESIGN_MD: &str = "---\ntypography:\n  body:\n    fontFamily: \"Palatino, Georgia, serif\"\n---\n# Project A Design System\n";
+
+    fn ds_with(colors: serde_json::Value) -> DesignSystem {
+        let fm: Map<String, Value> = serde_json::from_value(serde_json::json!({ "colors": colors })).unwrap();
+        normalize_design_system(Some(&fm), None, Some("/p/DESIGN.md"), None, false)
+    }
+
+    fn palette(snippet: &str) -> Finding {
+        finding("ai-color-palette", "f.html", snippet, 0.0)
+    }
+
+    /// r3-23-ai-color-palette-brand-hue: a declared purple switches the
+    /// purple forms off and leaves the cyan forms and other rules alone.
+    #[test]
+    fn a_declared_purple_switches_the_purple_forms_off() {
+        let purple = ds_with(serde_json::json!({ "surface": "#ffffff", "primary": "#5c2d91" }));
+        assert_eq!(purple.declared_purple().map(|(label, _)| label), Some("colors.primary"));
+        assert_eq!(
+            declared_purple_note(&purple).as_deref(),
+            Some("Note: ai-color-palette's purple/violet check is off: /p/DESIGN.md declares colors.primary (#5c2d91).")
+        );
+        let mut findings = vec![
+            palette("Purple/violet text (#5c2d91) on heading"),
+            palette("text-purple-700 on heading"),
+            palette("from-violet-600 gradient"),
+            palette("Purple/violet accent colors detected"),
+            palette("Cyan neon text on dark background"),
+            finding("gradient-text", "f.html", "background-clip: text + gradient", 0.0),
+        ];
+        assert_eq!(drop_declared_purple_findings(&mut findings, Some(&purple)), 4);
+        let left: Vec<&str> = findings.iter().map(|f| f.snippet.as_str()).collect();
+        assert_eq!(left, vec!["Cyan neon text on dark background", "background-clip: text + gradient"]);
+
+        // Blue, grey and a desaturated mauve are not purples.
+        for colors in [
+            serde_json::json!({ "primary": "#1a4d8f" }),
+            serde_json::json!({ "primary": "#6b6b73" }),
+            serde_json::json!({ "primary": "#8a8290" }),
+        ] {
+            let ds = ds_with(colors);
+            assert!(ds.declared_purple().is_none());
+            let mut findings = vec![palette("text-purple-700 on heading")];
+            assert_eq!(drop_declared_purple_findings(&mut findings, Some(&ds)), 0);
+        }
+        // Violet-500 and a plum count.
+        assert!(ds_with(serde_json::json!({ "accent": "#8b5cf6" })).declared_purple().is_some());
+        assert!(ds_with(serde_json::json!({ "accent": "#7a2a6e" })).declared_purple().is_some());
+        let mut findings = vec![palette("text-purple-700 on heading")];
+        assert_eq!(drop_declared_purple_findings(&mut findings, None), 0);
+    }
 
     fn root_of(dir: &TempDir, rel: &str, home: &str) -> Option<DesignRoot> {
         find_design_root(&dir.join(rel), "/", home)

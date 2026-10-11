@@ -58,8 +58,19 @@ pub struct StaticDocument {
     placeholder_styles: HashMap<NodeId, StyleValues>,
     accent_dash: HashSet<NodeId>,
     pseudo_surface: HashMap<NodeId, Rgba>,
+    pseudo_picture: HashSet<NodeId>,
     selector_cache: RefCell<HashMap<String, Result<Selector, SelectorError>>>,
     unsupported_selectors: RefCell<Vec<String>>,
+    /// Elements some applied declaration gave a border radius.
+    radius_declared: HashSet<NodeId>,
+    /// Elements a radius the cascade could not apply may reach: a nested
+    /// rule, a skipped at-rule, a selector the matcher refuses.
+    radius_unseen: HashSet<NodeId>,
+    /// A radius the cascade could not apply names no element it can find,
+    /// so every element's corners are unknown.
+    radius_unseen_everywhere: bool,
+    /// The page links a stylesheet the engine did not read.
+    unread_stylesheet: bool,
 }
 
 impl std::fmt::Debug for StaticDocument {
@@ -178,8 +189,13 @@ impl StaticDocument {
             placeholder_styles: HashMap::new(),
             accent_dash: HashSet::new(),
             pseudo_surface: HashMap::new(),
+            pseudo_picture: HashSet::new(),
             selector_cache: RefCell::new(HashMap::new()),
             unsupported_selectors: RefCell::new(Vec::new()),
+            radius_declared: HashSet::new(),
+            radius_unseen: HashSet::new(),
+            radius_unseen_everywhere: false,
+            unread_stylesheet: false,
         }
     }
 
@@ -268,6 +284,20 @@ impl StaticDocument {
         }
     }
 
+    /// The ids of every element matching `selector`, or `None` when the
+    /// matcher refuses it. Unlike [`Self::query_selector_all`] a refusal is
+    /// not recorded for the parity report: the side-accent fail-safe probes
+    /// selectors the page never asked the matcher about.
+    pub fn select_ids_quiet(&self, selector: &str) -> Option<Vec<NodeId>> {
+        let sel = Selector::parse(selector).ok()?;
+        Some(
+            self.select_all_in(&sel, self.root().children())
+                .iter()
+                .map(|el| el.id())
+                .collect(),
+        )
+    }
+
     /// JS `document.querySelector(selector)`.
     pub fn query_selector(&self, selector: &str) -> Option<StaticElement<'_>> {
         match self.compile(selector) {
@@ -338,6 +368,31 @@ impl StaticDocument {
     }
     pub fn get_pseudo_surface(&self, node: NodeId) -> Option<Rgba> {
         self.pseudo_surface.get(&node).copied()
+    }
+    /// Mark a node whose `::before` or `::after` is stretched over it and
+    /// paints a raster image: a hero photo drawn by a pseudo-element.
+    pub fn set_pseudo_picture(&mut self, node: NodeId) {
+        self.pseudo_picture.insert(node);
+    }
+    pub fn has_pseudo_picture(&self, node: NodeId) -> bool {
+        self.pseudo_picture.contains(&node)
+    }
+    /// Record that an applied declaration gave `node` a border radius.
+    pub fn set_radius_declared(&mut self, node: NodeId) {
+        self.radius_declared.insert(node);
+    }
+    /// Record that a radius the cascade could not apply may reach `node`.
+    pub fn set_radius_unseen(&mut self, node: NodeId) {
+        self.radius_unseen.insert(node);
+    }
+    /// Record that a radius the cascade could not apply names no element it
+    /// can find, so no element's corners are known.
+    pub fn set_radius_unseen_everywhere(&mut self) {
+        self.radius_unseen_everywhere = true;
+    }
+    /// Record that the page links a stylesheet the engine did not read.
+    pub fn set_unread_stylesheet(&mut self) {
+        self.unread_stylesheet = true;
     }
 }
 
@@ -459,6 +514,23 @@ impl<'a> StaticElement<'a> {
             .map(|n| self.doc.wrap(n))
     }
 
+    /// JS `nextElementSibling`: the nearest following `tag`-typed sibling.
+    pub fn next_element_sibling(&self) -> Option<StaticElement<'a>> {
+        self.node
+            .next_siblings()
+            .find(node_is_plain_tag)
+            .map(|n| self.doc.wrap(n))
+    }
+
+    /// JS `firstElementChild`: the first `tag`-typed child node, read without
+    /// collecting the rest.
+    pub fn first_element_child(&self) -> Option<StaticElement<'a>> {
+        self.node
+            .children()
+            .find(node_is_plain_tag)
+            .map(|n| self.doc.wrap(n))
+    }
+
     /// JS `children`: `tag`-typed child nodes.
     pub fn children(&self) -> Vec<StaticElement<'a>> {
         self.node
@@ -562,6 +634,21 @@ impl<'a> StaticElement<'a> {
     /// The computed style (default when the cascade skipped this node).
     pub fn style(&self) -> &'a StyleValues {
         self.doc.get_style(self.node.id())
+    }
+
+    /// Whether an applied declaration gave this element a border radius.
+    pub fn radius_declared(&self) -> bool {
+        self.doc.radius_declared.contains(&self.node.id())
+    }
+
+    /// Whether a radius the cascade could not apply may reach this element.
+    pub fn radius_unseen(&self) -> bool {
+        self.doc.radius_unseen_everywhere || self.doc.radius_unseen.contains(&self.node.id())
+    }
+
+    /// Whether the page links a stylesheet the engine did not read.
+    pub fn page_has_unread_stylesheet(&self) -> bool {
+        self.doc.unread_stylesheet
     }
 }
 

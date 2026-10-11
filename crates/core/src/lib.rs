@@ -14,6 +14,8 @@
 
 pub mod browser;
 pub mod checks;
+pub mod script_errors;
+pub mod third_party;
 
 pub use impeccable_foundation::{
     color, constants, fdlibm_trig, findings, fonts, inline_ignores, js, js_ext_a, js_ext_b, page,

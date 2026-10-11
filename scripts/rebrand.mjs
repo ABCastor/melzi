@@ -511,6 +511,23 @@ export const UPSTREAM_REFS = [
   // substring, so the discriminator has to be the surrounding prose — which is
   // why every other entry here is a phrase rather than a token.
   "upstream's `skills/impeccable/` paths",
+  // Added 2026-10-11. The Apache-2.0 modification notices the public release added
+  // (file headers, the README and npm README licence lines) name the work we modified.
+  // Rebranding them rewrote "Modified from Impeccable" to "Modified from Melzi" and
+  // "a modified fork of Impeccable by Paul Bakaus" to "of Melzi by Paul Bakaus".
+  'Modified from Impeccable',
+  'modified fork of [Impeccable]',
+  'modified fork of Impeccable',
+  // The public docs also say what this fork does NOT take from upstream: its engine
+  // packages, its signing identity, its hosted verification protocol. Rebranded, each
+  // sentence claims those are Melzi's.
+  'upstream Impeccable',
+  "download Impeccable's engine",
+  "describes Impeccable's retained verification protocol",
+  // Upstream's site design kit (kinpaku), vendored into the component-review bundle. The
+  // bundle is built from ui/component-review/, which the rules do not reach, so a rename
+  // here makes the built asset disagree with its source (tests/component-review-bundle).
+  'Impeccable, so it is also how the site labels things',
 ];
 
 /**

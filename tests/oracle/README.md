@@ -69,7 +69,8 @@ machine-dependent fragments. Each is targeted at one script's output:
 
 Not covered on purpose: `palette` with no `--id` / `--from` / env seed (random),
 `concept-seed` against the live roll API, `generate-image` real mode,
-`serve-question --start` / blocking mode (opens a browser and binds a port),
+`serve-question --start` / blocking mode (opens a browser and binds a port;
+`--start` refusals that exit before spawning are covered),
 and unhandled-exception paths whose stack traces carry Node line numbers.
 
 ## Live-mode cases (`cases/live-*.mjs`, workspaces `live-*`)

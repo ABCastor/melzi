@@ -68,6 +68,43 @@
       margin-bottom: 16px;
     }
 
+    /* 6: Tailwind's /10 tint, which computes to an alpha of exactly 0.1 */
+    .icon-tint {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      background: rgba(40, 85, 189, 0.1);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    /* 7: a ring drawn by box-shadow, no fill and no border */
+    .icon-ring {
+      width: 56px; height: 56px;
+      border-radius: 14px;
+      box-shadow: 0 0 0 1px #cbd5e1;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    /* 8 and 9: Framer's shape. A transparent container around the tile, a
+       masked div as the icon, and the heading several wrappers down or the
+       tile behind a display: contents variant wrapper. */
+    .tile-container { width: 70px; height: 70px; margin-bottom: 24px; }
+    .icon-framer {
+      width: 70px; height: 70px;
+      border-radius: 15px;
+      background: #f8fafc;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .icon-mask {
+      width: 30px; height: 30px;
+      background: #0f172a;
+      -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%2210%22%2F%3E%3C%2Fsvg%3E");
+      mask-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%2210%22%2F%3E%3C%2Fsvg%3E");
+    }
+    .contents-variant { display: contents; }
+    .far-wrap { padding-top: 140px; }
+
     /* ── PASS cases ── */
 
     /* a: round avatar above name (border-radius: 50% — circle, not rounded square) */
@@ -175,6 +212,40 @@
         <h3>Emoji Inline Icon</h3>
         <p>The tile contains an emoji directly, no SVG child.</p>
       </div>
+
+      <div class="case">
+        <div class="icon-tint">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2855bd" stroke-width="1.5">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <h3>Tinted Tile</h3>
+        <p>The tile's fill is a primary colour at 10% alpha.</p>
+      </div>
+
+      <div class="case">
+        <div class="icon-ring">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/>
+          </svg>
+        </div>
+        <h3>Ring Tile</h3>
+        <p>A box-shadow ring draws the tile's edge.</p>
+      </div>
+
+      <div class="case">
+        <div class="tile-container">
+          <div class="icon-framer"><div class="icon-mask"></div></div>
+        </div>
+        <div><div><div><div><h3>Framer Card Heading</h3></div></div></div></div>
+        <p>The heading sits four wrappers down from the tile's sibling.</p>
+      </div>
+
+      <div class="case">
+        <div class="contents-variant"><div class="tile-container"><div class="icon-framer"><div class="icon-mask"></div></div></div></div>
+        <div><h3>Contents Wrapped Tile</h3></div>
+        <p>The tile hides behind a display: contents variant wrapper.</p>
+      </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════
@@ -239,6 +310,17 @@
         <div class="img-huge"></div>
         <h3>Huge Hero Image</h3>
         <p>The container is larger than the size cap.</p>
+      </div>
+
+      <!-- g: a tile before the heading's wrapper, but far above the heading -->
+      <div class="case">
+        <div class="icon-tint">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2855bd" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/>
+          </svg>
+        </div>
+        <div class="far-wrap"><h3>Far From The Tile</h3></div>
+        <p>Climbing past a wrapper needs the tile just above the heading.</p>
       </div>
     </div>
   </div>
