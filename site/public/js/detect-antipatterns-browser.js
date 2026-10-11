@@ -1,6 +1,7 @@
 /**
  * Anti-Pattern Browser Detector for Melzi
  * Copyright (c) 2026 Paul Bakaus
+ * Modified from Impeccable: renamed for Melzi; see NOTICE.md.
  * SPDX-License-Identifier: Apache-2.0
  *
  * GENERATED -- do not edit. Source: cli/engine/browser/injected/index.mjs
