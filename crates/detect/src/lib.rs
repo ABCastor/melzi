@@ -69,9 +69,12 @@ Commands:
   help                             List all available skills and commands
   install                          Install an explicit local IMPECCABLE_BUNDLE_PATH bundle
   link                             Symlink skills from a local checkout or submodule
-  update                           Update skills to the latest version
-  check                            Check if skill updates are available
+  update                           Refresh skills from an explicit local bundle
+  check                            Compare skills with an explicit local bundle
   telemetry off|on|status          Turn the roll API's anonymous usage data off or on, or show it
+
+Remote skill installation and updates are unavailable.
+Local build and installation: https://github.com/ABCastor/melzi#build-and-use
 
 Options:
   --help       Show this help message

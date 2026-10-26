@@ -361,6 +361,14 @@ pub fn download_and_extract_bundle(sys: &Sys) -> Result<String, BundleError> {
     if let Some(forced) = test_seam::take() {
         return forced;
     }
+    download_bundle_with(sys, std::env::current_exe().ok().as_deref(), &mut ureq_fetch)
+}
+
+fn download_bundle_with(
+    sys: &Sys,
+    executable: Option<&std::path::Path>,
+    fetch: &mut dyn FnMut(&str) -> Result<FetchResponse, String>,
+) -> Result<String, BundleError> {
     if let Some(local) = sys.env.get("IMPECCABLE_BUNDLE_PATH").filter(|v| !v.is_empty()) {
         return copy_or_extract_local_bundle(sys, local).map_err(BundleError::Local);
     }
@@ -370,14 +378,14 @@ pub fn download_and_extract_bundle(sys: &Sys) -> Result<String, BundleError> {
     // or a build-machine path embedded by CARGO_MANIFEST_DIR.
     let own_bundle = executable.and_then(own_checkout_bundle);
     if let Some(bundle) = own_bundle.as_ref().filter(|p| p.exists()) {
-        return copy_or_extract_local_bundle(sys, &bundle.to_string_lossy());
+        return copy_or_extract_local_bundle(sys, &bundle.to_string_lossy()).map_err(BundleError::Local);
     }
     if !FORK_PUBLISHES_BUNDLES {
         let destination = own_bundle.map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_else(|| "dist/universal.zip in this fork's checkout".into());
-        return Err(format!(
+        return Err(BundleError::Local(format!(
             "ForkBundleUnavailable: no local bundle found, and this fork does not publish one.\n  Build it first: bun run build:release (writes {destination})\n  Or point at one: IMPECCABLE_BUNDLE_PATH=/path/to/universal.zip\n  Refusing to fall back to {API_BASE}, which serves the upstream project this was forked from, not this tool."
-        ));
+        )));
     }
     download_remote_bundle(sys, fetch, bundle_signature::trusted_keys())
 }
@@ -1159,12 +1167,12 @@ mod tests {
         assert_eq!(util::read_text(&format!("{staging}/origin.txt")).unwrap(), "wrong-cwd");
         util::rm_rf(&staging);
         overridden.env.insert("IMPECCABLE_BUNDLE_PATH".into(), "missing.zip".into());
-        let error = download_bundle_with(&overridden, Some(&executable), &mut fetch).unwrap_err();
+        let error = download_bundle_with(&overridden, Some(&executable), &mut fetch).unwrap_err().to_string();
         assert!(error.starts_with("Local bundle not found:"), "{error}");
 
         std::fs::remove_file(&own_bundle).unwrap();
         for executable in [Some(executable.as_path()), None] {
-            let error = download_bundle_with(&sys, executable, &mut fetch).unwrap_err();
+            let error = download_bundle_with(&sys, executable, &mut fetch).unwrap_err().to_string();
             assert!(error.starts_with("ForkBundleUnavailable:"), "{error}");
             assert!(error.contains("bun run build:release"), "{error}");
             assert!(error.contains("IMPECCABLE_BUNDLE_PATH"), "{error}");

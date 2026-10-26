@@ -13,7 +13,10 @@ use crate::config::{
     filter_detection_findings, normalize_ignore_rule, read_detection_config, should_ignore_detection_file,
     DetectionConfig,
 };
-use crate::design_system::{load_design_system_for_target, DesignSystemCache};
+use crate::design_system::{
+    design_system_start_dir, find_design_root, load_design_system_for_target, parse_frontmatter,
+    resolve_design_md_path, DesignSystemCache,
+};
 use crate::detect_text::{detect_text, ext_from_file_path, TextOptions};
 use crate::project_tokens::{may_need_tokens, ProjectTokens};
 use crate::engines::{EngineError, Engines, ScanOptions};

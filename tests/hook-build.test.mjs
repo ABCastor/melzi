@@ -171,7 +171,7 @@ describe('hook manifest builders', () => {
     assert.equal(manifest.hooks.stop, undefined);
     assert.equal(manifest.hooks.sessionStart, undefined);
     assert.equal(afterEdit.matcher, '^Write$');
-    expectCommand(afterEdit.command, '.cursor/skills/impeccable/scripts');
+    expectCommand(afterEdit.command, '.cursor/skills/melzi/scripts');
     assert.equal(afterEdit.timeout, 5);
   });
 
@@ -319,11 +319,11 @@ describe('generated hook artifacts in repo', { skip: SYNCED ? false : 'generated
     assert.ok(['postToolUse', 'preToolUse'].includes(event), event);
     expectCommand(
       manifest.hooks[event][0].command,
-      '.cursor/skills/impeccable/scripts',
+      '.cursor/skills/melzi/scripts',
       event === 'postToolUse' ? 'hook' : 'hook-before-edit',
     );
-    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.cursor/skills/impeccable/scripts/impeccable')));
-    assert.equal(fs.existsSync(path.join(REPO_ROOT, '.cursor/skills/impeccable/scripts/hook-before-edit.mjs')), false);
+    assert.ok(fs.existsSync(path.join(REPO_ROOT, '.cursor/skills/melzi/scripts/impeccable')));
+    assert.equal(fs.existsSync(path.join(REPO_ROOT, '.cursor/skills/melzi/scripts/hook-before-edit.mjs')), false);
   });
 
   it('Codex project hooks reference the launcher in the .codex skill payload', () => {

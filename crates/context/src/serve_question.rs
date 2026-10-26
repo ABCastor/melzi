@@ -1715,12 +1715,12 @@ pub fn run(argv: &[String], io: &mut Io) -> i32 {
                     // covers the framed copy; this header covers the same URL opened as a
                     // top-level tab, where it would otherwise run with the decision page's
                     // origin and could read the key and nonce and forge the answer.
-                    let resp = tiny_http::Response::from_data(bytes)
-                        .with_header(tiny_http::Header::from_bytes("content-type", "text/html; charset=utf-8").unwrap())
-                        .with_header(tiny_http::Header::from_bytes("content-security-policy", "sandbox allow-scripts").unwrap());
-                    let _ = request.respond(resp);
+                    request.respond(&Response::new(200)
+                        .header("content-type", "text/html; charset=utf-8")
+                        .header("content-security-policy", "sandbox allow-scripts")
+                        .bytes(bytes));
                 } else {
-                    let _ = request.respond(tiny_http::Response::empty(404));
+                    request.respond(&Response::new(404));
                 }
                 continue;
             }
@@ -1773,7 +1773,7 @@ pub fn run(argv: &[String], io: &mut Io) -> i32 {
                 // page's nonce too, for the reason /answer does: a framed screen can POST.
                 let parsed = serde_json::from_str::<Value>(&body).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
                 if st.reject_answer_nonce(&parsed) {
-                    let _ = request.respond(tiny_http::Response::empty(403));
+                    request.respond(&Response::new(403));
                     continue;
                 }
                 let value = serde_json::from_str::<Value>(&body).ok().and_then(|v| v.get("value").and_then(|x| x.as_str()).map(|s| s.to_string()));
@@ -1797,14 +1797,13 @@ pub fn run(argv: &[String], io: &mut Io) -> i32 {
                 request.respond(&ok_resp());
                 continue;
             }
-            request.respond(&ok_resp());
-            // /answer
+            // /answer: the upstream key/origin gate has already run.
             let parsed = serde_json::from_str::<Value>(&body).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
             if st.reject_answer_nonce(&parsed) {
-                let _ = request.respond(tiny_http::Response::empty(403));
+                request.respond(&Response::new(403));
                 continue;
             }
-            let _ = request.respond(ok_resp());
+            request.respond(&ok_resp());
             let option_id = parsed.get("optionId").cloned().unwrap_or(Value::Null);
             let chosen = st.options.iter().find(|o| o.get("id") == Some(&option_id) && !option_id.is_null()).cloned();
             let is_reroll = option_id.as_str() == Some("reroll");

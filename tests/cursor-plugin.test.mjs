@@ -68,7 +68,7 @@ describe('Cursor native plugin', () => {
     const result = spawnSync('sh', ['-c', command], { cwd: root, input: '{"tool_name":"Edit"}\n', encoding: 'utf8' });
     assert.equal(result.status, 2, result.stderr);
     assert.equal(result.stdout, `${fs.realpathSync(root)}\nhook\n{"tool_name":"Edit"}\n`);
-    assert.match(buildCursorHooksManifest().hooks.postToolUse[0].command, /\.cursor\/skills\/impeccable/);
+    assert.match(buildCursorHooksManifest().hooks.postToolUse[0].command, /\.cursor\/skills\/melzi/);
   });
 
   it('does not add path prose to agents that do not use scripts', () => {
