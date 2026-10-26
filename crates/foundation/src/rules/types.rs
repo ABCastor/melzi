@@ -302,6 +302,14 @@ pub struct ColorOpts {
     /// as they recorded.
     #[serde(default)]
     pub same_color_surface_is_unread: bool,
+    /// The adapter's knowledge that the glyphs paint no colour of their own:
+    /// a transparent text fill (`-webkit-text-fill-color`), or an ancestor
+    /// whose background is clipped to the text, which paints them instead
+    /// (resend.com's `em` inside a gradient-clipped `h1`). `color` is not
+    /// what a reader sees, so no contrast verdict is taken on it, on any
+    /// path. The recorded call vectors predate the field and leave it false.
+    #[serde(default)]
+    pub ink_unread: bool,
 }
 
 // ─── checkHoverContrast ─────────────────────────────────────────────────────

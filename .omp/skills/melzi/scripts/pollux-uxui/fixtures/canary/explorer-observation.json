@@ -1,0 +1,30 @@
+{
+  "actionLog": [
+    {"op":"navigate","url":"http://localhost:8798/fixture-sanitized.html"},
+    {"op":"click","selector":"#save","description":"Save changes button"}
+  ],
+  "channels": {
+    "a11yRefCount": 12,
+    "network": [
+      {"method":"GET","url":"http://localhost:8798/fixture-sanitized.html","status":200},
+      {"method":"GET","url":"http://localhost:8798/assets/avatar.png","status":404},
+      {"method":"POST","url":"http://localhost:8798/api/save","status":501}
+    ],
+    "consoleCount": 4,
+    "pageErrors": [
+      {
+        "type": "error",
+        "message": "Uncaught ReferenceError: reportAnalyticsBoot is not defined",
+        "stack": "ReferenceError: reportAnalyticsBoot is not defined\n    at http://localhost:8798/fixture-sanitized.html:155:3"
+      },
+      {
+        "type": "resource-error",
+        "message": "resource failed: http://localhost:8798/assets/avatar.png",
+        "stack": null
+      }
+    ],
+    "screenshotPath": ".playwright-mcp/page-2026-07-15T13-03-12-314Z.png",
+    "bbox": {"x":363,"y":381,"w":120.734375,"h":34},
+    "saveStatus": 501
+  }
+}

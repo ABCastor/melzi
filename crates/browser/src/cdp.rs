@@ -32,6 +32,10 @@ use tungstenite::{Message, WebSocket};
 const LAUNCH_TIMEOUT: Duration = Duration::from_secs(30);
 /// puppeteer's per-command `protocolTimeout` (180 s).
 const PROTOCOL_TIMEOUT: Duration = Duration::from_secs(180);
+/// How long a screenshot of an attached page may take. A window that paints
+/// no frames (hidden on some systems) never answers one, and the scan of
+/// someone else's app should not sit on it for the protocol timeout.
+const ATTACHED_SCREENSHOT_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug, Clone)]
 pub struct CdpError {
@@ -55,7 +59,8 @@ impl From<String> for CdpError {
 pub type CdpResult<T> = Result<T, CdpError>;
 
 /// puppeteer's `ChromeLauncher.defaultArgs()` (headless, no extensions) plus
-/// the user args, in the order puppeteer emits them. `--remote-debugging-port`
+/// the user args, in the order puppeteer emits them, with one feature more
+/// switched off (see `--disable-features` below). `--remote-debugging-port`
 /// and `--user-data-dir` are appended by the launcher afterwards, as
 /// puppeteer's `computeLaunchArguments` does.
 pub fn default_chrome_args(user_args: &[String], dangerous_no_sandbox: bool) -> Vec<String> {
@@ -86,7 +91,13 @@ pub fn default_chrome_args(user_args: &[String], dangerous_no_sandbox: bool) -> 
         "--no-first-run",
         "--password-store=basic",
         "--use-mock-keychain",
-        "--disable-features=Translate,AcceptCHFrame,MediaRouter,OptimizationHints,WebUIReloadButton,ProcessPerSiteUpToMainFrameThreshold,IsolateSandboxedIframes",
+        // puppeteer's list plus `DeviceBoundSessions`. With that feature on,
+        // Chrome holds every request of a new profile until it has created
+        // and read the profile's bound-session store, which comes after the
+        // cookie store and has no protocol call to wait on. On a busy disk
+        // that took over 15 s, out of the first navigation's timeout. A
+        // throwaway profile has no bound session to honour.
+        "--disable-features=Translate,AcceptCHFrame,MediaRouter,OptimizationHints,WebUIReloadButton,ProcessPerSiteUpToMainFrameThreshold,IsolateSandboxedIframes,DeviceBoundSessions",
         "--enable-features=PdfOopif",
     ]
     .iter()
@@ -107,11 +118,15 @@ pub fn default_chrome_args(user_args: &[String], dangerous_no_sandbox: bool) -> 
 }
 
 /// A running headless browser: the process, its temp profile, and the
-/// browser-level CDP connection.
+/// browser-level CDP connection. A browser reached with [`Browser::connect`]
+/// (`detect --cdp`) belongs to someone else: it has no process or profile
+/// here, and closing it only drops the connection.
 pub struct Browser {
-    child: Child,
-    user_data_dir: PathBuf,
+    child: Option<Child>,
+    user_data_dir: Option<PathBuf>,
     conn: Connection,
+    /// The DevTools websocket URL this connection was opened on.
+    ws_url: String,
     /// Sessions of `worker` targets whose exceptions count as page errors,
     /// keyed by session id → owning page session id.
     worker_owner: HashMap<String, String>,
@@ -244,7 +259,7 @@ impl Browser {
                 )));
             }
         };
-        let mut conn = match Connection::connect(&ws_url) {
+        let mut conn = match Connection::connect(&ws_url, LAUNCH_TIMEOUT) {
             Ok(c) => c,
             Err(e) => {
                 let _ = child.kill();
@@ -262,40 +277,120 @@ impl Browser {
         // timeout, so a navigation deadline measures only the navigation.
         let _ = conn.send(None, "Storage.getCookies", json!({}), PROTOCOL_TIMEOUT);
         Ok(Browser {
-            child,
-            user_data_dir,
+            child: Some(child),
+            user_data_dir: Some(user_data_dir),
             conn,
+            ws_url,
             worker_owner: HashMap::new(),
         })
     }
 
+    /// Connect to a browser someone else runs, at its DevTools websocket
+    /// (`/devtools/browser/<id>`). Nothing is launched, and [`Browser::close`]
+    /// leaves the browser running.
+    pub fn connect(ws_url: &str) -> CdpResult<Browser> {
+        let conn = Connection::connect(ws_url, Duration::from_secs(10))?;
+        Ok(Browser {
+            child: None,
+            user_data_dir: None,
+            conn,
+            ws_url: ws_url.to_string(),
+            worker_owner: HashMap::new(),
+        })
+    }
+
+    /// The DevTools websocket URL this connection uses. For a launched
+    /// browser its port is the one Chrome picked for `--remote-debugging-port=0`.
+    pub fn ws_url(&self) -> &str {
+        &self.ws_url
+    }
+
     /// `browser.close()`: `Browser.close`, wait for exit, remove the temp
-    /// profile.
+    /// profile. On a browser reached with [`Browser::connect`] it closes the
+    /// connection and nothing else.
     pub fn close(mut self) {
+        if self.child.is_none() {
+            let _ = self.conn.ws.close(None);
+            let _ = self.conn.ws.flush();
+            return;
+        }
         let _ = self
             .conn
             .send(None, "Browser.close", json!({}), Duration::from_secs(5));
         let deadline = Instant::now() + Duration::from_secs(5);
-        loop {
-            match self.child.try_wait() {
-                Ok(Some(_)) => break,
-                Ok(None) if Instant::now() < deadline => {
-                    std::thread::sleep(Duration::from_millis(25))
+        if let Some(child) = self.child.as_mut() {
+            loop {
+                match child.try_wait() {
+                    Ok(Some(_)) => break,
+                    Ok(None) if Instant::now() < deadline => {
+                        std::thread::sleep(Duration::from_millis(25))
+                    }
+                    _ => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        break;
+                    }
                 }
-                _ => {
-                    let _ = self.child.kill();
-                    let _ = self.child.wait();
+            }
+        }
+        if let Some(dir) = self.user_data_dir.as_ref() {
+            for _ in 0..10 {
+                if std::fs::remove_dir_all(dir).is_ok() || !dir.exists() {
                     break;
                 }
+                std::thread::sleep(Duration::from_millis(100));
             }
         }
-        for _ in 0..10 {
-            if std::fs::remove_dir_all(&self.user_data_dir).is_ok() || !self.user_data_dir.exists()
-            {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(100));
+    }
+
+    /// `Target.getTargets`: every target the browser knows, as CDP
+    /// `TargetInfo` objects.
+    pub fn targets(&mut self) -> CdpResult<Vec<Value>> {
+        let res = self.conn.send(None, "Target.getTargets", json!({}), PROTOCOL_TIMEOUT)?;
+        Ok(res.get("targetInfos").and_then(Value::as_array).cloned().unwrap_or_default())
+    }
+
+    /// Attach to a page someone else opened, without changing it: no new
+    /// document scripts, no network or auto-attach setup, and
+    /// [`Page::close`] detaches instead of closing the target. Every
+    /// evaluation runs in an isolated world on the page's current document,
+    /// so the page's own scripts never see the scan's globals and the scan
+    /// never sees what the page did to its built-ins. A navigation ends the
+    /// world, and the next evaluation fails instead of reading the new
+    /// document.
+    pub fn attach_page(&mut self, target_id: &str) -> CdpResult<Page<'_>> {
+        let attached = self.conn.send(
+            None,
+            "Target.attachToTarget",
+            json!({ "targetId": target_id, "flatten": true }),
+            PROTOCOL_TIMEOUT,
+        )?;
+        let session_id = attached
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| CdpError::new("Target.attachToTarget returned no sessionId"))?
+            .to_string();
+        let mut page = Page {
+            browser: self,
+            session_id,
+            target_id: target_id.to_string(),
+            frames: HashMap::new(),
+            main_frame_id: String::new(),
+            page_errors: Vec::new(),
+            swapped: false,
+            same_document_navigation: false,
+            iframe_sessions: HashSet::new(),
+            main_document_response: None,
+            response_capture: None,
+            execution_contexts: HashMap::new(),
+            attached: true,
+            default_world: None,
+        };
+        if let Err(e) = page.initialize_attached() {
+            page.close();
+            return Err(e);
         }
+        Ok(page)
     }
 
     /// Browser-reported capture environment, independent of page script overrides.
@@ -342,6 +437,8 @@ impl Browser {
             main_document_response: None,
             response_capture: None,
             execution_contexts: HashMap::new(),
+            attached: false,
+            default_world: None,
         };
         page.initialize()?;
         Ok(page)
@@ -350,12 +447,17 @@ impl Browser {
 
 impl Drop for Browser {
     fn drop(&mut self) {
-        // Belt and braces for the error paths that skip `close()`.
-        if let Ok(None) = self.child.try_wait() {
-            let _ = self.child.kill();
-            let _ = self.child.wait();
+        // Belt and braces for the error paths that skip `close()`. A browser
+        // this process did not launch is never touched.
+        if let Some(child) = self.child.as_mut() {
+            if let Ok(None) = child.try_wait() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
         }
-        let _ = std::fs::remove_dir_all(&self.user_data_dir);
+        if let Some(dir) = self.user_data_dir.as_ref() {
+            let _ = std::fs::remove_dir_all(dir);
+        }
     }
 }
 
@@ -378,12 +480,15 @@ struct Connection {
 }
 
 impl Connection {
-    fn connect(ws_url: &str) -> CdpResult<Connection> {
+    fn connect(ws_url: &str, timeout: Duration) -> CdpResult<Connection> {
         let parsed = url_host_port(ws_url)
             .ok_or_else(|| CdpError::new(format!("Unexpected DevTools endpoint: {ws_url}")))?;
-        let stream = TcpStream::connect(&parsed).map_err(|e| {
+        let stream = connect_tcp(&parsed, timeout).map_err(|e| {
             CdpError::new(format!("Could not connect to the browser at {ws_url}: {e}"))
         })?;
+        // The handshake reads under a deadline too: a port that accepts and
+        // never answers (not a DevTools server) fails instead of hanging.
+        let _ = stream.set_read_timeout(Some(timeout));
         let _ = stream.set_nodelay(true);
         let request = ws_url
             .into_client_request()
@@ -579,6 +684,20 @@ impl Connection {
     }
 }
 
+/// `TcpStream::connect` over every address `host:port` resolves to, each
+/// with a deadline.
+pub(crate) fn connect_tcp(host_port: &str, timeout: Duration) -> std::io::Result<TcpStream> {
+    use std::net::ToSocketAddrs;
+    let mut last = std::io::Error::new(std::io::ErrorKind::NotFound, "no address");
+    for addr in host_port.to_socket_addrs()? {
+        match TcpStream::connect_timeout(&addr, timeout) {
+            Ok(s) => return Ok(s),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
+}
+
 fn url_host_port(ws_url: &str) -> Option<String> {
     let rest = ws_url.strip_prefix("ws://")?;
     let host_port = rest.split('/').next()?;
@@ -622,10 +741,18 @@ pub struct Page<'a> {
     main_document_response: Option<Value>,
     response_capture: Option<crate::response_capture::ResponseCapture>,
     execution_contexts: HashMap<i64, String>,
+    /// A page this process attached to rather than opened
+    /// ([`Browser::attach_page`]): screenshots never resize its view, no
+    /// evaluation counts as a user gesture, and closing detaches.
+    attached: bool,
+    /// Where [`Page::evaluate`] runs when set: the isolated world an
+    /// attached page is scanned in.
+    default_world: Option<IsolatedWorld>,
 }
 
 /// An opaque, document-bound isolated execution context. Never falls back to
 /// the page world or a newly navigated document.
+#[derive(Clone)]
 pub struct IsolatedWorld {
     unique_id: String,
     context_id: i64,
@@ -643,11 +770,12 @@ pub enum EvalOutcome {
 
 impl<'a> Page<'a> {
     fn send(&mut self, method: &str, params: Value) -> CdpResult<Value> {
+        self.send_with_timeout(method, params, PROTOCOL_TIMEOUT)
+    }
+
+    fn send_with_timeout(&mut self, method: &str, params: Value, timeout: Duration) -> CdpResult<Value> {
         let sid = self.session_id.clone();
-        let out = self
-            .browser
-            .conn
-            .send(Some(&sid), method, params, PROTOCOL_TIMEOUT);
+        let out = self.browser.conn.send(Some(&sid), method, params, timeout);
         self.pump_events();
         out
     }
@@ -720,6 +848,10 @@ impl<'a> Page<'a> {
             self.handle_frame_tree(ft, None);
         }
         self.send("Page.setLifecycleEventsEnabled", json!({ "enabled": true }))?;
+        // Before any page script on every document this page loads: keep the
+        // built-ins the snapshot producer uses where page script cannot
+        // replace them (`natives_prelude_script`).
+        self.send("Page.addScriptToEvaluateOnNewDocument", json!({ "source": natives_prelude_script() }))?;
         // URL mode injects only the snapshot producer (plain JS) and runs the
         // rules natively in this process over `SnapshotDom` (triage D2; see
         // WASM-BUNDLE.md in the detector repo): no WebAssembly is compiled next
@@ -736,6 +868,55 @@ impl<'a> Page<'a> {
             json!({ "autoAttach": true, "waitForDebuggerOnStart": true, "flatten": true }),
         )?;
         Ok(())
+    }
+
+    /// The non-owning setup [`Browser::attach_page`] does: the frame tree
+    /// with the current document's loader, Runtime for execution contexts
+    /// and the page's errors, then an isolated world on that document as the
+    /// default for every evaluation. Domains enabled here are this session's
+    /// and end with it.
+    fn initialize_attached(&mut self) -> CdpResult<()> {
+        self.send("Page.enable", json!({}))?;
+        let tree = self.send("Page.getFrameTree", json!({}))?;
+        let Some(ft) = tree.get("frameTree") else {
+            return Err(CdpError::new("the page has no frame tree"));
+        };
+        self.handle_frame_tree(ft, None);
+        let loader = ft.pointer("/frame/loaderId").and_then(Value::as_str).unwrap_or("").to_string();
+        let main = self.main_frame_id.clone();
+        if let Some(frame) = self.frames.get_mut(&main) {
+            frame.loader_id = loader;
+        }
+        self.send("Runtime.enable", json!({}))?;
+        let world = self.create_isolated_world()?;
+        self.default_world = Some(world);
+        Ok(())
+    }
+
+    /// Whether this page was attached to ([`Browser::attach_page`]) rather
+    /// than opened.
+    pub fn is_attached(&self) -> bool {
+        self.attached
+    }
+
+    /// `Page.getLayoutMetrics`: the visual viewport's document position and
+    /// size, `(x, y, width, height)` in CSS pixels, and the layout
+    /// viewport's size.
+    pub fn viewport_metrics(&mut self) -> CdpResult<((f64, f64, f64, f64), (f64, f64))> {
+        let res = self.send("Page.getLayoutMetrics", json!({}))?;
+        let num = |v: Option<&Value>, k: &str| v.and_then(|v| v.get(k)).and_then(Value::as_f64);
+        let visual = res.get("cssVisualViewport").or_else(|| res.get("visualViewport"));
+        let layout = res.get("cssLayoutViewport").or_else(|| res.get("layoutViewport"));
+        let missing = || CdpError::new("Page.getLayoutMetrics returned no viewport");
+        Ok((
+            (
+                num(visual, "pageX").ok_or_else(missing)?,
+                num(visual, "pageY").ok_or_else(missing)?,
+                num(visual, "clientWidth").ok_or_else(missing)?,
+                num(visual, "clientHeight").ok_or_else(missing)?,
+            ),
+            (num(layout, "clientWidth").ok_or_else(missing)?, num(layout, "clientHeight").ok_or_else(missing)?),
+        ))
     }
 
     fn handle_frame_tree(&mut self, tree: &Value, parent: Option<String>) {
@@ -1316,6 +1497,16 @@ impl<'a> Page<'a> {
         for candidate in retained {
             if !candidates.contains(candidate) { candidates.push(candidate.clone()); }
         }
+        self.native_pseudo_boxes(world, &candidates)
+    }
+
+    /// Native layout boxes of the named generated boxes (`{index, pseudo}`,
+    /// `pseudo` without colons, `index` in querySelectorAll order): the bounds
+    /// of the border quad, transforms included, in viewport pixels. A generated
+    /// box with no layout box of its own reports `box: null`; one that is not
+    /// generated at all is not listed.
+    pub fn native_pseudo_boxes(&mut self, world: &IsolatedWorld, candidates: &[Value]) -> CdpResult<Value> {
+        self.validate_world(world)?;
         if candidates.len()>256 {return Err(CdpError::new("capture pseudo image candidates exceed bound"));}
         if candidates.is_empty() {return Ok(json!([]));}
         let tree = self.send("DOM.getDocument", json!({"depth":-1}))?;
@@ -1392,7 +1583,13 @@ impl<'a> Page<'a> {
 
     /// `page.evaluate(<expression string>)`: `Runtime.evaluate` with
     /// `awaitPromise` + `returnByValue`, in the main world.
+    /// On an attached page it runs in the page's isolated world instead
+    /// ([`Browser::attach_page`]).
     pub fn evaluate(&mut self, expression: &str) -> CdpResult<EvalOutcome> {
+        if let Some(world) = self.default_world.clone() {
+            self.validate_world(&world)?;
+            return self.evaluate_with_context(expression, Some(&world.unique_id));
+        }
         self.evaluate_with_context(expression, None)
     }
 
@@ -1401,7 +1598,19 @@ impl<'a> Page<'a> {
         expression: &str,
         unique_context: Option<&str>,
     ) -> CdpResult<EvalOutcome> {
-        let mut params = json!({"expression":expression,"returnByValue":true,"awaitPromise":true,"userGesture":true});
+        // The main world is the page's: run the expression with the
+        // built-ins the prelude stashed (`in_natives_scope`). An isolated
+        // world has its own untouched globals.
+        let scoped;
+        let expression = if unique_context.is_none() {
+            scoped = in_natives_scope(expression);
+            scoped.as_str()
+        } else {
+            expression
+        };
+        // An attached page keeps its own user-activation state: a gesture
+        // granted here would outlive the scan (autoplay, popups, fullscreen).
+        let mut params = json!({"expression":expression,"returnByValue":true,"awaitPromise":true,"userGesture":!self.attached});
         if let Some(id) = unique_context {
             params["uniqueContextId"] = json!(id);
         }
@@ -1484,15 +1693,20 @@ impl<'a> Page<'a> {
             (y, height)
         };
         let round = |v: f64| impeccable_core::js::math_round(v);
-        let res = self.send(
+        let timeout = if self.attached { ATTACHED_SCREENSHOT_TIMEOUT } else { PROTOCOL_TIMEOUT };
+        let res = self.send_with_timeout(
             "Page.captureScreenshot",
             json!({
                 "format": "png",
                 "optimizeForSpeed": false,
                 "fromSurface": true,
                 "clip": { "x": round(x), "y": round(y), "width": round(width), "height": round(height), "scale": 1 },
-                "captureBeyondViewport": true,
+                // A beyond-viewport capture lays the page out at the size of
+                // the clip for the shot, which an attached app's window would
+                // show: it reads what is on screen instead.
+                "captureBeyondViewport": !self.attached,
             }),
+            timeout,
         )?;
         Ok(res
             .get("data")
@@ -1525,7 +1739,7 @@ impl<'a> Page<'a> {
                 "quality": quality.min(100),
                 "fromSurface": true,
                 "clip": { "x": x, "y": y, "width": width.round(), "height": height.round(), "scale": 1 },
-                "captureBeyondViewport": true,
+                "captureBeyondViewport": !self.attached,
             }),
         )?;
         Ok(res
@@ -1593,15 +1807,25 @@ impl<'a> Page<'a> {
     }
 
     /// `page.close()`: `Target.closeTarget`, errors swallowed like the JS
-    /// `page.close().catch(() => {})`.
+    /// `page.close().catch(() => {})`. An attached page is detached from
+    /// instead, and stays open.
     pub fn close(self) {
-        let target_id = self.target_id.clone();
-        let _ = self.browser.conn.send(
-            None,
-            "Target.closeTarget",
-            json!({ "targetId": target_id }),
-            Duration::from_secs(10),
-        );
+        if self.attached {
+            let _ = self.browser.conn.send(
+                None,
+                "Target.detachFromTarget",
+                json!({ "sessionId": self.session_id }),
+                Duration::from_secs(10),
+            );
+        } else {
+            let target_id = self.target_id.clone();
+            let _ = self.browser.conn.send(
+                None,
+                "Target.closeTarget",
+                json!({ "targetId": target_id }),
+                Duration::from_secs(10),
+            );
+        }
         // Detached sessions may keep queued events; drop anything stale.
         self.browser.conn.events.clear();
         // Interception (origin-scoped auth) dies with the page; a shared
@@ -2230,6 +2454,68 @@ mod tests {
         assert_eq!(with.last().unwrap(), "--no-sandbox");
         assert!(with.contains(&"about:blank".to_string()));
     }
+
+    /// Chrome reads only the last `--disable-features`, so the bound-session
+    /// switch has to sit in the one list the launcher passes.
+    #[test]
+    fn bound_sessions_are_off_in_the_only_feature_list() {
+        let args = default_chrome_args(&[], false);
+        let lists: Vec<&String> = args
+            .iter()
+            .filter(|a| a.starts_with("--disable-features="))
+            .collect();
+        assert_eq!(lists.len(), 1);
+        let features = lists[0].trim_start_matches("--disable-features=");
+        assert!(features.split(',').any(|f| f == "DeviceBoundSessions"));
+    }
+}
+
+/// `browser-bundle/05-natives.js`: binds the built-ins the page JS uses
+/// (`Map`, `Set`, `Array.from`, `JSON.stringify`, ...) from
+/// `window.__impeccableNatives` when that stash exists, else from the
+/// current globals.
+pub const NATIVES_JS: &str = include_str!("../../../browser-bundle/05-natives.js");
+
+/// The new-document script [`Page`] registers for every document, which runs
+/// before the page's own scripts: it builds the natives from the untouched
+/// globals and stashes them on `window.__impeccableNatives`, non-enumerable
+/// and read-only, so a page that declares its own global `Map` (work24.go.kr)
+/// or reassigns `Array.from` cannot reach the capture.
+pub fn natives_prelude_script() -> String {
+    format!(
+        "(function(){{\n{NATIVES_JS}\ntry {{ Reflect.defineProperty(window, '__impeccableNatives', {{ value: __impeccableNatives, enumerable: false, writable: false, configurable: false }}); }} catch (e) {{}}\n}})()"
+    )
+}
+
+/// The names `browser-bundle/05-natives.js` binds, in its order. A unit test
+/// keeps the two lists equal.
+pub const NATIVE_NAMES: &[&str] = &[
+    "Map", "Set", "WeakMap", "WeakSet", "Error", "URL", "Image", "ResizeObserver", "String",
+    "Boolean", "Array", "Object", "Number", "Promise", "JSON", "Math", "Reflect", "CSS",
+    "performance", "getComputedStyle", "matchMedia", "setTimeout", "clearTimeout",
+    "requestAnimationFrame", "parseFloat",
+];
+
+/// `expression` inside a block whose `const`s shadow the built-ins with the
+/// ones the new-document prelude stashed, so the engine's own page scripts
+/// (the scroll probe, the full-page screenshot, consent and overlay
+/// handling) build a native `Map` on a page that declared its own
+/// (work24.go.kr). Without a stash (a document loaded before the prelude was
+/// registered) the names read the page's globals as before.
+///
+/// A block's completion value is its last statement's, so an expression and
+/// a statement list ending in one both return what they did unwrapped. The
+/// prefix shares the expression's first line, so reported line numbers do
+/// not move, and the closing brace has its own line, so a trailing `//`
+/// comment cannot swallow it.
+pub fn in_natives_scope(expression: &str) -> String {
+    let mut out = String::with_capacity(expression.len() + 320);
+    out.push_str("{ const { ");
+    out.push_str(&NATIVE_NAMES.join(", "));
+    out.push_str(" } = (window.__impeccableNatives || window); ");
+    out.push_str(expression);
+    out.push_str("\n}");
+    out
 }
 
 /// The page-side half of [`Page::pin_clock`].
@@ -2241,4 +2527,29 @@ Object.defineProperty(N.prototype,"constructor",{{value:D,writable:true,configur
 const F=Intl.DateTimeFormat.prototype,g=Object.getOwnPropertyDescriptor(F,"format").get,p=F.formatToParts;
 Object.defineProperty(F,"format",{{configurable:true,get(){{const f=g.call(this);return d=>f(d===undefined?now():d)}}}});
 F.formatToParts=function(d){{return p.call(this,d===undefined?now():d)}};}})()"#, epoch = epoch_ms.floor() as i64)
+}
+
+#[cfg(test)]
+mod natives_tests {
+    use super::*;
+
+    #[test]
+    fn native_names_match_the_natives_file() {
+        let start = NATIVES_JS.rfind("const {").expect("05-natives.js ends with a destructure");
+        let end = start + NATIVES_JS[start..].find('}').expect("closing brace");
+        let names: Vec<&str> = NATIVES_JS[start + "const {".len()..end]
+            .split(',')
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .collect();
+        assert_eq!(names, NATIVE_NAMES, "browser-bundle/05-natives.js and NATIVE_NAMES differ");
+    }
+
+    #[test]
+    fn natives_scope_keeps_the_first_line_and_closes_after_a_comment() {
+        let scoped = in_natives_scope("(() => 1)() // trailing");
+        assert_eq!(scoped.lines().count(), 2);
+        assert!(scoped.lines().next().unwrap().ends_with("(() => 1)() // trailing"));
+        assert_eq!(scoped.lines().last(), Some("}"));
+    }
 }

@@ -19,7 +19,7 @@
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { readSourceFiles, readPatterns, stashPerProjectArtifacts, restorePerProjectArtifacts } from './lib/utils.js';
+import { readSourceFiles, readPatterns, stashPerProjectArtifacts, restorePerProjectArtifacts, findBatchFilesWithBareLf } from './lib/utils.js';
 import { syncRootCommands } from './lib/root-commands-sync.mjs';
 import { createTransformer, PROVIDERS } from './lib/transformers/index.js';
 import { hooksJsonFor, buildClaudePluginHooksManifest } from './lib/transformers/hooks.js';
@@ -437,10 +437,10 @@ function validateSkillProse(rootDir) {
  * Validate that every `{{ask_instruction}}` interpolation starts a sentence.
  *
  * The placeholder's per-provider values are complete capitalized sentences
- * ("STOP and call the AskUserQuestion tool to clarify."), so a call site that
+ * ("Ask with the AskUserQuestion tool and wait for the answer before continuing."), so a call site that
  * splices it mid-sentence ships malformed guidance to every provider at once:
- * `stop and STOP and call the AskUserQuestion tool to clarify. before expanding
- * it`. Four reference files shipped exactly that before this gate existed, and
+ * `stop and Ask with the AskUserQuestion tool and wait for the answer before
+ * continuing. before expanding it`. Four reference files shipped exactly that before this gate existed, and
  * a comment in PROVIDER_PLACEHOLDERS asking authors to keep the contract is
  * what failed to prevent it.
  *
@@ -490,6 +490,31 @@ function validateAskInstructionSites(rootDir) {
  *
  * Returns the number of validation errors. Build fails if > 0.
  */
+/**
+ * Every shipped `impeccable.cmd` must have CRLF line endings: cmd.exe cannot
+ * find `call :label` targets in an LF-only batch file (#1098). The build
+ * writes CRLF itself (readSkillScripts), so a failure here means that
+ * guarantee regressed. Checks dist/ (the release zips are packed from it)
+ * and, on a release build, the tracked harness dirs and plugin subtrees.
+ *
+ * Returns the number of validation errors. Build fails if > 0.
+ */
+function validateBatchLineEndings(rootDir, distDir, { syncRootOutputs }) {
+  const dirs = [distDir];
+  if (syncRootOutputs) {
+    for (const { configDir } of Object.values(PROVIDERS)) {
+      dirs.push(path.join(rootDir, configDir, 'skills', 'melzi'));
+    }
+    dirs.push(path.join(rootDir, 'plugin'), path.join(rootDir, 'cursor-plugin'));
+  }
+  const bad = findBatchFilesWithBareLf([...new Set(dirs)]);
+  for (const file of bad) {
+    console.error(`❌ ${path.relative(rootDir, file)} has LF line endings; cmd.exe needs CRLF in a batch file (#1098).`);
+  }
+  if (bad.length === 0) console.log('✓ Batch launchers ship with CRLF line endings');
+  return bad.length;
+}
+
 function copyDirSync(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
   const entries = fs.readdirSync(src, { withFileTypes: true });
@@ -658,6 +683,7 @@ This folder contains skills for all supported tools:
   .kiro/      -> Kiro
   .opencode/  -> OpenCode
   .pi/        -> Pi
+  .omp/       -> Oh My Pi
   .trae-cn/   -> Trae China
   .trae/      -> Trae International
   .rovodev/   -> Rovo Dev
@@ -964,7 +990,10 @@ async function build() {
   // guidance to every provider at once.
   const askSiteErrors = validateAskInstructionSites(ROOT_DIR);
 
-  if (countErrors > 0 || versionErrors > 0 || manifestShapeErrors > 0 || proseErrors > 0 || skillProseErrors > 0 || askSiteErrors > 0) {
+  // cmd.exe misparses an LF-only batch file, so every emitted .cmd is CRLF.
+  const batchEolErrors = validateBatchLineEndings(ROOT_DIR, DIST_DIR, BUILD_OPTIONS);
+
+  if (countErrors > 0 || versionErrors > 0 || manifestShapeErrors > 0 || proseErrors > 0 || skillProseErrors > 0 || askSiteErrors > 0 || batchEolErrors > 0) {
     process.exit(1);
   }
 

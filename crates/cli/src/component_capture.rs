@@ -96,7 +96,7 @@ pub(crate) fn render_page(
         let dom=page.evaluate_value_in_world(&world,&inspect).map_err(|e|e.message)?;
         // Only the entry capture asks; review proofs keep their shape.
         let raster_coverage = if measure_raster {
-            Some(page.evaluate_value_in_world(&world, &format!("({})()", include_str!("raster_coverage.js"))).map_err(|e| e.message)?)
+            Some(crate::asset_capture::measure_raster_coverage(&mut page, &world, &Value::Null)?)
         } else { None };
         let urls = page.observed_response_urls().map_err(|e| e.message)?;
         let evidence = page.response_evidence(&urls).map_err(|e| e.message)?;

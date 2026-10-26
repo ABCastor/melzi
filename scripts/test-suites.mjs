@@ -8,6 +8,7 @@ export const OPT_IN_SUITES = [
   'live-e2e-accept-cleanup',
   'new-work-e2e',
   'skill-behavior',
+  'skill-activation',
   'skill-workflow',
   'live-svelte-adapter-deepseek',
 ];
@@ -98,6 +99,7 @@ export const SUITES = {
           'tests/brand-user-visible.test.mjs',
           'tests/bind-verify.test.mjs',
           'tests/ci-test-plan.test.mjs',
+          'tests/rust-test-selection.test.mjs',
           'tests/cli-shim.test.mjs',
           'tests/distribution-notices.test.mjs',
           'tests/launcher-download.test.mjs',
@@ -201,11 +203,12 @@ export const SUITES = {
     ],
   },
   detector: {
-    description: 'Extension packaging checks (the rule logic itself is covered by the crate tests and the oracle).',
+    description: 'Extension packaging and DevTools report checks (the rule logic itself is covered by the crate tests and the oracle).',
     triggers: [
       ...COMMON_INFRA_PATTERNS,
       /^extension\/(background|content|detector|devtools|offscreen|popup|shared|manifest\.json)/,
       /^scripts\/build-extension\.js$/,
+      /^tests\/extension-(build|devtools)\.test\.mjs$/,
       /^browser-bundle\//,
       // Everything `cargo xtask bundle` reads: the rules and the registry
       // rows (core, foundation), the wasm module (wasm), the assembly and the
@@ -220,7 +223,7 @@ export const SUITES = {
     commands: [
       {
         runner: 'node',
-        files: ['tests/extension-build.test.mjs'],
+        files: ['tests/extension-build.test.mjs', 'tests/extension-devtools.test.mjs'],
       },
     ],
   },
@@ -306,6 +309,9 @@ export const SUITES = {
       ...COMMON_INFRA_PATTERNS,
       /^skill\/scripts\/live-browser/,
       /^ENGINE_VERSION$/,
+      // The HTTP core the live server runs on (in common since the decision
+      // page and component review share it) and live's re-export of it.
+      /^crates\/(common\/src\/http|live\/src\/live_http)\.rs$/,
       /^tests\/framework-fixtures/,
       /^tests\/live-e2e(\.test\.mjs|\/)/,
       /^browser-bundle\/40-overlay\.js$/,
@@ -320,20 +326,24 @@ export const SUITES = {
     ],
   },
   'new-work-e2e': {
-    description: 'Playwright smoke sweep of the new-work concept/serve-question decision page plus the offline fake image generator.',
+    description: 'Playwright smoke checks of native decision and review pages, plus the offline fake image generator.',
     optIn: true,
     needsPlaywright: true,
     triggers: [
       ...COMMON_INFRA_PATTERNS,
       /^ENGINE_VERSION$/,
       /^tests\/new-work-e2e(\.test\.mjs|\/)/,
+      /^tests\/review-theme\.test\.mjs$/,
+      /^ui\/component-review\//,
+      /^crates\/context\/src\/(question_page|serve_question)\.rs$/,
+      /^crates\/context\/src\/component_review\/server\.rs$/,
     ],
     commands: [
       {
         runner: 'node',
         timeoutMs: 600000,
         forceExit: true,
-        files: ['tests/new-work-e2e.test.mjs'],
+        files: ['tests/new-work-e2e.test.mjs', 'tests/review-theme.test.mjs'],
       },
     ],
   },
@@ -372,13 +382,29 @@ export const SUITES = {
       /^skill\/SKILL\.src\.md$/,
       /^skill\/reference\//,
       /^ENGINE_VERSION$/,
-      /^tests\/skill-behavior\//,
+      // activation.eval.mjs and its fixtures belong to skill-activation, which
+      // nothing here loads; editing them should not bill this lane.
+      /^tests\/skill-behavior\/(?!activation[.-])/,
     ],
     commands: [{
       runner: 'node',
       timeoutMs: 240000,
       wallClockMs: 1_800_000,
       files: ['tests/skill-behavior/scenarios.test.mjs'],
+    }],
+  },
+  'skill-activation': {
+    description: 'LLM-backed check that the skill description triggers on UI work and stays quiet otherwise.',
+    optIn: true,
+    triggers: [
+      /^skill\/SKILL\.src\.md$/,
+      /^tests\/skill-behavior\/(activation-cases|providers)\.mjs$/,
+    ],
+    commands: [{
+      runner: 'node',
+      timeoutMs: 900000,
+      wallClockMs: 1_200_000,
+      files: ['tests/skill-behavior/activation.eval.mjs'],
     }],
   },
   'skill-workflow': {
@@ -390,7 +416,9 @@ export const SUITES = {
       /^skill\//,
       /^ENGINE_VERSION$/,
       /^tests\/skill-workflow\//,
-      /^tests\/skill-behavior\//,
+      // activation.eval.mjs and its fixtures belong to skill-activation, which
+      // nothing here loads; editing them should not bill this lane.
+      /^tests\/skill-behavior\/(?!activation[.-])/,
     ],
     commands: [
       { runner: 'node', files: ['tests/skill-workflow-browser.test.mjs'] },

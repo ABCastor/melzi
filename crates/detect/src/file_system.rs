@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+use crate::config::{match_configured_extension, ExtensionEntry};
 use crate::jsp;
 use crate::util::{re, read_text, ANY, D, WS};
 
@@ -41,7 +42,7 @@ pub fn has_scannable_extension(filename: &str) -> bool {
 }
 
 /// Built-in scannable extensions plus configured suffix matches (#822).
-fn has_scannable_extension_with(filename: &str, extra_exts: &[String]) -> bool {
+fn has_scannable_extension_with(filename: &str, extra_exts: &[ExtensionEntry]) -> bool {
     let lower = impeccable_core::js::to_lower_case(filename);
     if SCANNABLE_EXTENSIONS.contains(&jsp::extname(&lower).as_str()) {
         return true;
@@ -51,19 +52,21 @@ fn has_scannable_extension_with(filename: &str, extra_exts: &[String]) -> bool {
             return true;
         }
     }
-    let name_len = lower.encode_utf16().count();
-    for ext in extra_exts {
-        let ext_len = ext.encode_utf16().count();
-        if name_len > ext_len && lower.ends_with(ext.as_str()) {
-            return true;
-        }
-    }
-    false
+    match_configured_extension(filename, extra_exts).is_some()
 }
 
 /// `HTML_EXTENSIONS.has(path.extname(filePath).toLowerCase())`.
 pub fn is_html_path(file_path: &str) -> bool {
     HTML_EXTENSIONS.contains(&impeccable_core::js::to_lower_case(&jsp::extname(file_path)).as_str())
+}
+
+/// Engine routing shared by `detect` and the hook: a configured
+/// `detector.extensions` entry picks its engine, else `.html`/`.htm` (#795).
+pub fn uses_html_engine(file_path: &str, extensions: &[ExtensionEntry]) -> bool {
+    match match_configured_extension(file_path, extensions) {
+        Some(c) => c.engine == "html",
+        None => is_html_path(file_path),
+    }
 }
 
 /// JS: file-system.mjs#walkDir. Files in `readdirSync` order (the OS order,
@@ -76,7 +79,7 @@ pub fn walk_dir(dir: &str) -> Vec<String> {
 /// reported and skipped rather than silently yielding nothing (#711).
 pub fn walk_dir_reporting(
     dir: &str,
-    extra_exts: &[String],
+    extra_exts: &[ExtensionEntry],
     on_read_error: &mut dyn FnMut(&str, &std::io::Error),
 ) -> Vec<String> {
     let mut files = Vec::new();
@@ -556,11 +559,19 @@ mod tests {
         assert!(has_scannable_extension("A.HTML"));
         assert!(!has_scannable_extension("a.php"));
         assert!(is_html_path("/x/y.HTM"));
-        let erb = vec![".html.erb".to_string()];
+        let entry = |ext: &str, engine: &str| ExtensionEntry {
+            ext: ext.to_string(),
+            engine: engine.to_string(),
+        };
+        let erb = vec![entry(".html.erb", "html")];
         assert!(!has_scannable_extension("first.html.erb"));
         assert!(has_scannable_extension_with("first.html.erb", &erb));
         assert!(has_scannable_extension_with("A.HTML.ERB", &erb));
         assert!(!has_scannable_extension_with("notes.txt", &erb));
+        assert!(uses_html_engine("/x/first.html.erb", &erb));
+        assert!(!uses_html_engine("/x/first.html", &[entry(".html", "text")]));
+        assert!(!uses_html_engine("/x/a.vue", &erb));
+        assert!(uses_html_engine("/x/a.HTM", &[]));
     }
 
     #[test]

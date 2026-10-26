@@ -96,7 +96,7 @@ fn stop_manifest_entry_with_windows(command: &str, windows: &str) -> Value {
 /// resolves on every teammate's checkout.
 const CLAUDE_HOOK_COMMAND: &str = "\"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" hook";
 const AGENTS_HOOK_COMMAND: &str = "\".agents/skills/melzi/scripts/impeccable\" hook";
-const CURSOR_HOOK_COMMAND: &str = "\".cursor/skills/melzi/scripts/impeccable\" hook-before-edit";
+const CURSOR_HOOK_COMMAND: &str = "\".cursor/skills/melzi/scripts/impeccable\" hook";
 const GITHUB_HOOK_COMMAND: &str = "\"$(git rev-parse --show-toplevel)/.github/skills/melzi/scripts/impeccable\" hook";
 
 struct ManifestTarget {
@@ -110,8 +110,7 @@ struct ManifestTarget {
     user_settings: bool,
 }
 
-fn claude_manifest() -> Value {
-    let cmd = CLAUDE_HOOK_COMMAND;
+fn claude_manifest_for_command(cmd: &str) -> Value {
     obj(vec![
         (
             "description",
@@ -135,6 +134,23 @@ fn claude_manifest() -> Value {
     ])
 }
 
+/// The guarded absolute-launcher command a user-scope install writes into
+/// `~/.claude/settings.json` (the `update --user` form): POSIX single quotes,
+/// double quotes on Windows.
+fn user_claude_hook_command(skill_root: &str, win32: bool) -> String {
+    let launcher = jsp::join(&[skill_root, "scripts", "impeccable"]);
+    let q = if win32 {
+        serde_json::to_string(&launcher).unwrap_or_default()
+    } else {
+        format!("'{}'", launcher.replace('\'', "'\\''"))
+    };
+    format!("[ ! -f {q} ] || {q} hook")
+}
+
+fn claude_manifest() -> Value {
+    claude_manifest_for_command(CLAUDE_HOOK_COMMAND)
+}
+
 fn agents_manifest() -> Value {
     let cmd = AGENTS_HOOK_COMMAND;
     let win = &impeccable_context::hook_markers::windows_launcher_hook_command(".agents/skills/melzi/scripts/impeccable", "hook");
@@ -156,23 +172,12 @@ fn agents_manifest() -> Value {
     )])
 }
 
+/// Cursor runs the post-edit design hook like the other harnesses (the
+/// before-edit gate is retired). `merge_hook_manifests` strips Melzi
+/// entries from every event, so `on` also drops a leftover `preToolUse`
+/// gate entry while writing this one.
 fn cursor_manifest() -> Value {
-    obj(vec![
-        ("version", Value::from(1)),
-        (
-            "hooks",
-            obj(vec![(
-                "preToolUse",
-                Value::Array(vec![obj(vec![
-                    (
-                        "command",
-                        Value::from(CURSOR_HOOK_COMMAND),
-                    ),
-                    ("timeout", Value::from(TIMEOUT_SECONDS)),
-                ])]),
-            )]),
-        ),
-    ])
+    impeccable_context::hook_markers::cursor_hook_manifest(CURSOR_HOOK_COMMAND, TIMEOUT_SECONDS)
 }
 
 fn github_manifest() -> Value {
@@ -685,7 +690,7 @@ fn set_enabled(rt: &Runtime, cwd: &str, value: bool) -> Result<String, String> {
     let mut consent = Map::new();
     consent.insert("consent".into(), Value::from("accepted"));
     let local_target = write_hook_config(rt, cwd, &consent, true)?;
-    let repaired = repair_hook_manifests(cwd)?;
+    let repaired = repair_hook_manifests(rt, cwd)?;
     let mut parts = vec![
         format!(
             "Design hook enabled for this project (wrote {}).",
@@ -737,7 +742,7 @@ struct Repaired {
 }
 
 /// JS: repairHookManifests(cwd)
-fn repair_hook_manifests(cwd: &str) -> Result<Repaired, String> {
+fn repair_hook_manifests(rt: &Runtime, cwd: &str) -> Result<Repaired, String> {
     let mut result = Repaired {
         written: vec![],
         already: vec![],
@@ -745,19 +750,51 @@ fn repair_hook_manifests(cwd: &str) -> Result<Repaired, String> {
         skipped: vec![],
     };
     for target in HOOK_MANIFEST_TARGETS {
-        if !exists(&jsp::join(&[cwd, target.skill_rel])) {
-            continue;
-        }
-        let dest = jsp::join(&[cwd, target.dest_rel]);
+        let mut dest = jsp::join(&[cwd, target.dest_rel]);
         let shared_dest = target.shared_dest_rel.map(|s| jsp::join(&[cwd, s]));
-        if let Some(sd) = &shared_dest {
+        let project_skill = jsp::join(&[cwd, target.skill_rel]);
+        let user_skill = jsp::join(&[&rt.homedir(), target.skill_rel]);
+        let (skill_root, user_scoped) = if exists(&project_skill) {
+            (project_skill, false)
+        } else if target.provider == ".claude"
+            // The launcher itself, not just the skill folder: a user hook
+            // naming a missing launcher is a no-op, and switching to it would
+            // prune a project hook that may still run another installation.
+            && exists(&jsp::join(&[&user_skill, "scripts", "impeccable"]))
+            && (file_has_impeccable_hook_marker(&dest)
+                || shared_dest.as_ref().is_some_and(|path| file_has_impeccable_hook_marker(path)))
+        {
+            (user_skill, true)
+        } else {
+            continue;
+        };
+        let mut user_settings = target.user_settings;
+        // The project manifest to prune once the user-scope hook is confirmed.
+        let mut prune_after: Option<String> = None;
+        if user_scoped {
+            // A user-scope skill gets its hook where a user-scope install
+            // writes it: `~/.claude/settings.json`, with the absolute launcher.
+            // In the project only the gitignored `settings.local.json` loses
+            // its Melzi entries, and only after the user hook is written
+            // or already present: an unreadable user file is skipped, and the
+            // project hook is then the only one the machine has. The committed
+            // `settings.json` belongs to the team and is never rewritten with
+            // a home path.
+            prune_after = Some(dest.clone());
+            dest = jsp::join(&[&rt.homedir(), ".claude", "settings.json"]);
+            user_settings = true;
+        } else if let Some(sd) = &shared_dest {
             if file_has_impeccable_hook_marker(sd) {
                 prune_impeccable_hook_from_manifest(&dest)?;
                 result.already.push(target.provider.to_string());
                 continue;
             }
         }
-        let fresh = (target.manifest)();
+        let fresh = if user_scoped {
+            claude_manifest_for_command(&user_claude_hook_command(&skill_root, rt.win32))
+        } else {
+            (target.manifest)()
+        };
         let mut next = fresh.clone();
         let mut had_comments = false;
         if exists(&dest) {
@@ -767,8 +804,8 @@ fn repair_hook_manifests(cwd: &str) -> Result<Repaired, String> {
                     next = merge_hook_manifests(&existing, &fresh);
                 }
                 // The user's whole settings file: never replace it.
-                None if target.user_settings => {
-                    result.skipped.push(target.dest_rel.to_string());
+                None if user_settings => {
+                    result.skipped.push(if user_scoped { dest.clone() } else { target.dest_rel.to_string() });
                     continue;
                 }
                 None => {
@@ -785,12 +822,22 @@ fn repair_hook_manifests(cwd: &str) -> Result<Repaired, String> {
             None
         };
         if current.as_deref() == Some(serialized.as_str()) {
+            if let Some(project_manifest) = &prune_after {
+                prune_impeccable_hook_from_manifest(project_manifest)?;
+            }
             result.already.push(target.provider.to_string());
             continue;
         }
         backup_commented(&dest, had_comments)?;
         std::fs::create_dir_all(jsp::dirname(&dest)).map_err(|e| e.to_string())?;
-        std::fs::write(&dest, serialized).map_err(|e| e.to_string())?;
+        if user_settings {
+            impeccable_common::fsx::write_atomic(&dest, serialized.as_bytes()).map_err(|e| e.to_string())?;
+        } else {
+            std::fs::write(&dest, serialized).map_err(|e| e.to_string())?;
+        }
+        if let Some(project_manifest) = &prune_after {
+            prune_impeccable_hook_from_manifest(project_manifest)?;
+        }
         result.written.push(target.provider.to_string());
     }
     Ok(result)

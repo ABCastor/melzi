@@ -231,6 +231,20 @@ pub trait Dom {
         None
     }
 
+    /// Where the last two words of the element's rendered text sit: the
+    /// rect of the word before the last, then the last word's, each the last
+    /// of the word's client rects (a word hyphenated across two lines ends on
+    /// the lower one). The text is the one `text_line_rects` measures, split
+    /// on white space with soft hyphens and zero-width spaces dropped.
+    ///
+    /// `None` from a DOM that did not measure them: a snapshot records them
+    /// only for the prose blocks `straggler` reads, and only from a capture
+    /// that knew to. A caller stands down there rather than guess where the
+    /// words broke.
+    fn last_word_rects(&self, _el: ElId) -> Option<[Rect; 2]> {
+        None
+    }
+
     /// The CSS properties (`opacity`, `filter`, hyphenated as the CSSOM
     /// spells them) of every animation and transition running on the element
     /// itself at capture: `document.getAnimations()` entries whose effect
@@ -285,6 +299,15 @@ pub trait Dom {
     /// `srcset` and the `<source>`s of an enclosing `<picture>`. Empty when
     /// it has selected none.
     fn image_current_src(&self, _el: ElId) -> Option<String> {
+        None
+    }
+    /// `video.readyState` (0 to 4) for an HTML `<video>`: 2
+    /// (`HAVE_CURRENT_DATA`) or more means a frame is decoded, so the element
+    /// paints a picture (its poster, or that frame where the poster did not
+    /// load). Nothing tells whether a `poster` image loaded, so below 2 a
+    /// video may paint nothing at all. `None` for anything that is not a
+    /// `<video>` and where the probe did not read it.
+    fn video_ready_state(&self, _el: ElId) -> Option<u8> {
         None
     }
 
@@ -638,5 +661,6 @@ mod tests {
         assert_eq!(LightTreeOnly.image_natural_size(3), None);
         assert_eq!(LightTreeOnly.image_complete(3), None);
         assert_eq!(LightTreeOnly.image_current_src(3), None);
+        assert_eq!(LightTreeOnly.video_ready_state(3), None);
     }
 }

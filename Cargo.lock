@@ -531,7 +531,7 @@ dependencies = [
 
 [[package]]
 name = "impeccable"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "base64",
  "impeccable-browser",
@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "impeccable-browser"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "base64",
  "image",
@@ -568,7 +568,7 @@ dependencies = [
 
 [[package]]
 name = "impeccable-bundle"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "base64",
  "impeccable-core",
@@ -577,14 +577,17 @@ dependencies = [
 
 [[package]]
 name = "impeccable-common"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
+ "getrandom 0.2.17",
  "libc",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]
 name = "impeccable-comp"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "image",
  "once_cell",
@@ -596,7 +599,7 @@ dependencies = [
 
 [[package]]
 name = "impeccable-comp-verbs"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "image",
  "impeccable-common",
@@ -612,7 +615,7 @@ dependencies = [
 
 [[package]]
 name = "impeccable-context"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "flate2",
  "impeccable-common",
@@ -632,8 +635,9 @@ dependencies = [
 
 [[package]]
 name = "impeccable-core"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
+ "cssparser",
  "impeccable-core",
  "impeccable-foundation",
  "once_cell",
@@ -644,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "impeccable-detect"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "impeccable-common",
  "impeccable-core",
@@ -656,7 +660,7 @@ dependencies = [
 
 [[package]]
 name = "impeccable-foundation"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "cssparser",
  "once_cell",
@@ -669,13 +673,14 @@ dependencies = [
 
 [[package]]
 name = "impeccable-hook"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "impeccable-common",
  "impeccable-comp-verbs",
  "impeccable-context",
  "impeccable-core",
  "impeccable-detect",
+ "libc",
  "once_cell",
  "regex",
  "serde_json",
@@ -684,7 +689,7 @@ dependencies = [
 
 [[package]]
 name = "impeccable-html"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "cssparser",
  "ego-tree",
@@ -705,13 +710,14 @@ dependencies = [
 
 [[package]]
 name = "impeccable-live"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "getrandom 0.2.17",
  "impeccable-common",
  "impeccable-context",
  "impeccable-core",
  "impeccable-hook",
+ "markup5ever",
  "once_cell",
  "regex",
  "serde",
@@ -723,7 +729,7 @@ dependencies = [
 
 [[package]]
 name = "impeccable-skills"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "impeccable-common",
  "impeccable-context",
@@ -742,7 +748,7 @@ dependencies = [
 
 [[package]]
 name = "impeccable-wasm"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "impeccable-core",
  "impeccable-detect",
@@ -1122,9 +1128,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.43"
+version = "0.23.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
+checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
 dependencies = [
  "log",
  "once_cell",
@@ -1807,7 +1813,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xtask"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "impeccable-bundle",
 ]

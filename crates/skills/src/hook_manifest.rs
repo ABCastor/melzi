@@ -6,7 +6,7 @@
 //! Where the JS wrote `[ ! -f "<skill>/scripts/hook.mjs" ] || node
 //! "<skill>/scripts/hook.mjs"` (and a `node -e` guard on Windows), the binary
 //! writes the launcher form `[ ! -f "<skill>/scripts/impeccable" ] ||
-//! "<skill>/scripts/impeccable" hook` (`hook-before-edit` for Cursor), the
+//! "<skill>/scripts/impeccable" hook` (Cursor included, on `postToolUse`), the
 //! shape the public build's `transformers/hooks.js` puts in the bundle; the
 //! Codex `commandWindows` sibling and a Windows Grok `command` run
 //! `impeccable.cmd` behind `cmd /c if exist`.
@@ -17,7 +17,7 @@
 //! `impeccable_context::hook_markers::is_impeccable_hook_command`, so the two
 //! writers and the three readers can never disagree on what counts as ours.
 
-use impeccable_context::hook_markers::{is_impeccable_hook_command, is_launcher_hook_command, parse_manifest_jsonc, windows_launcher_hook_command};
+use impeccable_context::hook_markers::{cursor_hook_manifest, cursor_manifest_has_retired_gate, is_impeccable_hook_command, is_launcher_hook_command, parse_manifest_jsonc, windows_launcher_hook_command};
 use serde_json::{Map, Value};
 
 use crate::providers::Sys;
@@ -68,6 +68,17 @@ pub fn hook_artifacts_for_provider(bundle_dir: &str, root: &str, provider: &str)
         .collect()
 }
 
+fn hook_artifacts_for_install(bundle_dir: &str, root: &str, provider: &str, user_scope: bool) -> Vec<HookArtifact> {
+    if provider == ".claude" && user_scope {
+        return vec![HookArtifact {
+            src: jsp::join(&[bundle_dir, ".claude", "settings.json"]),
+            dest: jsp::join(&[root, ".claude", "settings.json"]),
+            shared_dest: None,
+        }];
+    }
+    hook_artifacts_for_provider(bundle_dir, root, provider)
+}
+
 /// JS: expectedHookDests(root, providers)
 pub fn expected_hook_dests(root: &str, providers: &[&str]) -> Vec<String> {
     providers
@@ -80,15 +91,30 @@ pub fn expected_hook_dests(root: &str, providers: &[&str]) -> Vec<String> {
         .collect()
 }
 
-/// The hook verb the launcher runs for a provider (JS: the `hook.mjs` /
-/// `hook-before-edit.mjs` choice in hookScriptRelPathForProvider).
-pub fn hook_verb(provider: &str) -> &'static str {
-    if provider == ".cursor" {
-        "hook-before-edit"
-    } else {
-        "hook"
-    }
+/// The hook verb the launcher runs for a provider. Every harness runs the
+/// post-edit `hook` verb; Cursor used to run `hook-before-edit` on
+/// `preToolUse`, and `migrate_cursor_gate` moves those manifests over.
+pub fn hook_verb(_provider: &str) -> &'static str {
+    "hook"
 }
+
+/// Moves a Cursor manifest off the retired `preToolUse` before-edit gate:
+/// drops Melzi entries from every event (other tools' hooks stay) and
+/// adds the post-edit `postToolUse` entry, its command rewritten for the
+/// install. A manifest without the gate is returned unchanged, so this is
+/// safe to run after any write.
+pub fn migrate_cursor_gate(value: &Value, skill_root: &str, absolute: bool) -> Value {
+    if !cursor_manifest_has_retired_gate(value) {
+        return value.clone();
+    }
+    // Any launcher-form command carries the marker the rewrite replaces.
+    let template = cursor_hook_manifest("\".cursor/skills/melzi/scripts/impeccable\" hook", CURSOR_TIMEOUT_SECONDS);
+    let fresh = rewrite_hook_commands_for_skill_root(&template, ".cursor", skill_root, absolute);
+    merge_hook_manifests(value, &fresh)
+}
+
+/// Cursor's per-edit hook timeout, in seconds (the bundle's TIMEOUT_SECONDS).
+const CURSOR_TIMEOUT_SECONDS: i64 = 5;
 
 /// JS: hookScriptRelPathForProvider(provider), for the launcher: the
 /// project-relative launcher path (Claude keeps its `${CLAUDE_PROJECT_DIR}`
@@ -154,6 +180,25 @@ pub fn quoted_launcher_path(skill_root: &str, provider: &str, absolute: bool) ->
     })
 }
 
+/// GitHub Copilot hook manifests are project files even for a user-scoped
+/// skill install. Keep their normal project command untouched, but point a
+/// global install at the user's actual install root. On Windows, Git Bash's
+/// `$HOME` may differ from the `USERPROFILE` directory used by `os.homedir()`,
+/// so write that resolved root with Bash-compatible forward slashes.
+fn quoted_github_user_launcher(skill_root: &str, win32: bool) -> QuotedPath {
+    let path = if win32 {
+        jsp::win32::join(&[skill_root, ".github", "skills", "melzi", "scripts", "impeccable"])
+            .replace('\\', "/")
+    } else {
+        "$HOME/.github/skills/melzi/scripts/impeccable".to_string()
+    };
+    QuotedPath {
+        posix: if win32 { sh_single_quote(&path) } else { json_string(&path) },
+        win32: json_string(&path),
+        raw: path,
+    }
+}
+
 /// JS: guardHookCommand(quotedPath, provider), launcher edition, in the
 /// shape the public build's `transformers/hooks.js` `guardedLauncher` emits:
 /// `[ ! -f X ] || X <verb>` (not `|| true`, so the launcher's exit code, and
@@ -171,7 +216,7 @@ pub fn hook_command(quoted: &QuotedPath, provider: &str, win32: bool) -> String 
     let q = match (provider, win32) {
         (".gemini", _) => return gemini_hook_command(quoted, verb, win32),
         (".grok", true) => return windows_hook_command(quoted, provider),
-        (".agents", _) | (_, false) => &quoted.posix,
+        (".agents", _) | (".github", _) | (_, false) => &quoted.posix,
         (_, true) => &quoted.win32,
     };
     format!("[ ! -f {q} ] || {q} {verb}")
@@ -210,7 +255,12 @@ pub fn windows_hook_command(quoted: &QuotedPath, provider: &str) -> String {
 
 /// JS: rewriteHookCommandsForSkillRoot(value, provider, {skillRoot, absolute})
 pub fn rewrite_hook_commands_for_skill_root(value: &Value, provider: &str, skill_root: &str, absolute: bool) -> Value {
-    let Some(quoted) = quoted_launcher_path(skill_root, provider, absolute) else {
+    let quoted = if provider == ".github" && absolute {
+        Some(quoted_github_user_launcher(skill_root, cfg!(windows)))
+    } else {
+        quoted_launcher_path(skill_root, provider, absolute)
+    };
+    let Some(quoted) = quoted else {
         return value.clone();
     };
     rewrite_value(value, provider, &quoted, cfg!(windows))
@@ -219,7 +269,12 @@ pub fn rewrite_hook_commands_for_skill_root(value: &Value, provider: &str, skill
 /// `rewrite_hook_commands_for_skill_root` with the platform made explicit
 /// (tests drive the Windows form from any host).
 pub fn rewrite_hook_commands_for_platform(value: &Value, provider: &str, skill_root: &str, absolute: bool, win32: bool) -> Value {
-    let Some(quoted) = quoted_launcher_path(skill_root, provider, absolute) else {
+    let quoted = if provider == ".github" && absolute {
+        Some(quoted_github_user_launcher(skill_root, win32))
+    } else {
+        quoted_launcher_path(skill_root, provider, absolute)
+    };
+    let Some(quoted) = quoted else {
         return value.clone();
     };
     rewrite_value(value, provider, &quoted, win32)
@@ -290,6 +345,17 @@ pub fn manifest_has_stale_hook(file: &str) -> bool {
     }
 }
 
+/// True when a Cursor manifest on disk still runs the retired `preToolUse`
+/// before-edit gate (either generation's spelling).
+pub fn manifest_has_retired_cursor_gate(file: &str) -> bool {
+    if !util::exists(file) {
+        return false;
+    }
+    let Ok(text) = util::read_text(file) else { return false };
+    let Ok(parsed) = serde_json::from_str::<Value>(&text) else { return false };
+    cursor_manifest_has_retired_gate(&parsed)
+}
+
 /// JS: fileHasImpeccableHookMarker(file): parse and scan only the `hooks`
 /// subtree.
 pub fn file_has_impeccable_hook_marker(file: &str) -> bool {
@@ -321,8 +387,8 @@ fn backup_commented(path: &str, had_comments: bool) -> Result<(), String> {
 
 /// A provider whose hook manifest is the user's whole settings file (model,
 /// auth, MCP servers), so an unreadable one is never replaced wholesale.
-fn manifest_is_user_settings(provider: &str) -> bool {
-    provider == ".gemini"
+fn manifest_is_user_settings(provider: &str, user_scope: bool) -> bool {
+    provider == ".gemini" || (provider == ".claude" && user_scope)
 }
 
 /// JS: hookInstalledForProvider(root, provider)
@@ -338,6 +404,98 @@ pub fn hook_installed_for_provider(root: &str, provider: &str) -> bool {
         }
         write_rel != spec.rel && file_has_impeccable_hook_marker(&jsp::join(&[root, spec.dest_provider, spec.rel]))
     })
+}
+
+/// User-scoped Claude hooks are loaded only from `settings.json`; the
+/// project-only `settings.local.json` path must not satisfy a global install.
+/// For that file, "installed" means current (`user_claude_hook_is_current`),
+/// not merely marked: a legacy `hook.mjs` entry or one naming a launcher that
+/// no longer exists must be rewritten, not counted.
+///
+/// A user-scope Copilot install counts the project manifest only when it does
+/// not name the project's skill, or that skill is there: an older global
+/// install wrote the portable `$(git rev-parse ...)/.github/skills/...` form
+/// into a project with no Copilot skill of its own, a hook that never fires
+/// (#1098), so a repeat install must rewrite it rather than count it.
+pub fn hook_installed_for_provider_at_scope(root: &str, provider: &str, user_scope: bool) -> bool {
+    if user_scope && provider == ".claude" {
+        return user_claude_hook_is_current(root);
+    }
+    if user_scope && provider == ".github" && github_manifest_names_missing_project_skill(root) {
+        return false;
+    }
+    hook_installed_for_provider(root, provider)
+}
+
+/// The portable prefix of a project Copilot hook command.
+const GITHUB_PORTABLE_PREFIX: &str = "$(git rev-parse --show-toplevel)/.github/skills/melzi/scripts/impeccable";
+
+/// True when the project carries its own Copilot skill launcher.
+fn github_project_skill_exists(project_root: &str) -> bool {
+    util::exists(&jsp::join(&[project_root, ".github", "skills", "melzi", "scripts", "impeccable"]))
+}
+
+/// True when `root` is a project (not the home dir) that ships its own
+/// Copilot skill: its committed manifest keeps the portable command.
+fn github_keeps_portable_form(sys: &Sys, root: &str) -> bool {
+    !sys.is_home_dir(root) && github_project_skill_exists(root)
+}
+
+/// True when `<root>/.github/hooks/impeccable.json` runs an Melzi hook in
+/// the portable project form while `<root>` has no Copilot skill to run.
+fn github_manifest_names_missing_project_skill(root: &str) -> bool {
+    if github_project_skill_exists(root) {
+        return false;
+    }
+    let Some((Value::Object(map), _)) = read_manifest(&jsp::join(&[root, ".github", "hooks", "impeccable.json"])) else {
+        return false;
+    };
+    let Some(hooks @ (Value::Object(_) | Value::Array(_))) = map.get("hooks") else { return false };
+    let mut commands = Vec::new();
+    collect_impeccable_hook_commands(hooks, &mut commands);
+    commands.iter().any(|c| c.contains(GITHUB_PORTABLE_PREFIX))
+}
+
+/// The command a user-scope install writes into `<home>/.claude/settings.json`:
+/// the guarded absolute launcher under `<home>/.claude/skills/melzi`.
+pub fn user_claude_hook_command(home_root: &str, win32: bool) -> Option<String> {
+    let quoted = quoted_launcher_path(home_root, ".claude", true)?;
+    Some(hook_command(&quoted, ".claude", win32))
+}
+
+fn collect_impeccable_hook_commands<'a>(value: &'a Value, out: &mut Vec<&'a str>) {
+    match value {
+        Value::String(s) if is_impeccable_hook_command(s) => out.push(s),
+        Value::Array(a) => a.iter().for_each(|v| collect_impeccable_hook_commands(v, out)),
+        Value::Object(o) => o.values().for_each(|v| collect_impeccable_hook_commands(v, out)),
+        _ => {}
+    }
+}
+
+/// True only when `<home>/.claude/settings.json` parses, its launcher exists,
+/// and every Melzi hook command in it is exactly the form this engine
+/// writes for a user-scope install. An Melzi marker alone is not enough:
+/// a legacy `node .../hook.mjs` entry, or one naming a launcher that is gone,
+/// is a dead hook, and counting it would skip the rewrite and let the
+/// duplicate-hook cleanup delete the project hook that still works.
+pub fn user_claude_hook_is_current(home_root: &str) -> bool {
+    user_claude_hook_is_current_for(home_root, cfg!(windows))
+}
+
+/// `user_claude_hook_is_current` with the platform made explicit.
+pub fn user_claude_hook_is_current_for(home_root: &str, win32: bool) -> bool {
+    let Some(expected) = user_claude_hook_command(home_root, win32) else { return false };
+    let Some(launcher) = launcher_path(home_root, ".claude") else { return false };
+    if !util::exists(&launcher) {
+        return false;
+    }
+    let Some((Value::Object(map), _)) = read_manifest(&jsp::join(&[home_root, ".claude", "settings.json"])) else {
+        return false;
+    };
+    let Some(hooks @ (Value::Object(_) | Value::Array(_))) = map.get("hooks") else { return false };
+    let mut commands = Vec::new();
+    collect_impeccable_hook_commands(hooks, &mut commands);
+    !commands.is_empty() && commands.iter().all(|c| *c == expected)
 }
 
 fn marker_in(entry: &Map<String, Value>, key: &str) -> bool {
@@ -468,11 +626,13 @@ fn json_parse_message(e: &serde_json::Error) -> String {
 
 /// JS: copyProviderHooks(bundleDir, root, providers, {force, skillRoot}).
 /// Returns the providers whose manifest was written (deduplicated, in order).
-pub fn copy_provider_hooks(sys: &crate::providers::Sys, bundle_dir: &str, root: &str, providers: &[&'static str], force: bool, skill_root: Option<&str>) -> Result<Vec<&'static str>, String> {
+pub fn copy_provider_hooks(sys: &crate::providers::Sys, bundle_dir: &str, root: &str, providers: &[&'static str], force: bool, skill_root: Option<&str>, project_root: Option<&str>) -> Result<Vec<&'static str>, String> {
     let skill_root = skill_root.unwrap_or(root);
+    let user_scope = sys.is_home_dir(skill_root);
     let mut written: Vec<&'static str> = Vec::new();
     for provider in providers {
-        for artifact in hook_artifacts_for_provider(bundle_dir, root, provider) {
+        let manifest_root = if user_scope && *provider == ".claude" { skill_root } else { root };
+        for artifact in hook_artifacts_for_install(bundle_dir, manifest_root, provider, user_scope) {
             if !util::exists(&artifact.src) {
                 continue;
             }
@@ -483,7 +643,10 @@ pub fn copy_provider_hooks(sys: &crate::providers::Sys, bundle_dir: &str, root: 
                 }
             }
             let fresh_manifest = read_json_file(&artifact.src, "Bundled hook manifest")?;
-            let absolute = skill_root != root || sys.is_home_dir(root);
+            // A project that ships its own Copilot skill keeps the portable,
+            // team-committed command even when the user installs globally.
+            let absolute = (skill_root != root || sys.is_home_dir(root))
+                && !(*provider == ".github" && github_keeps_portable_form(sys, root));
             let fresh = rewrite_hook_commands_for_skill_root(&fresh_manifest, provider, skill_root, absolute);
             let mut next = fresh.clone();
             if util::exists(&artifact.dest) {
@@ -492,7 +655,7 @@ pub fn copy_provider_hooks(sys: &crate::providers::Sys, bundle_dir: &str, root: 
                         backup_commented(&artifact.dest, had_comments)?;
                         next = merge_hook_manifests(&existing, &fresh);
                     }
-                    None if manifest_is_user_settings(provider) => {
+                    None if manifest_is_user_settings(provider, user_scope) => {
                         return Err(format!("Existing settings file is not valid JSON: {}. It holds your other settings too, so it is never replaced; fix it and re-run.", artifact.dest));
                     }
                     None => {
@@ -504,14 +667,41 @@ pub fn copy_provider_hooks(sys: &crate::providers::Sys, bundle_dir: &str, root: 
                     }
                 }
             }
+            if *provider == ".cursor" {
+                // An older bundle can still carry the retired `preToolUse`
+                // gate; the verb rewrite above would point it at `hook`, which
+                // must run after the edit, not before it.
+                next = migrate_cursor_gate(&next, skill_root, absolute);
+            }
             util::mkdir_p(&jsp::dirname(&artifact.dest))?;
-            util::write_bytes(&artifact.dest, format!("{}\n", util::json_pretty(&next)).as_bytes())?;
+            // Atomic: in user scope this is the user's whole Claude settings file.
+            impeccable_common::fsx::write_atomic(&artifact.dest, format!("{}\n", util::json_pretty(&next)).as_bytes()).map_err(|e| util::node_error("open", &artifact.dest, &e))?;
             if !written.contains(provider) {
                 written.push(provider);
             }
         }
+        if user_scope && *provider == ".claude" {
+            prune_duplicate_claude_hooks(sys, skill_root, project_root.unwrap_or(root))?;
+        }
     }
     Ok(written)
+}
+
+/// Once a user-scope Claude hook is in `<home>/.claude/settings.json`, the
+/// Melzi entries in `settings.local.json` (the home one Claude never
+/// loads, and the project's gitignored one) only make the hook fire twice.
+/// Prunes them, and only when the user hook is confirmed current: a legacy or
+/// dangling user entry does not count. Runs after a fresh hook write and on a
+/// repeat install whose user hook is already current.
+pub fn prune_duplicate_claude_hooks(sys: &crate::providers::Sys, home_root: &str, project_root: &str) -> Result<(), String> {
+    if !user_claude_hook_is_current(home_root) {
+        return Ok(());
+    }
+    prune_impeccable_hook_from_manifest(&jsp::join(&[home_root, ".claude", "settings.local.json"]))?;
+    if !sys.is_home_dir(project_root) {
+        prune_impeccable_hook_from_manifest(&jsp::join(&[project_root, ".claude", "settings.local.json"]))?;
+    }
+    Ok(())
 }
 
 /// Self-heal for the v3 -> launcher upgrade (triage E8): a present provider
@@ -526,7 +716,11 @@ pub fn copy_provider_hooks(sys: &crate::providers::Sys, bundle_dir: &str, root: 
 /// skipped. `.github` (and any provider with no rewritable launcher path)
 /// carries a portable, team-committed command form that must not be pinned to
 /// a machine-local path here; its migration rides the bundle-merge path in
-/// `copy_provider_hooks` instead. Returns the providers whose manifest changed.
+/// `copy_provider_hooks` instead. A Cursor manifest that still runs the retired
+/// `preToolUse` before-edit gate is migrated here too (`migrate_cursor_gate`),
+/// in either spelling, so an update moves it to the post-edit hook whether or
+/// not the user re-consents to hooks. Returns the providers whose manifest
+/// changed.
 pub fn repair_stale_hook_manifests(sys: &Sys, root: &str, providers: &[&'static str], skill_root: Option<&str>) -> Result<Vec<&'static str>, String> {
     let skill_root = skill_root.unwrap_or(root);
     let absolute = skill_root != root || sys.is_home_dir(root);
@@ -544,12 +738,17 @@ pub fn repair_stale_hook_manifests(sys: &Sys, root: &str, providers: &[&'static 
             }
             for rel in rels {
                 let path = jsp::join(&[root, spec.dest_provider, rel]);
-                if !manifest_has_stale_hook(&path) {
+                let cursor_gate = *provider == ".cursor" && manifest_has_retired_cursor_gate(&path);
+                if !cursor_gate && !manifest_has_stale_hook(&path) {
                     continue;
                 }
                 let Ok(text) = util::read_text(&path) else { continue };
                 let Ok(parsed) = serde_json::from_str::<Value>(&text) else { continue };
-                let rewritten = rewrite_hook_commands_for_skill_root(&parsed, provider, skill_root, absolute);
+                let rewritten = if cursor_gate {
+                    migrate_cursor_gate(&parsed, skill_root, absolute)
+                } else {
+                    rewrite_hook_commands_for_skill_root(&parsed, provider, skill_root, absolute)
+                };
                 if rewritten != parsed {
                     util::write_bytes(&path, format!("{}\n", util::json_pretty(&rewritten)).as_bytes())?;
                     changed = true;
@@ -564,7 +763,7 @@ pub fn repair_stale_hook_manifests(sys: &Sys, root: &str, providers: &[&'static 
 }
 
 /// JS: HOOK_EXPLAINER
-pub const HOOK_EXPLAINER: &str = "\nImpeccable can install a design hook for this project. In Claude/Codex it\nchecks UI files after edits; in Cursor it checks proposed writes before they\nland and can block writes with detector findings. It feeds results back to\nyour agent so design slop gets caught as you build. Change it later with\n/melzi hooks on|off.\n";
+pub const HOOK_EXPLAINER: &str = "\nImpeccable can install a design hook for this project. It checks UI files\nafter your agent edits them and feeds the findings back to the agent, so\ndesign slop gets caught as you build. Change it later with\n/melzi hooks on|off.\n";
 
 /// JS: impeccable-config.mjs#setHookConsent(root, value)
 pub fn set_hook_consent(root: &str, value: &str) -> Result<String, String> {

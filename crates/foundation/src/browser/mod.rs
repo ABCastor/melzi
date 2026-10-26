@@ -160,6 +160,14 @@ pub struct BrowserConfig {
     /// applies `|| 80`).
     #[serde(default)]
     pub line_length_max: Option<serde_json::Value>,
+    /// Rules whose findings the host removes from the report after the scan
+    /// (the CLI's `ignoreRules`, a rule outside every requested `--scope`).
+    /// Read in any mode, and only where one rule's finding stands in for
+    /// another's: a finding nobody will see speaks for nothing (a
+    /// `low-contrast` finding that vanishing ink would let take the place of
+    /// the element's size findings). No finding is filtered by it here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unreported_rules: Vec<String>,
     /// The installed rule pack, when the host linked one in
     /// ([`crate::rule_pack`]). Not part of the JSON config: a pack is a Rust
     /// value, so it is skipped in both directions and a config parsed from

@@ -24,7 +24,14 @@
     "url": "git+https://github.com/ABCastor/melzi.git"
   },
   "engines": {
-    "node": ">=22.18.0"
+    "node": ">=18.19.0"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=22.18.0",
+      "onFail": "warn"
+    }
   },
   "type": "module",
   "bin": {
@@ -61,8 +68,10 @@
     "test:new-work-e2e": "node scripts/run-tests.mjs new-work-e2e",
     "test:live-e2e-agent": "node scripts/run-tests.mjs live-e2e-agent",
     "test:skill-behavior": "node scripts/run-tests.mjs skill-behavior",
+    "test:skill-activation": "node scripts/run-tests.mjs skill-activation",
     "test:skill-workflow": "node scripts/run-tests.mjs skill-workflow",
     "test:live-svelte-adapter-deepseek": "node scripts/run-tests.mjs live-svelte-adapter-deepseek",
+    "test:rust-changed": "node scripts/test-rust-changed.mjs",
     "smoke:hooks": "node scripts/smoke-provider-hooks.mjs",
     "audit": "bun audit --audit-level=moderate",
     "prepack": "bun run check:typescript && cp README.md .npm-readme-backup && cp README.npm.md README.md",
@@ -84,7 +93,7 @@
     "@ai-sdk/google": "^4.0.8",
     "@ai-sdk/openai": "^4.0.7",
     "@anthropic-ai/claude-agent-sdk": "^0.3.165",
-    "@anthropic-ai/sdk": "^0.131.0",
+    "@anthropic-ai/sdk": "^0.135.0",
     "@babel/parser": "^8.0.4",
     "@types/node": "26.6.4",
     "ai": "^7.0.14",

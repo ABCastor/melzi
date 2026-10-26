@@ -11,7 +11,8 @@
 //! image that covers it; a link or date closing the block above and a
 //! heading's own icon or accent bar keep reporting. Round 7's equal-gaps
 //! call (r7-t1) reports a heading spaced evenly under running prose, and an
-//! even gap under one line or with more room above still passes.
+//! even gap under one line or with more room above still passes. A heading
+//! inside a `blockquote` is a pull quote and sets no rhythm.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -115,6 +116,11 @@ fn fixture_flags_crowded_headings_and_passes_the_misread_shapes() {
         // A heading's own icon or accent bar draws no edge above it.
         "\"Flag Icon Heading\" has 12px above vs 40px below",
         "\"Flag Accent Bar Heading\" has 12px above vs 40px below",
+        // observations-1006 row 10: a subtitle on two lines is a block of
+        // its own, not the heading's.
+        "\"Flag Two Line Subtitle\" has 0px above vs 24px below",
+        // A short line closing the block above is not a subtitle.
+        "\"Flag Tail Line Touching\" has 0px above vs 24px below",
     ] {
         assert!(
             snippets.iter().any(|s| s.contains(heading)),
@@ -134,5 +140,5 @@ fn fixture_flags_crowded_headings_and_passes_the_misread_shapes() {
     );
     let stray: Vec<&&str> = snippets.iter().filter(|s| s.contains("\"Pass ")).collect();
     assert!(stray.is_empty(), "should-pass headings flagged: {stray:?}");
-    assert_eq!(snippets.len(), 24, "{snippets:?}");
+    assert_eq!(snippets.len(), 26, "{snippets:?}");
 }

@@ -29,14 +29,15 @@ const STATUS_MESSAGE = 'Checking UI changes';
 // The Stop deep pass scans every UI file touched in the session with the
 // full rule set, so it gets a longer budget than the single-file per-edit
 // pass. Wired only for Claude Code and Codex, which both dispatch a native
-// `Stop` hook event; Cursor's stop hook is not consistently dispatched and
-// GitHub Copilot's stop-style events do not feed context back to the model.
+// `Stop` hook event; Cursor's stop hook can only answer with a follow-up user
+// message and GitHub Copilot's stop-style events do not feed context back to
+// the model.
 const STOP_TIMEOUT_SECONDS = 30;
 const STOP_STATUS_MESSAGE = 'Design deep pass';
 
 // The hook is a verb of the impeccable launcher that ships in the skill's
-// scripts dir: `<scripts>/impeccable hook` (per-edit and Stop passes) and
-// `<scripts>/impeccable hook-before-edit` (Cursor's preToolUse). The launcher
+// scripts dir: `<scripts>/impeccable hook` (per-edit and Stop passes; Cursor's
+// retired preToolUse gate ran `hook-before-edit`, which still works). The launcher
 // runs the platform binary next to it, or downloads it once; no runtime probe
 // is needed and there is no Node on the path to check.
 export const LAUNCHER_NAME = 'impeccable';
@@ -160,13 +161,23 @@ export function buildCodexHooksManifest(skillDir = '.codex') {
   };
 }
 
+// Cursor runs the post-edit hook on `postToolUse`, whose response field
+// `additional_context` Cursor injects after the tool result. Every agent file
+// edit reports `tool_name: "Write"` with `tool_input: { file_path, content }`;
+// the matcher is an unanchored regex, so the anchors keep `WriteShellStdin`
+// out. (`afterFileEdit` fires too but its response never reaches the agent.)
+// No Stop entry: Cursor's `stop` can only answer with a `followup_message`
+// submitted as a new user turn (#1061). The engine's twin is
+// `cursor_hook_manifest` in crates/context/src/hook_markers.rs.
+// https://cursor.com/docs/hooks
 export function buildCursorHooksManifest(scriptsDir = CURSOR_SCRIPTS) {
   return {
     version: 1,
     hooks: {
-      preToolUse: [
+      postToolUse: [
         {
-          command: guardedLauncher(launcherIn(scriptsDir), 'hook-before-edit'),
+          command: guardedLauncher(launcherIn(scriptsDir)),
+          matcher: '^Write$',
           timeout: TIMEOUT_SECONDS,
         },
       ],

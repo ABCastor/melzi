@@ -2,6 +2,7 @@ import { copyDistributionNotices } from './distribution-notices.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildCursorHooksManifest } from './transformers/hooks.js';
+import { quoteLauncher } from './plugin-paths.js';
 
 const PROJECT_SCRIPTS = '.cursor/skills/melzi/scripts';
 
@@ -9,8 +10,8 @@ export function rewriteCursorPluginMarkdown(text, { agent = false } = {}) {
   // Installed plugins live outside the workspace. Keep the shared Setup flow,
   // but remove its project-install fallback and quote executable paths.
   text = text.replace(`, and \`${PROJECT_SCRIPTS}\` is the fallback only when the runtime reports no base directory`, '');
-  text = text.replaceAll(`${PROJECT_SCRIPTS}/impeccable.cmd`, '"<skill-base-dir>/scripts/impeccable.cmd"');
-  text = text.replaceAll(`${PROJECT_SCRIPTS}/impeccable`, '"<skill-base-dir>/scripts/impeccable"');
+  text = text.replaceAll(`${PROJECT_SCRIPTS}/impeccable.cmd`, quoteLauncher('<skill-base-dir>', true));
+  text = text.replaceAll(`${PROJECT_SCRIPTS}/impeccable`, quoteLauncher('<skill-base-dir>'));
   text = text.replaceAll(PROJECT_SCRIPTS, '<skill-base-dir>/scripts');
   text = text.replace('`<skill-base-dir>/scripts/impeccable context`', '`"<skill-base-dir>/scripts/impeccable" context`');
   if (agent && text.includes('<skill-base-dir>')) {

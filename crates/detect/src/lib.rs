@@ -10,15 +10,19 @@
 //! [`engines::Engines`]. crates/html depends on this crate for the design
 //! system types and helpers ([`design_system`]).
 
+pub mod cdp_endpoint;
 pub mod cli;
 pub mod config;
 pub mod design_system;
 pub mod detect_text;
 pub mod engines;
 pub mod file_system;
+pub mod github_annotations;
 pub mod ignores;
 pub mod jsp;
+pub mod list_rules;
 pub mod profiler;
+pub mod project_tokens;
 pub mod regex_matchers;
 pub mod skills;
 pub mod util;
@@ -65,11 +69,9 @@ Commands:
   help                             List all available skills and commands
   install                          Install an explicit local IMPECCABLE_BUNDLE_PATH bundle
   link                             Symlink skills from a local checkout or submodule
-  update                           Refresh skills from an explicit local bundle
-  check                            Compare skills with an explicit local bundle
-
-Remote skill installation and updates are unavailable.
-Local build and installation: https://github.com/ABCastor/melzi#build-and-use
+  update                           Update skills to the latest version
+  check                            Check if skill updates are available
+  telemetry off|on|status          Turn the roll API's anonymous usage data off or on, or show it
 
 Options:
   --help       Show this help message

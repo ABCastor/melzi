@@ -4,14 +4,14 @@
 //! `crate::js_ext_a::utf16_index`) and/or a `selector`.
 
 use crate::checks::rules::{
-    extract_shadow_lengths, find_shadow_color, glow_is_perceptible, DeclaredCorners, ANY, B, D,
-    NOMINAL_CARD_WIDTH_PX,
+    extract_shadow_lengths, find_shadow_color, glow_is_perceptible, is_radius_property,
+    DeclaredCorners, ANY, B, D, NOMINAL_CARD_WIDTH_PX,
 };
 use crate::color::{
     color_to_hex, has_chroma, parse_any_color, relative_luminance, split_top_level_commas, Rgba,
 };
 
-use crate::js::{self, ci, math_min, number_to_string, parse_float, WS, WS_CHARS};
+use crate::js::{self, ci, math_max, math_min, number_to_string, parse_float, WS, WS_CHARS};
 
 use crate::js_ext_a::{
     advance_utf16, is_word_byte, last_index_of_byte, split_commas_outside_parens, split_ws,
@@ -262,7 +262,15 @@ re!(
 
 /// JS: checks.mjs#scanCssTextForGridBackground
 pub fn scan_css_text_for_grid_background(content: &str) -> Vec<IndexedHit> {
-    for blk in GRID_BLOCK_RE.captures_iter(content) {
+    grid_background_hits(content).take(1).collect()
+}
+
+/// Every block of `content` that paints a two-axis grid-line background, in
+/// source order, read lazily: [`scan_css_text_for_grid_background`] keeps
+/// the first, and a walk that picks the first candidate the page shows
+/// reads on only past one it passes over.
+pub fn grid_background_hits(content: &str) -> impl Iterator<Item = IndexedHit> + '_ {
+    GRID_BLOCK_RE.captures_iter(content).filter_map(|blk| {
         let block = blk
             .get(1)
             .or_else(|| blk.get(2))
@@ -282,20 +290,17 @@ pub fn scan_css_text_for_grid_background(content: &str) -> Vec<IndexedHit> {
             bg_joined.push(';');
         }
         if hairline_count == 0 {
-            continue;
+            return None;
         }
         let has_px_cell =
             SIZE_DECL_PX_RE.is_match(block) || SHORTHAND_PX_ANY_RE.is_match(&bg_joined);
         // A single hairline is a line, divider, or rail, not a grid, even
         // when tiled by a 2D px cell (issue #615).
-        if hairline_count >= 2 && has_px_cell {
-            return vec![IndexedHit {
-                index: blk.get(0).unwrap().start(),
-                snippet: "two-axis grid-line gradient background".to_string(),
-            }];
-        }
-    }
-    Vec::new()
+        (hairline_count >= 2 && has_px_cell).then(|| IndexedHit {
+            index: blk.get(0).unwrap().start(),
+            snippet: "two-axis grid-line gradient background".to_string(),
+        })
+    })
 }
 
 // ─── scanCssTextForRadialHalo ───────────────────────────────────────────────
@@ -572,6 +577,15 @@ re!(
         target = ci("target")
     )
 );
+
+/// Whether a selector styles a selection, hover or focus state: a stripe
+/// there marks the chosen item, not a card. The stripe scans skip it.
+pub(crate) fn selector_is_state_indicator(selector: &str) -> bool {
+    STATE_PSEUDO_TARGET_RE.is_match(selector)
+        || ARIA_SELECTED_TRUE_RE.is_match(selector)
+        || has_aria_current_not_false(selector)
+        || selector_has_state_word(selector, false)
+}
 
 // ─── scanCssTextForPseudoStripe ─────────────────────────────────────────────
 re!(COMMENT_RE, format!(r"/\*{ANY}*?\*/"));
@@ -1534,6 +1548,33 @@ impl<'a> CssHostIndex<'a> {
         corners
     }
 
+    /// Whether a radius declaration styles the box the declaration at `pos`
+    /// sits on, the stylesheet reading side-tab takes: a rule
+    /// [`tied_rules`](Self::tied_rules) ties to the box's hosts sets one, so
+    /// `.card` rules and grouped selectors count and a compound that adds to
+    /// the host (`.card.is-active`) does not. A pseudo-element's own rules
+    /// count too: the host forms name its element, the block's selectors as
+    /// written name the pseudo-element itself. A statement that might bring a
+    /// radius in unseen (a mixin, `@apply`) is not one.
+    pub fn declaration_declares_radius(&self, pos: usize) -> bool {
+        let Some(mut hosts) = self.declaration_hosts(pos) else {
+            return false;
+        };
+        if let Some(Some(b)) = self.declaration_block(pos) {
+            for selector in &self.hosts[b] {
+                if !hosts.contains(selector) {
+                    hosts.push(selector.clone());
+                }
+            }
+        }
+        self.tied_rules(&hosts).iter().any(|id| {
+            self.rules[*id]
+                .decls
+                .iter()
+                .any(|d| matches!(d, RadiusDecl::Set(prop, _) if is_radius_property(prop)))
+        })
+    }
+
     /// The radius rules naming one of `hosts`, in source order: what
     /// [`corners_for_hosts`](Self::corners_for_hosts) applies.
     fn tied_rules(&self, hosts: &[String]) -> Vec<usize> {
@@ -1623,22 +1664,35 @@ impl<'a> CssHostIndex<'a> {
         side: usize,
         sheet: &DeclaredCorners,
     ) -> bool {
+        self.hosts_known_square(self.declaration_hosts(pos), side, sheet)
+    }
+
+    /// The host selectors of the box the declaration at `pos` (a byte offset
+    /// into the text the index was built on) styles: the innermost block
+    /// around it, or `&` at the top level of a CSS-in-JS template. `None`
+    /// when the box cannot be named: the declaration or an enclosing selector
+    /// is interpolated.
+    pub fn declaration_hosts(&self, pos: usize) -> Option<Vec<String>> {
+        match self.declaration_block(pos)? {
+            None => Some(vec!["&".to_string()]),
+            Some(b) if self.hosts_unknown[b] => None,
+            Some(b) => Some(self.host_forms(&self.hosts[b])),
+        }
+    }
+
+    /// The innermost block around the declaration at `pos`, `Some(None)` at
+    /// the top level, `None` inside an interpolation the walk read as text.
+    fn declaration_block(&self, pos: usize) -> Option<Option<usize>> {
         let pos = self.content_offset(pos);
         if self
             .interpolations
             .iter()
             .any(|(start, end)| *start <= pos && pos <= *end)
         {
-            return false;
+            return None;
         }
         let before = self.opens.partition_point(|open| *open < pos);
-        let block = (0..before).rev().find(|b| self.closes[*b] >= pos);
-        let hosts = match block {
-            None => Some(vec!["&".to_string()]),
-            Some(b) if self.hosts_unknown[b] => None,
-            Some(b) => Some(self.host_forms(&self.hosts[b])),
-        };
-        self.hosts_known_square(hosts, side, sheet)
+        Some((0..before).rev().find(|b| self.closes[*b] >= pos))
     }
 
     /// [`side_stripe_on_rounded_host`](Self::side_stripe_on_rounded_host)'s
@@ -1995,9 +2049,410 @@ fn polygon_is_rectilinear(body: &str) -> bool {
     })
 }
 
+/// One polygon coordinate as a number and its unit, when it is a plain
+/// length or percentage (`96%`, `4px`, `0`). A `calc()` or a variable is not.
+fn polygon_coordinate_number(token: &str) -> Option<(f64, String)> {
+    let t = js::trim(token).to_ascii_lowercase();
+    let unit_start = t.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+')).unwrap_or(t.len());
+    let value: f64 = t[..unit_start].parse().ok()?;
+    let unit = &t[unit_start..];
+    if !unit.chars().all(|c| c.is_ascii_alphabetic() || c == '%') {
+        return None;
+    }
+    // A zero is a zero in any unit.
+    Some((value, if value == 0.0 { String::new() } else { unit.to_string() }))
+}
+
+/// Whether a `polygon()` body is a zigzag edge: its vertices take two to
+/// four distinct values on one axis and step evenly along the other.
+/// presswhisper.com's tape ribbon (`100% 20%, 96% 40%, 100% 60%, 96% 80%,
+/// ...`) notches both ends that way; a hand-drawn contour wanders on both
+/// axes. A coordinate that is not a plain number answers no.
+fn polygon_is_zigzag(body: &str) -> bool {
+    let mut xs: Vec<(f64, String)> = Vec::new();
+    let mut ys: Vec<(f64, String)> = Vec::new();
+    for (i, point) in split_top_level(body, |c| c == ',').into_iter().enumerate() {
+        let coords = split_top_level(point, char::is_whitespace);
+        if i == 0 && coords.len() == 1 && matches!(js::to_lower_case(coords[0]).as_str(), "nonzero" | "evenodd") {
+            continue;
+        }
+        let [x, y] = coords.as_slice() else {
+            return false;
+        };
+        let (Some(x), Some(y)) = (polygon_coordinate_number(x), polygon_coordinate_number(y)) else {
+            return false;
+        };
+        xs.push(x);
+        ys.push(y);
+    }
+    // One unit per axis, so the values compare.
+    let one_unit = |v: &[(f64, String)]| {
+        let mut units = v.iter().map(|(_, u)| u.as_str()).filter(|u| !u.is_empty());
+        let first = units.next();
+        units.all(|u| Some(u) == first)
+    };
+    if xs.len() < 3 || !one_unit(&xs) || !one_unit(&ys) {
+        return false;
+    }
+    let distinct = |v: &[(f64, String)]| {
+        let mut d: Vec<f64> = Vec::new();
+        for (n, _) in v {
+            if !d.iter().any(|x| (x - n).abs() < 0.01) {
+                d.push(*n);
+            }
+        }
+        d.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        d
+    };
+    let even_steps = |d: &[f64]| {
+        d.len() >= 3 && {
+            let step = d[1] - d[0];
+            step > 0.0 && d.windows(2).all(|w| ((w[1] - w[0]) - step).abs() <= 0.5)
+        }
+    };
+    let (dx, dy) = (distinct(&xs), distinct(&ys));
+    let xv: Vec<f64> = xs.iter().map(|(n, _)| *n).collect();
+    let yv: Vec<f64> = ys.iter().map(|(n, _)| *n).collect();
+    ((2..=4).contains(&dx.len()) && even_steps(&dy) && teeth_alternate(&yv, dy[1] - dy[0], &xv))
+        || ((2..=4).contains(&dy.len()) && even_steps(&dx) && teeth_alternate(&xv, dx[1] - dx[0], &yv))
+}
+
+/// Whether the vertices that advance one step at a time along `along` swing
+/// back and forth on `across` like teeth: every swing the same size, each
+/// one the other way from the last, at least three of them. A torn edge
+/// with levels in no order (96%, 97%, 99%, 100%) swings by uneven amounts.
+fn teeth_alternate(along: &[f64], step: f64, across: &[f64]) -> bool {
+    let n = along.len();
+    let mut swings = 0usize;
+    let mut last: Option<f64> = None;
+    for i in 0..n {
+        let j = (i + 1) % n;
+        if ((along[j] - along[i]).abs() - step).abs() > 0.5 {
+            // A side that is not one tooth step ends the run.
+            last = None;
+            continue;
+        }
+        let swing = across[j] - across[i];
+        if swing.abs() < 0.01 {
+            continue;
+        }
+        if let Some(prev) = last {
+            if prev.signum() == swing.signum() || (prev.abs() - swing.abs()).abs() > 0.5 {
+                return false;
+            }
+        }
+        last = Some(swing);
+        swings += 1;
+    }
+    swings >= 3
+}
+
+re!(PATH_TOKEN_RE, r"[A-Za-z]|[-+]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?".to_string());
+
+/// Whether a `path()` body draws a rounded rectangle: every straight
+/// segment (`L`, `H`, `V`, a closing `Z`) runs along an edge of the box the
+/// path's points span, the straight segments reach all four of its edges,
+/// and each run of curves between them joins two adjacent edges, turning a
+/// corner. sinter.systems' smooth-corner buttons are squircles drawn that
+/// way. A blob has no straight side, or one; a wave divider (straight top
+/// and sides, a curved bottom) has three, and its curves run along one
+/// edge. The box is spanned by points sampled along every curve as well as
+/// the segment ends, so a curve that bulges outside the straight sides
+/// moves the box off them. Path data the reader cannot follow answers no.
+fn path_is_rounded_rectangle(body: &str) -> bool {
+    // Path data holds no parentheses: the body ends at the first one. An
+    // inline style escapes the quotes, and a fill rule may lead.
+    let data = body.split(')').next().unwrap_or("").replace("&quot;", "\"");
+    // The fill rule, where one leads, is a keyword before the first comma;
+    // the path data after it holds commas of its own.
+    let data = match data.find(',') {
+        Some(i) if matches!(data[..i].trim().to_ascii_lowercase().as_str(), "nonzero" | "evenodd") => {
+            data[i + 1..].to_string()
+        }
+        _ => data,
+    };
+    let data = data.trim_matches(|c: char| c == '"' || c == '\'' || c.is_whitespace());
+    let tokens: Vec<&str> = PATH_TOKEN_RE.find_iter(data).map(|m| m.as_str()).collect();
+    let mut points: Vec<(f64, f64)> = Vec::new();
+    // Every segment in drawing order: start, end, and whether it is straight.
+    let mut segments: Vec<((f64, f64), (f64, f64), bool)> = Vec::new();
+    let (mut cur, mut start) = ((0.0f64, 0.0f64), (0.0f64, 0.0f64));
+    // The last cubic or quadratic control point, for `S` and `T` to reflect.
+    let mut last_cubic: Option<(f64, f64)> = None;
+    let mut last_quad: Option<(f64, f64)> = None;
+    let mut i = 0usize;
+    let mut cmd: Option<char> = None;
+    while i < tokens.len() {
+        let tok = tokens[i];
+        let c = tok.chars().next().unwrap_or(' ');
+        if c.is_ascii_alphabetic() {
+            cmd = Some(c);
+            i += 1;
+            if c == 'Z' || c == 'z' {
+                last_cubic = None;
+                last_quad = None;
+                if cur != start {
+                    segments.push((cur, start, true));
+                }
+                cur = start;
+                points.push(cur);
+                cmd = None;
+            }
+            continue;
+        }
+        let Some(command) = cmd else { return false };
+        let arity = match command.to_ascii_uppercase() {
+            'M' | 'L' | 'T' => 2,
+            'H' | 'V' => 1,
+            'C' => 6,
+            'S' | 'Q' => 4,
+            'A' => 7,
+            _ => return false,
+        };
+        if i + arity > tokens.len() {
+            return false;
+        }
+        let mut args = Vec::with_capacity(arity);
+        for t in &tokens[i..i + arity] {
+            match t.parse::<f64>() {
+                Ok(v) if v.is_finite() => args.push(v),
+                _ => return false,
+            }
+        }
+        i += arity;
+        let rel = command.is_ascii_lowercase();
+        let base = if rel { cur } else { (0.0, 0.0) };
+        let end = match command.to_ascii_uppercase() {
+            'H' => (if rel { cur.0 + args[0] } else { args[0] }, cur.1),
+            'V' => (cur.0, if rel { cur.1 + args[0] } else { args[0] }),
+            _ => (base.0 + args[arity - 2], base.1 + args[arity - 1]),
+        };
+        let at = |k: usize| (base.0 + args[k], base.1 + args[k + 1]);
+        let reflect = |c: Option<(f64, f64)>| c.map_or(cur, |c| (2.0 * cur.0 - c.0, 2.0 * cur.1 - c.1));
+        let (mut cubic, mut quad) = (None, None);
+        match command.to_ascii_uppercase() {
+            'C' => {
+                let (c1, c2) = (at(0), at(2));
+                points.extend(sample_cubic(cur, c1, c2, end));
+                cubic = Some(c2);
+            }
+            'S' => {
+                let (c1, c2) = (reflect(last_cubic), at(0));
+                points.extend(sample_cubic(cur, c1, c2, end));
+                cubic = Some(c2);
+            }
+            'Q' => {
+                let c = at(0);
+                points.extend(sample_cubic(cur, lerp(cur, c, 2.0 / 3.0), lerp(end, c, 2.0 / 3.0), end));
+                quad = Some(c);
+            }
+            'T' => {
+                let c = reflect(last_quad);
+                points.extend(sample_cubic(cur, lerp(cur, c, 2.0 / 3.0), lerp(end, c, 2.0 / 3.0), end));
+                quad = Some(c);
+            }
+            'A' => points.extend(sample_arc(cur, args[0], args[1], args[2], args[3] != 0.0, args[4] != 0.0, end)),
+            _ => {}
+        }
+        last_cubic = cubic;
+        last_quad = quad;
+        match command.to_ascii_uppercase() {
+            'M' => {
+                start = end;
+                // Pairs after a moveto are implicit linetos.
+                cmd = Some(if rel { 'l' } else { 'L' });
+            }
+            // A straight command of zero length still ends a run of curves:
+            // a squircle written as `c ... L 146.016 20` where the curve
+            // already reached (146.016, 20) is two corners, not one curve.
+            'L' | 'H' | 'V' => segments.push((cur, end, true)),
+            _ => segments.push((cur, end, false)),
+        }
+        cur = end;
+        points.push(cur);
+    }
+    // A zero-length side still marks the edge it sits on.
+    let lines: Vec<_> = segments.iter().filter(|s| s.2).map(|s| (s.0, s.1)).collect();
+    if lines.len() < 4 || points.is_empty() {
+        return false;
+    }
+    let (mut min_x, mut max_x, mut min_y, mut max_y) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+    for (x, y) in &points {
+        min_x = min_x.min(*x);
+        max_x = max_x.max(*x);
+        min_y = min_y.min(*y);
+        max_y = max_y.max(*y);
+    }
+    let tol = 0.01 * (max_x - min_x).max(max_y - min_y).max(1.0);
+    let near = |a: f64, b: f64| (a - b).abs() <= tol;
+    let mut edges = [false; 4];
+    for (a, b) in &lines {
+        let side = if near(a.1, min_y) && near(b.1, min_y) {
+            0
+        } else if near(a.0, max_x) && near(b.0, max_x) {
+            1
+        } else if near(a.1, max_y) && near(b.1, max_y) {
+            2
+        } else if near(a.0, min_x) && near(b.0, min_x) {
+            3
+        } else {
+            return false;
+        };
+        edges[side] = true;
+    }
+    if !edges.iter().all(|e| *e) {
+        return false;
+    }
+    // Each run of curves between two straight sides turns a corner: it
+    // starts on one edge and ends on an edge next to it (top or bottom to
+    // left or right). A wave along an edge starts and ends on the same one.
+    let on_edges = |p: (f64, f64)| -> Vec<usize> {
+        let mut e = Vec::new();
+        if near(p.1, min_y) { e.push(0) }
+        if near(p.0, max_x) { e.push(1) }
+        if near(p.1, max_y) { e.push(2) }
+        if near(p.0, min_x) { e.push(3) }
+        e
+    };
+    let Some(first_line) = segments.iter().position(|s| s.2) else { return false };
+    let n = segments.len();
+    let mut run: Option<((f64, f64), (f64, f64))> = None;
+    for k in 1..=n {
+        let seg = segments[(first_line + k) % n];
+        if seg.2 {
+            if let Some((a, b)) = run.take() {
+                let (ea, eb) = (on_edges(a), on_edges(b));
+                if !ea.iter().any(|x| eb.iter().any(|y| x % 2 != y % 2)) {
+                    return false;
+                }
+            }
+        } else {
+            run = Some(match run {
+                Some((a, _)) => (a, seg.1),
+                None => (seg.0, seg.1),
+            });
+        }
+    }
+    true
+}
+
+const CURVE_SAMPLES: usize = 16;
+
+fn lerp(a: (f64, f64), b: (f64, f64), t: f64) -> (f64, f64) {
+    (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t)
+}
+
+/// Points along a cubic Bezier, its ends excluded.
+fn sample_cubic(p0: (f64, f64), p1: (f64, f64), p2: (f64, f64), p3: (f64, f64)) -> Vec<(f64, f64)> {
+    (1..CURVE_SAMPLES)
+        .map(|k| {
+            let t = k as f64 / CURVE_SAMPLES as f64;
+            let u = 1.0 - t;
+            let (a, b, c, d) = (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
+            (a * p0.0 + b * p1.0 + c * p2.0 + d * p3.0, a * p0.1 + b * p1.1 + c * p2.1 + d * p3.1)
+        })
+        .collect()
+}
+
+/// Points along an SVG elliptical arc, its ends excluded (the endpoint to
+/// centre conversion of SVG 1.1 F.6.5, radii scaled up when too small).
+fn sample_arc(
+    from: (f64, f64),
+    rx: f64,
+    ry: f64,
+    rotation_deg: f64,
+    large: bool,
+    sweep: bool,
+    to: (f64, f64),
+) -> Vec<(f64, f64)> {
+    let (mut rx, mut ry) = (rx.abs(), ry.abs());
+    if from == to || rx == 0.0 || ry == 0.0 {
+        return Vec::new();
+    }
+    let phi = rotation_deg.to_radians();
+    let (sin, cos) = phi.sin_cos();
+    let (dx, dy) = ((from.0 - to.0) / 2.0, (from.1 - to.1) / 2.0);
+    let (x1, y1) = (cos * dx + sin * dy, -sin * dx + cos * dy);
+    let lambda = (x1 * x1) / (rx * rx) + (y1 * y1) / (ry * ry);
+    if lambda > 1.0 {
+        rx *= lambda.sqrt();
+        ry *= lambda.sqrt();
+    }
+    let num = rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1;
+    let den = rx * rx * y1 * y1 + ry * ry * x1 * x1;
+    let mut coef = if den == 0.0 { 0.0 } else { (num / den).max(0.0).sqrt() };
+    if large == sweep {
+        coef = -coef;
+    }
+    let (cx1, cy1) = (coef * rx * y1 / ry, -coef * ry * x1 / rx);
+    let (cx, cy) = (
+        cos * cx1 - sin * cy1 + (from.0 + to.0) / 2.0,
+        sin * cx1 + cos * cy1 + (from.1 + to.1) / 2.0,
+    );
+    let angle = |ux: f64, uy: f64| uy.atan2(ux);
+    let theta1 = angle((x1 - cx1) / rx, (y1 - cy1) / ry);
+    let mut delta = angle((-x1 - cx1) / rx, (-y1 - cy1) / ry) - theta1;
+    let tau = std::f64::consts::TAU;
+    if sweep && delta < 0.0 {
+        delta += tau;
+    } else if !sweep && delta > 0.0 {
+        delta -= tau;
+    }
+    (1..CURVE_SAMPLES)
+        .map(|k| {
+            let t = theta1 + delta * k as f64 / CURVE_SAMPLES as f64;
+            let (ex, ey) = (rx * t.cos(), ry * t.sin());
+            (cos * ex - sin * ey + cx, sin * ex + cos * ey + cy)
+        })
+        .collect()
+}
+
+/// The vertex count of a `polygon()` body (the text between its
+/// parentheses) that approximates an organic contour, the shape the
+/// organic-clip-path rule reports: at least [`ORGANIC_POLYGON_MIN_VERTICES`]
+/// comma-separated points (a leading fill rule counts as one, as the rule
+/// has always counted it), every coordinate off a 25% grid on average, and
+/// neither rectilinear nor a zigzag. `None` otherwise.
+pub(crate) fn organic_polygon_vertices(body: &str) -> Option<usize> {
+    let points: Vec<&str> = body
+        .split(',')
+        .map(js::trim)
+        .filter(|p| !p.is_empty())
+        .collect();
+    if points.len() < ORGANIC_POLYGON_MIN_VERTICES {
+        return None;
+    }
+    // Vertices sitting on a coarse grid (multiples of 25%) are geometric;
+    // a contour has arbitrary values.
+    let mut off_grid = 0usize;
+    for p in &points {
+        for n in SIGNED_NUM_RE.find_iter(p) {
+            let v = parse_float(n.as_str());
+            if (v - js::math_round(v / 25.0) * 25.0).abs() > 0.5 {
+                off_grid += 1;
+            }
+        }
+    }
+    if off_grid < points.len() {
+        return None;
+    }
+    if polygon_is_rectilinear(body) || polygon_is_zigzag(body) {
+        return None;
+    }
+    Some(points.len())
+}
+
 /// JS: checks.mjs#scanCssTextForOrganicClipPath
+///
+/// The same declaration repeated (one inline style per button) reports once
+/// per selector.
 pub fn scan_css_text_for_organic_clip_path(style_text: &str) -> Vec<PatternFinding> {
-    let mut findings = Vec::new();
+    let mut findings: Vec<PatternFinding> = Vec::new();
+    let push = |findings: &mut Vec<PatternFinding>, f: PatternFinding| {
+        if !findings.iter().any(|g| g.snippet == f.snippet && g.selector == f.selector) {
+            findings.push(f);
+        }
+    };
     for m in ORGANIC_CLIP_RE.captures_iter(style_text) {
         let kind = js::to_lower_case(&m[1]);
         let body = m.get(2).map(|g| g.as_str()).unwrap_or("");
@@ -2007,10 +2462,10 @@ pub fn scan_css_text_for_organic_clip_path(style_text: &str) -> Vec<PatternFindi
             // not a rectilinear M/L/Z outline; letters in path data are only
             // commands
             let curves = CURVE_CMD_RE.find_iter(body).count();
-            if curves < 3 {
+            if curves < 3 || path_is_rounded_rectangle(body) {
                 continue;
             }
-            findings.push(PatternFinding {
+            push(&mut findings, PatternFinding {
                 id: "organic-clip-path".to_string(),
                 snippet: format!("clip-path: path() with {curves} curve segments"),
                 selector: enclosing_css_selector(style_text, index),
@@ -2019,36 +2474,14 @@ pub fn scan_css_text_for_organic_clip_path(style_text: &str) -> Vec<PatternFindi
             });
             continue;
         }
-        let points: Vec<&str> = body
-            .split(',')
-            .map(js::trim)
-            .filter(|p| !p.is_empty())
-            .collect();
-        if points.len() < ORGANIC_POLYGON_MIN_VERTICES {
+        let Some(vertices) = organic_polygon_vertices(body) else {
             continue;
-        }
-        // Vertices sitting on a coarse grid (multiples of 25%) are geometric;
-        // a contour has arbitrary values.
-        let mut off_grid = 0usize;
-        for p in &points {
-            for n in SIGNED_NUM_RE.find_iter(p) {
-                let v = parse_float(n.as_str());
-                if (v - js::math_round(v / 25.0) * 25.0).abs() > 0.5 {
-                    off_grid += 1;
-                }
-            }
-        }
-        if off_grid < points.len() {
-            continue;
-        }
-        if polygon_is_rectilinear(body) {
-            continue;
-        }
-        findings.push(PatternFinding {
+        };
+        push(&mut findings, PatternFinding {
             id: "organic-clip-path".to_string(),
             snippet: format!(
                 "clip-path: polygon() with {} vertices approximating an organic contour",
-                points.len()
+                vertices
             ),
             selector: enclosing_css_selector(style_text, index),
             index: None,
@@ -2520,6 +2953,20 @@ re!(
     format!(r"{B}(?:w|h|size)-(?:1|1\.5|2|2\.5|3|3\.5|4){B}")
 );
 
+/// The longest side of a pulsing dot over its shortest.
+const PULSE_DOT_MAX_ASPECT: f64 = 1.5;
+
+/// The px size an unprefixed Tailwind spacing class (`w-2`, `h-1.5`) gives
+/// one side, at Tailwind's 4px step; `None` when the class names none.
+fn tw_side_px(cls: &str, side: &str) -> Option<f64> {
+    cls.split_ascii_whitespace().find_map(|token| {
+        let n = token.strip_prefix(side)?.strip_prefix('-')?;
+        (!n.is_empty() && n.bytes().all(|b| b.is_ascii_digit() || b == b'.'))
+            .then(|| parse_float(n) * 4.0)
+            .filter(|px| px.is_finite())
+    })
+}
+
 /// JS: checks.mjs#scanCssTextForPulsingDot. `markup` defaults to `content`.
 pub fn scan_css_text_for_pulsing_dot(content: &str, markup: Option<&str>) -> Vec<PatternFinding> {
     let markup = markup.unwrap_or(content);
@@ -2580,6 +3027,11 @@ pub fn scan_css_text_for_pulsing_dot(content: &str, markup: Option<&str>) -> Vec
         if w < 2.0 || h < 2.0 || w > 16.0 || h > 16.0 {
             continue;
         }
+        // A dot is about as wide as it is tall: a 3 by 6px bar with rounded
+        // ends (a waveform's bar) is not one, however round its radius.
+        if math_max(w, h) > PULSE_DOT_MAX_ASPECT * math_min(w, h) {
+            continue;
+        }
         let radius = resolve_var_refs(
             decls.get("border-radius").map(|s| s.as_str()).unwrap_or(""),
             &custom_props,
@@ -2628,6 +3080,16 @@ pub fn scan_css_text_for_pulsing_dot(content: &str, markup: Option<&str>) -> Vec
         }
         if !TW_TINY_SIZE_RE.is_match(cls) {
             continue;
+        }
+        // With both sides named, the dot gates of the declaration path
+        // apply: `w-1 h-4` is a 4 by 16px bar, not a dot.
+        if let (Some(w), Some(h)) = (tw_side_px(cls, "w"), tw_side_px(cls, "h")) {
+            if w < 2.0 || h < 2.0 || w > 16.0 || h > 16.0 {
+                continue;
+            }
+            if math_max(w, h) > PULSE_DOT_MAX_ASPECT * math_min(w, h) {
+                continue;
+            }
         }
         let key = format!("tw:{}", cls);
         if seen.contains(&key) {
@@ -2679,6 +3141,64 @@ mod tests {
         assert_eq!(scan_css_text_for_organic_clip_path(blob).len(), 1);
     }
 
+    /// presswhisper.com 323796: a tape ribbon with zigzag ends.
+    #[test]
+    fn zigzag_polygons_are_geometric() {
+        let tape = ".tape-edges { clip-path: polygon(0% 0%, 100% 0%, 100% 20%, 96% 40%, 100% 60%, 96% 80%, 100% 100%, 0% 100%, 4% 80%, 0% 60%, 4% 40%, 0% 20%); }";
+        assert!(scan_css_text_for_organic_clip_path(tape).is_empty());
+        // A torn top edge: evenly stepped x, a few y values.
+        assert!(polygon_is_zigzag("0 10%, 10% 0, 20% 10%, 30% 0, 40% 10%, 50% 0, 60% 10%, 70% 0, 80% 10%, 90% 0, 100% 10%, 100% 100%, 0 100%"));
+        // Mixed units on one axis do not compare.
+        assert!(!polygon_is_zigzag("0 10px, 10% 0, 20% 10%, 30% 0, 40% 10px, 50% 0, 60% 10px, 70% 0, 80% 10px, 90% 0, 100% 10px, 100% 100%, 0 100%"));
+        // A blob wanders on both axes; uneven steps are not a zigzag.
+        assert!(!polygon_is_zigzag("50% 0%, 61% 8%, 74% 6%, 82% 16%, 94% 22%, 96% 36%, 100% 50%, 92% 63%, 88% 78%, 74% 88%, 60% 100%, 46% 96%"));
+        assert!(!polygon_is_zigzag("0% 0%, 100% 0%, 100% 13%, 96% 40%, 100% 62%, 96% 80%, 100% 100%, 0% 100%, 4% 77%, 0% 60%, 4% 31%, 0% 20%"));
+        // A coordinate that is not a plain number answers no.
+        assert!(!polygon_is_zigzag("0 0, calc(100% - 4px) 0, 100% 20%, 0 100%"));
+        // A torn bottom edge with a few levels in no order is not teeth.
+        let torn = ".t{clip-path:polygon(0 0, 100% 0, 100% 96%, 95% 100%, 90% 97%, 85% 100%, 80% 96%, 75% 99%, 70% 96%, 65% 100%, 60% 97%, 55% 99%, 50% 96%, 0 96%)}";
+        assert_eq!(scan_css_text_for_organic_clip_path(torn).len(), 1);
+    }
+
+    /// sinter.systems 321980: smooth-corner buttons clip to a squircle, an
+    /// inline style per button.
+    #[test]
+    fn squircle_paths_are_rounded_rectangles() {
+        let squircle = "M 25.2 0 L 110.003 0 c 10.4993 0 15.7489 0 19.429 2.6738 a 14 14 0 0 1 4.9854 6.7023 c 0.7856 2.2452 0.7856 5.0381 0.7856 10.6239 L 135.203 20 c 0 5.5858 0 8.3787 -0.7856 10.6239 a 14 14 0 0 1 -4.9854 6.7023 c -3.6801 2.6738 -8.9297 2.6738 -19.429 2.6738 L 25.2 40 c -10.4993 0 -15.7489 0 -19.429 -2.6738 a 14 14 0 0 1 -4.9854 -6.7023 c -0.7856 -2.2452 -0.7856 -5.0381 -0.7856 -10.6239 L 0 20 c 0 -5.5858 0 -8.3787 0.7856 -10.6239 a 14 14 0 0 1 4.9854 -6.7023 c 3.6801 -2.6738 8.9297 -2.6738 19.429 -2.6738 Z";
+        let page = format!(
+            "<a style=\"clip-path: path(&quot;{squircle}&quot;);\">Talk</a><a style=\"clip-path: path(&quot;{squircle}&quot;);\">Explore</a>"
+        );
+        assert!(scan_css_text_for_organic_clip_path(&page).is_empty());
+        assert!(path_is_rounded_rectangle(&format!("'{squircle}')")));
+        // The same squircle where a corner's curve lands exactly where the
+        // straight side ends: a zero-length side still parts the corners.
+        let wide = squircle.replace("110.003", "120.816").replace("135.203", "146.016");
+        assert!(path_is_rounded_rectangle(&format!("'{wide}')")));
+        assert!(path_is_rounded_rectangle("evenodd, 'M10 0H90Q100 0 100 10V90Q100 100 90 100H10Q0 100 0 90V10Q0 0 10 0Z')"));
+        // A fill rule ahead of path data that holds commas of its own
+        // (review), and a comma right after the first command.
+        assert!(path_is_rounded_rectangle("evenodd, 'M10,0 H90 Q100,0 100,10 V90 Q100,100 90,100 H10 Q0,100 0,90 V10 Q0,0 10,0 Z')"));
+        assert!(path_is_rounded_rectangle("nonzero, 'M,10 0H90Q100 0 100 10V90Q100 100 90 100H10Q0 100 0 90V10Q0 0 10 0Z')"));
+        assert!(path_is_rounded_rectangle("'M10,0 H90 Q100,0 100,10 V90 Q100,100 90,100 H10 Q0,100 0,90 V10 Q0,0 10,0 Z')"));
+        // A blob of curves, and a curved shape with one flat side, still report.
+        let blob = ".b{clip-path:path('M50 0 C80 0 100 20 100 50 C100 80 80 100 50 100 C20 100 0 80 0 50 C0 20 20 0 50 0 Z')}";
+        assert_eq!(scan_css_text_for_organic_clip_path(blob).len(), 1);
+        assert!(!path_is_rounded_rectangle("'M0 100 L100 100 C100 40 70 0 50 0 C30 0 0 40 0 100 Z')"));
+        // Straight sides joined by curves that bulge far outside them.
+        assert!(!path_is_rounded_rectangle(
+            "'M20 0 H80 C150 -50 150 50 100 20 V80 C150 150 50 150 80 100 H20 C-50 150 -50 50 0 80 V20 C-50 -50 50 -50 20 0 Z')"
+        ));
+        // Corner arcs that take the long way round, outside the box.
+        assert!(!path_is_rounded_rectangle("'M10 0H90A10 10 0 1 1 100 10V90A10 10 0 1 1 90 100H10A10 10 0 1 1 0 90V10A10 10 0 1 1 10 0Z')"));
+        assert!(path_is_rounded_rectangle("'M10 0H90A10 10 0 0 1 100 10V90A10 10 0 0 1 90 100H10A10 10 0 0 1 0 90V10A10 10 0 0 1 10 0Z')"));
+        // A wave divider: straight top and sides, curves along the bottom.
+        let wave = ".hero{clip-path:path('M0 0 H1440 V300 C1260 360 1080 240 900 300 C720 360 540 240 360 300 C180 360 90 260 0 300 Z')}";
+        assert_eq!(scan_css_text_for_organic_clip_path(wave).len(), 1);
+        // The same organic declaration twice reports once.
+        let twice = format!("{blob}{blob}");
+        assert_eq!(scan_css_text_for_organic_clip_path(&twice).len(), 1);
+    }
+
     #[test]
     fn dark_root_bg_matches_node() {
         assert!(dark("body { background: #111827; }"));
@@ -2697,7 +3217,12 @@ mod tests {
     fn enclosing_selector_matches_node() {
         let cases: &[(&str, usize, Option<&str>)] = &[
             (".a { color: red }", 8, Some(".a")),
-            ("@media (x) { .b { c: d } }", 20, None),
+            // The first rule inside an at-rule block follows its brace
+            // (observations-1004 row 25: incredible.one's bounce rule).
+            ("@media (x) { .b { c: d } }", 20, Some(".b")),
+            ("@supports (x) { @media (y) {.b{c:d}} }", 32, Some(".b")),
+            ("@keyframes k { from { c: d } }", 22, None),
+            ("@keyframes k { 50% { c: d } }", 22, None),
             ("@media (x) { .b { c: d } }", 12, None),
             ("50% { c: d }", 6, None),
             ("from, to { c: d }", 12, None),
@@ -2709,6 +3234,22 @@ mod tests {
             ("<style>.q{r}", 10, None),
             (".a{b}.c{d}", 8, Some(".c")),
             (".a { b }", 0, None),
+            // Review of #1042: a nested style rule has no selector of its
+            // own (CSS nesting), whether it follows the parent's brace, a
+            // declaration, or an at-rule nested in the parent.
+            (".card { & > .s { c: d } }", 18, None),
+            (".card { c: d; .s { c: d } }", 21, None),
+            (".card { @media (x) { & .s { c: d } } }", 31, None),
+            ("@media (x) { .a{b} .c { d } }", 25, Some(".c")),
+            // A quoted or escaped brace opens no block.
+            (".q::before { content: \"{\"; } .gone { c: d }", 40, Some(".gone")),
+            (".q::before { content: '\\{'; } .gone { c: d }", 40, Some(".gone")),
+            // A quoted brace or semicolon in the selector itself bounds
+            // nothing either (second review of #1042).
+            ("[data-template*=\"{\"] { c: d }", 23, Some("[data-template*=\"{\"]")),
+            (".a{b} [title='x;y'] { c: d }", 22, Some("[title='x;y']")),
+            // A stray quote ends at its line.
+            ("a[x=\"] {}\n.c{d}\n.b { c: d }", 21, Some(".b")),
         ];
         for (text, idx, want) in cases {
             assert_eq!(
@@ -2717,6 +3258,20 @@ mod tests {
                 "{text:?} @ {idx}"
             );
         }
+        // #1076: a quoted brace or semicolon in an at-rule's header does
+        // not cut the header short, so the rule inside keeps its selector.
+        for text in [
+            "@supports (content: \"}\") { .b { c: d } }",
+            "@supports (content: \"{\") { .b { c: d } }",
+            "@supports (content: \"a;b\") { .b { c: d } }",
+            "@media (x) { @supports (content: 'x;y') { .b { c: d } } }",
+        ] {
+            let idx = text.find("c: d").unwrap();
+            assert_eq!(enclosing_css_selector(text, idx).as_deref(), Some(".b"), "{text:?}");
+        }
+        // A quoted semicolon still ends nothing in a rule nested in a style rule.
+        let nested = ".card { content: \"a;b\"; @media (x) { .s { c: d } } }";
+        assert_eq!(enclosing_css_selector(nested, nested.find("c: d").unwrap()), None);
     }
 
     #[test]
@@ -2834,6 +3389,81 @@ mod tests {
         let m =
             collect_pulse_keyframes("@keyframes n {50%{transform: translateY(2px) scale(1.2)}}");
         assert_eq!(m.entries(), &[("n".to_string(), true)]);
+    }
+
+    /// observations-1004 row 25: keyframes that move their box 4px or more,
+    /// or change its height alone, are not a pulse, however they fade.
+    #[test]
+    fn pulse_keyframes_that_move_or_resize_are_not_pulses() {
+        let pulses = |css: &str| collect_pulse_keyframes(css).entries()[0].1;
+        // imageto3d.studio's library-node-float.
+        assert!(!pulses(
+            "@keyframes f { 0% { opacity: 0.35; transform: none; } 50% { opacity: 0.55; transform: translateY(-14px); } 100% { opacity: 0.35; transform: none; } }"
+        ));
+        assert!(!pulses("@keyframes f { 0%, 100% { opacity: .4; translate: 0 0 } 50% { opacity: 1; translate: 0 -8px } }"));
+        assert!(!pulses("@keyframes f { 0% { opacity: 1; transform: translate3d(0, 0, 0) } 50% { opacity: .5; transform: translate3d(0, 0.5rem, 0) } }"));
+        // juskoe's wavePulse.
+        assert!(!pulses(
+            "@keyframes w { 0% { opacity: 0.4; height: 4px; } 50% { opacity: 1; height: 16px; } 100% { opacity: 0.4; height: 4px; } }"
+        ));
+        // Review of round 11: real pulses that must stay pulses.
+        // A centred ring, its translation spelled two ways.
+        assert!(pulses(
+            "@keyframes r { 0% { transform: translate(-50%,-50%) scale(1); opacity: 1 } 100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0 } }"
+        ));
+        // A GPU layer hint against no translation.
+        assert!(pulses("@keyframes g { 0%,100% { transform: translateZ(0) scale(1) } 50% { transform: scale(1.4); opacity: .4 } }"));
+        // A ripple that grows both sides.
+        assert!(pulses("@keyframes p { 0% { width: 10px; height: 10px; opacity: 1 } 100% { width: 30px; height: 30px; opacity: 0 } }"));
+        // An online dot that breathes a pixel, and a typing indicator's 2px bob.
+        assert!(pulses("@keyframes b { 0%,100% { opacity: 1; transform: translateY(0) } 50% { opacity: .5; transform: translateY(-1px) } }"));
+        assert!(pulses("@keyframes ty { 0%,60%,100% { opacity: .35; transform: none } 30% { opacity: 1; transform: translateY(-2px) } }"));
+        // A scale before the translate shrinks the travel (`scale(.5)
+        // translateY(6px)` moves 3px), so the travel is unknown and the
+        // pulse stays a pulse; a scale after the translate leaves it alone.
+        assert!(pulses("@keyframes s { 0% { opacity: 1; transform: scale(.5) translateY(0) } 100% { opacity: .4; transform: scale(.5) translateY(6px) } }"));
+        assert!(!pulses("@keyframes s2 { 0% { opacity: 1; transform: translateY(0) scale(.5) } 100% { opacity: .4; transform: translateY(6px) scale(.5) } }"));
+        // A percentage that changes cannot be read, and decides nothing.
+        assert!(pulses("@keyframes q { 0% { transform: translate(-50%, -50%); opacity: 1 } 100% { transform: translate(-50%, -60%); opacity: 0 } }"));
+        // Review of #1042: a percentage on one axis leaves the other read,
+        // so a centred float travels on y; a percentage that matches on
+        // both steps reads the px beside it.
+        assert!(!pulses("@keyframes c { 0%,100% { opacity: .4; transform: translate(-50%, 0) } 50% { opacity: 1; transform: translate(-50%, -14px) } }"));
+        assert!(!pulses("@keyframes c2 { 0%,100% { opacity: .4; transform: translate(-50%, -50%) } 50% { opacity: 1; transform: translate(-50%, -50%) translateY(-12px) } }"));
+        // A nested call cuts the arguments short: they decide nothing.
+        assert!(pulses("@keyframes c4 { 0%,100% { opacity: .4; transform: translate(calc(0px), 8px) } 50% { opacity: 1; transform: translate(0px, 8px) } }"));
+        assert!(pulses("@keyframes c3 { 0%,100% { opacity: .4; transform: translate(calc(-50% + 2px), 0) } 50% { opacity: 1; transform: translateX(-50%) } }"));
+        // One height, or one step that translates, decides nothing.
+        assert!(pulses("@keyframes h { 0%, 100% { opacity: .4; height: 8px } 50% { opacity: 1 } }"));
+        assert!(pulses("@keyframes s { 0% { opacity: 1 } 50% { opacity: .5; transform: translateY(6px) } }"));
+        // Review of #1042, second round: two spellings of one height are one
+        // size, and a matrix step's translation is unknown, not zero.
+        assert!(pulses("@keyframes e { 0%,100% { opacity: .4; height: 8px; width: 8px } 50% { opacity: 1; height: 8.0px; width: 8px } }"));
+        assert!(pulses("@keyframes m { 0%,100% { opacity: .4; transform: translateY(8px) } 50% { opacity: 1; transform: matrix(1, 0, 0, 1, 0, 8) } }"));
+    }
+
+    /// observations-1004 row 25 (juskoe 10047255): a pulsing box twice as
+    /// tall as it is wide is a bar, not a dot.
+    #[test]
+    fn a_pulsing_bar_is_not_a_dot() {
+        let dots = |w: &str, h: &str| {
+            scan_css_text_for_pulsing_dot(
+                &format!(".d{{width:{w};height:{h};border-radius:9999px;animation:blip 1s infinite}} @keyframes blip{{50%{{opacity:.3}}}}"),
+                None,
+            )
+            .len()
+        };
+        assert_eq!(dots("8px", "8px"), 1);
+        assert_eq!(dots("6px", "9px"), 1, "1.5 to 1");
+        assert_eq!(dots("3px", "6px"), 0, "a waveform bar");
+        assert_eq!(dots("12px", "4px"), 0, "a pill");
+        // Review of #1042: the utility-class form reads both sides too.
+        let tw = |cls: &str| scan_css_text_for_pulsing_dot("", Some(&format!("<span class=\"{cls}\"></span>"))).len();
+        assert_eq!(tw("animate-pulse w-2 h-2 rounded-full"), 1);
+        assert_eq!(tw("animate-ping size-2 rounded-full"), 1);
+        assert_eq!(tw("animate-pulse w-2 h-3 rounded-full"), 1, "1.5 to 1");
+        assert_eq!(tw("animate-pulse w-1 h-4 rounded-full"), 0, "a 4 by 16px bar");
+        assert_eq!(tw("animate-pulse w-1 h-12 rounded-full"), 0, "a tall bar");
     }
 
     #[test]

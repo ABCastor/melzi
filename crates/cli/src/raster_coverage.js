@@ -17,12 +17,29 @@
 // contain: paint on its containing-block chain), and an element under an
 // ancestor with opacity 0 paints nothing. The union is taken on a 4px grid so
 // tiled or overlapping pieces add up once.
-() => {
+//
+// `exclude` (optional) is what a spec with raster regions declares: `boxes`
+// are the regions' viewport rectangles, whose grid cells (by cell centre) are
+// left out of the count, and `paths` are the declared plates (project paths),
+// whose images are not counted at all. A piece reached through an SVG
+// definition is never treated as a declared plate. With neither, every image
+// counts. `pseudos` are the native layout boxes of the generated
+// ::before/::after boxes (`native_pseudo_boxes` over CDP), where each counts.
+(exclude, pseudos) => {
   const W = innerWidth, H = innerHeight, cell = 4;
   const cols = Math.ceil(W / cell), rows = Math.ceil(H / cell);
   const grid = new Uint8Array(cols * rows);
   const items = [];
   const page = location.href.split('#')[0];
+  const boxes = (exclude && exclude.boxes) || [];
+  // Native layout boxes of generated ::before/::after, by host index in
+  // querySelectorAll order and pseudo name (`{index, pseudo, box}`).
+  const native = new Map((pseudos || []).filter(q => q.box).map(q => [q.index + q.pseudo, q.box]));
+  // A resource is named by origin and path: the snapshot server ignores the
+  // query string, and a fragment never reaches it, so `art.png?v=2` is the plate.
+  const resource = u => u.origin + u.pathname;
+  const plates = new Set(((exclude && exclude.paths) || []).map(p => resource(new URL(p, location.origin + '/'))));
+  const outside = (x, y) => !boxes.some(b => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
   const refs = v => typeof v === 'string' ? [...v.matchAll(/url\(\s*(["']?)(.*?)\1\s*\)/gi)].map(m => m[2]) : [];
   // The id a same-document fragment reference names, or null for any other
   // reference. Chromium may report url(#id) resolved against the page URL.
@@ -75,6 +92,17 @@
     const id = fragment(ref);
     return id == null || rasterDef(id, seen);
   });
+  // The images a value draws from, for matching against declared plates: each
+  // reference that leaves the document as its resource, an unparsable one or a
+  // fragment naming a raster definition as null (never a declared plate), and a
+  // fragment naming a vector definition not at all.
+  const srcsOf = v => refs(v).flatMap(ref => {
+    const id = fragment(ref);
+    if (id != null) return rasterDef(id) ? [null] : [];
+    try { return [resource(new URL(ref, page))]; } catch { return [null]; }
+  });
+  // A piece drawn only from declared plates is the spec's own raster.
+  const declared = srcs => plates.size > 0 && srcs.length > 0 && srcs.every(u => u && plates.has(u));
   const px = v => /^-?[\d.]+px$/.test(v) ? parseFloat(v) : null;
   const intersect = (a, b) => ({ left: Math.max(a.left, b.left), top: Math.max(a.top, b.top), right: Math.min(a.right, b.right), bottom: Math.min(a.bottom, b.bottom) });
   const createsFixedBlock = s => s.transform !== 'none' || s.perspective !== 'none' || s.filter !== 'none'
@@ -103,12 +131,22 @@
     for (let a = el; a; a = a.parentElement) if (parseFloat(getComputedStyle(a).opacity) === 0) return true;
     return false;
   };
-  const mark = (from, mode, r, what) => {
+  const mark = (from, mode, r, what, srcs) => {
+    if (srcs && declared(srcs)) return;
     r = intersect(clipped(from, mode, r), { left: 0, top: 0, right: W, bottom: H });
     if (r.right <= r.left || r.bottom <= r.top) return;
-    items.push({ what, box: { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.right - r.left), h: Math.round(r.bottom - r.top) }, share: (r.right - r.left) * (r.bottom - r.top) / (W * H) });
+    let own = 0;
     for (let y = Math.floor(r.top / cell); y < Math.ceil(r.bottom / cell); y++)
-      for (let x = Math.floor(r.left / cell); x < Math.ceil(r.right / cell); x++) grid[y * cols + x] = 1;
+      for (let x = Math.floor(r.left / cell); x < Math.ceil(r.right / cell); x++) {
+        if (!outside((x + 0.5) * cell, (y + 0.5) * cell)) continue;
+        grid[y * cols + x] = 1;
+        own++;
+      }
+    if (!own) return;
+    // Without exclusion boxes a piece's share is its painted area; with them,
+    // the share of the viewport it paints outside the declared regions.
+    const share = boxes.length ? own / (cols * rows) : (r.right - r.left) * (r.bottom - r.top) / (W * H);
+    items.push({ what, box: { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.right - r.left), h: Math.round(r.bottom - r.top) }, share });
   };
   const name = el => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.classList.length ? '.' + [...el.classList].slice(0, 2).join('.') : '');
   const box = r => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
@@ -176,17 +214,18 @@
     }
     return (px(s.strokeWidth) ?? 1) * k / 2;
   };
-  for (const el of document.querySelectorAll('*')) {
+  for (const [index, el] of [...document.querySelectorAll('*')].entries()) {
     const s = getComputedStyle(el);
     if (s.display === 'none' || s.visibility !== 'visible' || transparent(el)) continue;
     const r = el.getBoundingClientRect();
     const tag = el.tagName.toLowerCase();
-    const at = (rect, what) => mark(el.parentElement, s.position, rect, what);
-    if (tag === 'img' || tag === 'video' || (tag === 'input' && el.type === 'image')) at(picture(el, s, r), name(el));
-    if (tag === 'image') at(box(r), name(el));
-    if (url(s.backgroundImage)) at(background(s, r), name(el) + ' background');
-    if (url(s.borderImageSource) || url(s.maskImage) || url(s.webkitMaskImage)) at(box(r), name(el) + ' border/mask image');
-    if (url(s.listStyleImage) && s.display === 'list-item') at(box(r), name(el) + ' list marker');
+    const at = (rect, what, srcs) => mark(el.parentElement, s.position, rect, what, srcs);
+    const src = v => { try { return v ? [resource(new URL(v, page))] : []; } catch { return [null]; } };
+    if (tag === 'img' || tag === 'video' || (tag === 'input' && el.type === 'image')) at(picture(el, s, r), name(el), src(el.currentSrc || el.src));
+    if (tag === 'image') at(box(r), name(el), src(el.href && el.href.baseVal));
+    if (url(s.backgroundImage)) at(background(s, r), name(el) + ' background', srcsOf(s.backgroundImage));
+    if (url(s.borderImageSource) || url(s.maskImage) || url(s.webkitMaskImage)) at(box(r), name(el) + ' border/mask image', [s.borderImageSource, s.maskImage, s.webkitMaskImage].flatMap(srcsOf));
+    if (url(s.listStyleImage) && s.display === 'list-item') at(box(r), name(el) + ' list marker', srcsOf(s.listStyleImage));
     // SVG paint servers, clips, filters, markers and use references reach a
     // definition whose own <image> has no box, so this element's painted area
     // counts when that definition holds raster content. A vector definition
@@ -213,22 +252,23 @@
       const own = url(ps.content) || url(ps.backgroundImage) || url(ps.borderImageSource) || url(ps.maskImage) || url(ps.webkitMaskImage) || url(ps.clipPath);
       const filtered = url(ps.filter);
       if (!own && !filtered) continue;
-      // A pseudo-element has no client rect. With a used pixel size, count that
-      // size (at the viewport origin when fixed, else at the host's corner);
-      // without one, count the host box. Its clipping chain starts at the host.
-      // A raster filter paints its filter region around that box instead.
+      // A pseudo-element has no client rect, so it counts at its native layout
+      // box (the caller reads it over CDP; offsets, size and transforms all
+      // applied). One with no layout box of its own (display: contents lays
+      // its generated content out in the host's flow) counts the host box.
+      // Its clipping chain starts at the host. A raster filter paints its
+      // filter region around that box instead.
       const mode = ps.position === 'fixed' || ps.position === 'absolute' ? ps.position : 'static';
-      const w = px(ps.width), h = px(ps.height);
-      let pr = box(r);
-      if (w != null && h != null) {
-        const left = mode === 'fixed' ? (px(ps.left) ?? 0) : r.left, top = mode === 'fixed' ? (px(ps.top) ?? 0) : r.top;
-        pr = { left, top, right: left + w, bottom: top + h };
-      }
-      if (own) mark(el, mode, pr, name(el) + p);
+      const srcs = [ps.content, ps.backgroundImage, ps.borderImageSource, ps.maskImage, ps.webkitMaskImage, ps.clipPath].flatMap(srcsOf);
+      const laid = native.get(index + p);
+      const pr = laid ? { left: laid.x, top: laid.y, right: laid.x + laid.w, bottom: laid.y + laid.h } : box(r);
+      if (own) mark(el, mode, pr, name(el) + p, srcs);
       if (filtered) mark(el, mode, region(ps.filter, pr), name(el) + p + ' filter');
     }
   }
   const covered = grid.reduce((n, v) => n + v, 0);
   items.sort((a, b) => b.share - a.share);
-  return { share: covered / (cols * rows), cell, largest: items.slice(0, 5), measure: 'painted-box-union-v3' };
+  const result = { share: covered / (cols * rows), cell, largest: items.slice(0, 5), measure: 'painted-box-union-v3' };
+  if (exclude) result.excluded = { boxes, paths: exclude.paths || [] };
+  return result;
 }

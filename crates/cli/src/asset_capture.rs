@@ -17,14 +17,23 @@ use std::{
 
 pub struct CdpAssetRenderer {
     env: HashMap<String, String>,
+    raster_coverage: Option<Value>,
     clock_ms: Option<f64>,
 }
 impl CdpAssetRenderer {
     pub fn from_process_env() -> Self {
         Self {
             env: impeccable_common::process_env(),
+            raster_coverage: None,
             clock_ms: None,
         }
+    }
+    /// Also measure the share of the viewport images paint outside `exclude`
+    /// (`{boxes, paths}`, see `raster_coverage.js`) on the settled page, before
+    /// any intervention, and record it as `rasterCoverage` on every receipt.
+    pub fn measuring_raster_coverage(mut self, exclude: Value) -> Self {
+        self.raster_coverage = Some(exclude);
+        self
     }
     /// Pin the page's clock (see `Page::pin_clock`) for every capture this renderer makes.
     pub fn pinned_at(mut self, epoch_ms: f64) -> Self {
@@ -193,15 +202,28 @@ impl AssetRenderer for CdpAssetRenderer {
                     "(()=>{{globalThis[{key}]?.restore();delete globalThis[{key}];return true;}})()"
                 ),
             );
+            // Measured on the restored page and bound to the graded frame: the
+            // viewport must show the baseline pixels before and after, so a page
+            // that changes later cannot report an earlier, smaller coverage.
+            let coverage = match (&self.raster_coverage, &result) {
+                (Some(exclude), Ok(captures)) => Some(
+                    coverage_on_baseline(&mut capture, &requests[0], exclude, captures)
+                        .unwrap_or_else(|reason| json!({"unavailable": reason})),
+                ),
+                _ => None,
+            };
             drop(capture);
             page.close();
-            result
+            result.map(|captures| (captures, coverage))
         })();
         browser.close();
-        result.map(|captures| {
+        result.map(|(captures, coverage)| {
             captures
                 .into_iter()
                 .map(|mut capture| {
+                    if let Some(coverage) = &coverage {
+                        capture.receipt["rasterCoverage"] = coverage.clone();
+                    }
                     capture.receipt["browser"] = browser_version.clone();
                     capture.receipt["rasterization"] = json!("software");
                     capture.receipt["partialRaster"] = json!(false);
@@ -212,6 +234,41 @@ impl AssetRenderer for CdpAssetRenderer {
                 .collect()
         })
     }
+}
+fn coverage_on_baseline(
+    page: &mut CapturePage<'_, '_>,
+    r: &AssetCaptureRequest,
+    exclude: &Value,
+    captures: &[AssetCapture],
+) -> Result<Value, String> {
+    let baseline = captures
+        .iter()
+        .flat_map(|c| c.images.iter())
+        .find(|i| i.name == "baseline.png")
+        .ok_or("no settled baseline frame")?;
+    let baseline = png_io::decode_png(&baseline.png)
+        .map_err(|e| format!("baseline decode: {e:?}"))?
+        .image;
+    let (_, before) = screenshot(page, r)?;
+    page.check_budget()?;
+    let coverage = measure_raster_coverage(page.page, &page.world, exclude)?;
+    let (_, after) = screenshot(page, r)?;
+    if before.data != baseline.data || after.data != baseline.data {
+        return Err("the page no longer shows the captured frame".into());
+    }
+    Ok(coverage)
+}
+/// Run `raster_coverage.js` with `exclude` (`null` for none) on the page as it
+/// stands. A pseudo-element has no client rect, so the native layout boxes of
+/// every generated `::before`/`::after` that could paint a `url()` are read
+/// first and handed to the measurement, which places each one there.
+pub(crate) fn measure_raster_coverage(page: &mut Page<'_>, world: &IsolatedWorld, exclude: &Value) -> Result<Value, String> {
+    const CANDIDATES: &str = "[...document.querySelectorAll('*')].flatMap((el,index)=>['before','after'].filter(p=>{const s=getComputedStyle(el,'::'+p);return s.content!=='none'&&s.content!=='normal'&&s.display!=='none'&&[s.content,s.backgroundImage,s.borderImageSource,s.maskImage,s.webkitMaskImage,s.clipPath,s.filter].some(v=>typeof v==='string'&&v.includes('url('))}).map(pseudo=>({index,pseudo})))";
+    let candidates = page.evaluate_value_in_world(world, CANDIDATES).map_err(|e| e.message)?;
+    let candidates = candidates.as_array().ok_or("pseudo-element candidates unavailable")?;
+    let pseudos = page.native_pseudo_boxes(world, candidates).map_err(|e| e.message)?;
+    page.evaluate_value_in_world(world, &format!("({})({exclude},{pseudos})", include_str!("raster_coverage.js")))
+        .map_err(|e| e.message)
 }
 struct CapturePage<'p, 'b> {
     page: &'p mut Page<'b>,

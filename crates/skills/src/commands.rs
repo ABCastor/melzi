@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use crate::bundle;
 use crate::engine_binary::install_engine_binaries;
-use crate::hook_manifest::{self, copy_provider_hooks, hook_installed_for_provider, HOOK_EXPLAINER};
+use crate::hook_manifest::{self, copy_provider_hooks, hook_installed_for_provider, hook_installed_for_provider_at_scope, HOOK_EXPLAINER};
 use crate::prompt::{CheckboxOption, Prompt, RadioOption};
 use crate::providers::*;
 use crate::util::{self, pad_end, utf16_len, utf16_prefix};
@@ -482,6 +482,22 @@ fn decide_hook_install(prompt: &mut Prompt, io: &mut Io, root: &str, targets: &[
     Ok(accepted)
 }
 
+/// Update's hook self-heal (triage E8, and the retired Cursor gate): repairs
+/// the manifests at `hook_root` against the skill at `skill_root`. In user
+/// scope those differ (project manifests, home skill), and the home manifests
+/// are repaired as well, since an older `update --user` wrote Cursor, Codex
+/// and Grok manifests there. They are repaired, never pruned: a home manifest
+/// is global, so removing its entry would drop the hook from every other
+/// project. A home and a project hook firing for one edit is settled inside
+/// the hook (`hook_claim`).
+fn repair_update_hook_manifests(sys: &crate::providers::Sys, hook_root: &str, skill_root: &str, providers: &[&'static str]) -> Result<(), String> {
+    hook_manifest::repair_stale_hook_manifests(sys, hook_root, providers, Some(skill_root))?;
+    if hook_root != skill_root {
+        hook_manifest::repair_stale_hook_manifests(sys, skill_root, providers, None)?;
+    }
+    Ok(())
+}
+
 // ─── link ────────────────────────────────────────────────────────────────────
 
 /// JS: link(flags)
@@ -615,7 +631,14 @@ fn install(flags: &[String], io: &mut Io) -> R<()> {
             }
             let mut updated = 0usize;
             let missing_hook_targets: Vec<&'static str> = if want_hooks {
-                hook_targets.iter().copied().filter(|p| !hook_installed_for_provider(&hook_root, p)).collect()
+                hook_targets
+                    .iter()
+                    .copied()
+                    .filter(|p| {
+                        let manifest_root = if scope == Scope::User && *p == ".claude" { &install_root } else { &hook_root };
+                        !hook_installed_for_provider_at_scope(manifest_root, p, scope == Scope::User)
+                    })
+                    .collect()
             } else {
                 Vec::new()
             };
@@ -624,12 +647,12 @@ fn install(flags: &[String], io: &mut Io) -> R<()> {
                 match bundle::download_and_extract_bundle(&sys) {
                     Ok(dir) => bundle_dir = Some(dir),
                     Err(e) => {
-                        if e.starts_with(crate::bundle_signature::ERROR_PREFIX)
+                        if e.is_fatal_over_existing_install()
                             || !missing_hook_targets.is_empty() || !missing_selected_targets.is_empty() {
-                            return Err(e);
+                            return Err(e.into());
                         }
                         update_check_skipped = true;
-                        out(io, &format!("Could not check for skill updates: {e}"));
+                        out(io, &format!("Could not check for skill updates: {}", e.summary()));
                     }
                 }
             }
@@ -666,12 +689,20 @@ fn install(flags: &[String], io: &mut Io) -> R<()> {
             }
 
             let written_hook_targets = if !missing_hook_targets.is_empty() {
-                copy_provider_hooks(&sys, &bdir, &hook_root, &missing_hook_targets, false, Some(&install_root))?
+                copy_provider_hooks(&sys, &bdir, &hook_root, &missing_hook_targets, false, Some(&install_root), None)?
             } else {
                 Vec::new()
             };
             if !written_hook_targets.is_empty() {
                 out(io, &format!("Installed hooks into: {}", written_hook_targets.join(", ")));
+            }
+            // A repeat user-scope install whose user hook is already current
+            // never sends Claude through copy_provider_hooks, so the
+            // duplicate-hook cleanup that function ends with runs here as well.
+            // A legacy or dangling user hook is not current: it was rewritten
+            // above, and the cleanup itself re-checks before pruning.
+            if want_hooks && scope == Scope::User && hook_targets.contains(&".claude") {
+                hook_manifest::prune_duplicate_claude_hooks(&sys, &install_root, &hook_root)?;
             }
 
             // Self-heal any pre-launcher (`node .../hook.mjs`) manifest left by a
@@ -728,7 +759,7 @@ fn install(flags: &[String], io: &mut Io) -> R<()> {
         let agents = bundle::copy_provider_agents(&sys, &bundle_dir, &install_root, &targets, scope_opt)?;
         bundle::copy_provider_commands(&sys, &bundle_dir, &install_root, &targets, scope_opt);
         let hooks = if want_hooks {
-            copy_provider_hooks(&sys, &bundle_dir, &hook_root, &targets, force, Some(&install_root))?
+            copy_provider_hooks(&sys, &bundle_dir, &hook_root, &targets, force, Some(&install_root), None)?
         } else {
             Vec::new()
         };
@@ -821,6 +852,11 @@ fn update(flags: &[String], io: &mut Io) -> R<()> {
     };
 
     out(io, &format!("Updating the {scope_label} install: {} ({})", sys.format_path_for_display(&root), providers.join(", ")));
+    // Hook manifests follow install's placement: a user-scope install keeps
+    // the skill under home but writes every non-Claude manifest (Cursor,
+    // Codex, Grok, ...) into the project, so update repairs and writes them
+    // there too, against the home skill root.
+    let hook_root = if scope == Some(Scope::User) { project_root.clone() } else { root.clone() };
     let linked_providers = sys.find_linked_providers(&root, &providers, scope);
     let copy_providers: Vec<&'static str> = providers.iter().copied().filter(|p| !linked_providers.contains(p)).collect();
 
@@ -854,10 +890,10 @@ fn update(flags: &[String], io: &mut Io) -> R<()> {
         let outcome: R<Vec<&'static str>> = (|| {
             // Repair any stale pre-launcher (`node .../hook.mjs`) manifest a v3
             // install left behind, regardless of hook consent (triage E8).
-            hook_manifest::repair_stale_hook_manifests(&sys, &root, &copy_providers, None).map_err(Flow::Throw)?;
-            let want_hooks = install_hooks && decide_hook_install(&mut prompt, io, &root, &copy_providers, yes)?;
+            repair_update_hook_manifests(&sys, &hook_root, &root, &copy_providers).map_err(Flow::Throw)?;
+            let want_hooks = install_hooks && decide_hook_install(&mut prompt, io, &hook_root, &copy_providers, yes)?;
             let hook_targets = if want_hooks {
-                copy_provider_hooks(&sys, &tmp_dir, &root, &copy_providers, force, None).map_err(Flow::Throw)?
+                copy_provider_hooks(&sys, &tmp_dir, &hook_root, &copy_providers, force, Some(&root), Some(&project_root)).map_err(Flow::Throw)?
             } else {
                 Vec::new()
             };
@@ -910,10 +946,10 @@ fn update(flags: &[String], io: &mut Io) -> R<()> {
         bundle::copy_provider_commands(&sys, &tmp_dir, &root, &copy_providers, scope);
         // Repair any stale pre-launcher (`node .../hook.mjs`) manifest a v3
         // install left behind, regardless of hook consent (triage E8).
-        hook_manifest::repair_stale_hook_manifests(&sys, &root, &copy_providers, None).map_err(Flow::Throw)?;
-        let want_hooks = install_hooks && decide_hook_install(&mut prompt, io, &root, &providers, yes)?;
+        repair_update_hook_manifests(&sys, &hook_root, &root, &copy_providers).map_err(Flow::Throw)?;
+        let want_hooks = install_hooks && decide_hook_install(&mut prompt, io, &hook_root, &providers, yes)?;
         let hook_targets = if want_hooks {
-            copy_provider_hooks(&sys, &tmp_dir, &root, &providers, force, None).map_err(Flow::Throw)?
+            copy_provider_hooks(&sys, &tmp_dir, &hook_root, &providers, force, Some(&root), Some(&project_root)).map_err(Flow::Throw)?
         } else {
             Vec::new()
         };
@@ -940,5 +976,114 @@ fn update(flags: &[String], io: &mut Io) -> R<()> {
             Err(Flow::Exit(1))
         }
         Err(other) => Err(other),
+    }
+}
+
+#[cfg(test)]
+mod offline_install_tests {
+    //! `install` over an existing installation when the bundle cannot be
+    //! fetched (#1138): only an authentication failure is fatal.
+
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    use crate::bundle::{test_seam, BundleError};
+    use crate::engine_binary::platform_tag;
+    use impeccable_common::Io;
+
+    struct Fixture {
+        root: String,
+        project: String,
+        env: HashMap<String, String>,
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            std::fs::remove_dir_all(&self.root).ok();
+        }
+    }
+
+    fn fixture(name: &str) -> Fixture {
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        let root = std::env::temp_dir().join(format!("impeccable-{name}-{}-{nanos}", std::process::id())).to_string_lossy().into_owned();
+        let project = format!("{root}/project");
+        let home = format!("{root}/home");
+        let tmp = format!("{root}/tmp");
+        for d in [&project, &home, &tmp] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        std::fs::create_dir_all(format!("{project}/.git")).unwrap();
+        let env: HashMap<String, String> = [("HOME", &home), ("USERPROFILE", &home), ("TMPDIR", &tmp), ("TEMP", &tmp)]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect();
+        Fixture { root, project, env }
+    }
+
+    fn run(fx: &Fixture, extra_env: &[(&str, &str)]) -> (i32, String, String) {
+        let mut env = fx.env.clone();
+        for (k, v) in extra_env {
+            env.insert((*k).into(), (*v).into());
+        }
+        let (mut io, captured) = Io::captured("", PathBuf::from(&fx.project), env);
+        let args: Vec<String> = ["install", "-y", "--providers=claude", "--scope=project", "--no-hooks"].map(String::from).into();
+        let code = crate::run(&args, &mut io);
+        let stdout = String::from_utf8_lossy(&captured.stdout.borrow()).into_owned();
+        let stderr = String::from_utf8_lossy(&captured.stderr.borrow()).into_owned();
+        (code, stdout, stderr)
+    }
+
+    /// Installs from a local bundle dir, so the next run finds existing skills.
+    fn install_existing(fx: &Fixture) -> Option<String> {
+        let (os, arch) = platform_tag()?;
+        let bundle = format!("{}/bundle", fx.root);
+        let skill = format!("{bundle}/.claude/skills/melzi");
+        std::fs::create_dir_all(format!("{skill}/scripts/bin/{os}-{arch}")).unwrap();
+        std::fs::write(format!("{skill}/SKILL.md"), "---\nname: impeccable\nversion: 9.9.9\n---\n# impeccable\n").unwrap();
+        // A staged engine binary keeps install_engine_binaries off the network.
+        std::fs::write(format!("{skill}/scripts/bin/{os}-{arch}/impeccable"), "#!/bin/sh\nexit 0\n").unwrap();
+        let (code, stdout, stderr) = run(fx, &[("IMPECCABLE_BUNDLE_PATH", &bundle)]);
+        assert_eq!(code, 0, "seed install failed.\nstdout:\n{stdout}\nstderr:\n{stderr}");
+        Some(format!("{}/.claude/skills/melzi/SKILL.md", fx.project))
+    }
+
+    #[test]
+    fn offline_over_existing_skills_leaves_them_and_exits_zero() {
+        let fx = fixture("offline-existing");
+        let Some(skill_md) = install_existing(&fx) else { return };
+        let before = std::fs::read(&skill_md).unwrap();
+
+        test_seam::force(Err(BundleError::Download("Network Error: Dns Failed: resolve dns name 'impeccable.style:443'".into())));
+        let (code, stdout, stderr) = run(&fx, &[]);
+        assert_eq!(code, 0, "stdout:\n{stdout}\nstderr:\n{stderr}");
+        assert!(stdout.contains("Could not check for skill updates: Could not download skill bundle: Network Error"), "{stdout}");
+        assert!(stdout.contains("Existing skills were left unchanged."), "{stdout}");
+        assert!(!stdout.contains("verify") && !stdout.contains("report it"), "{stdout}");
+        assert_eq!(std::fs::read(&skill_md).unwrap(), before, "existing skill was modified");
+    }
+
+    #[test]
+    fn failed_verification_over_existing_skills_is_fatal() {
+        let fx = fixture("verify-existing");
+        let Some(skill_md) = install_existing(&fx) else { return };
+        let before = std::fs::read(&skill_md).unwrap();
+
+        test_seam::force(Err(BundleError::Verify("ZIP digest does not match the signed release".into())));
+        let (code, stdout, stderr) = run(&fx, &[]);
+        assert_eq!(code, 1, "stdout:\n{stdout}\nstderr:\n{stderr}");
+        assert!(stderr.contains("Install check failed: Could not verify skill bundle: ZIP digest"), "{stderr}");
+        assert!(!stdout.contains("Could not check for skill updates"), "{stdout}");
+        assert_eq!(std::fs::read(&skill_md).unwrap(), before, "existing skill was modified");
+    }
+
+    #[test]
+    fn offline_fresh_install_fails_as_a_download() {
+        let fx = fixture("offline-fresh");
+        test_seam::force(Err(BundleError::Download("Network Error: Dns Failed".into())));
+        let (code, stdout, stderr) = run(&fx, &[]);
+        assert_eq!(code, 1, "stdout:\n{stdout}\nstderr:\n{stderr}");
+        assert!(stderr.contains("Download failed: Could not download skill bundle: Network Error"), "{stderr}");
+        assert!(!stderr.contains("verify"), "{stderr}");
+        assert!(!std::path::Path::new(&format!("{}/.claude/skills/melzi", fx.project)).exists());
     }
 }

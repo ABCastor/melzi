@@ -49,6 +49,7 @@ macro_rules! page_js {
 
 page_js![
     "00-header.js",
+    "05-natives.js",
     "10-probe.js",
     "15-snapshot.js",
     "30-scan-common.js",
@@ -77,6 +78,7 @@ fn src(name: &str) -> Cow<'static, str> {
 /// `@@WASM@@` the embedded module + synchronous instantiation.
 const ORDER: &[&str] = &[
     "00-header.js",
+    "05-natives.js",
     "10-probe.js",
     "15-snapshot.js",
     "@@GLUE@@",
@@ -93,6 +95,9 @@ const ORDER: &[&str] = &[
 /// (the module ships beside it as `core_bg.wasm`; no base64: the offscreen
 /// document fetches it) + the scan plumbing and visual-contrast orchestration
 /// + the offscreen session protocol.
+/// `05-natives.js` is left out of the snapshot piece on purpose: a content
+/// script already has its own globals, and in Firefox its `window` is an Xray
+/// view of the page's, so natives built there throw on every capture.
 const EXT_SNAPSHOT: &[&str] = &["15-snapshot.js"];
 const EXT_OVERLAY: &[&str] = &["40-overlay.js"];
 const EXT_CORE: &[&str] = &["@@GLUE@@", "@@LOADER@@", "30-scan-common.js", "35-visual.js", "60-offscreen.js"];
@@ -262,12 +267,16 @@ pub fn check_capture_contract() -> Result<(), String> {
 pub fn registry_json() -> String {
     let rows: Vec<serde_json::Value> = impeccable_core::registry::all_antipatterns()
         .map(|ap| {
-            serde_json::json!({
+            let mut row = serde_json::json!({
                 "id": ap.id,
                 "name": ap.name,
                 "category": ap.category,
                 "description": ap.description,
-            })
+            });
+            if let Some(severity) = ap.severity {
+                row["severity"] = serde_json::json!(severity);
+            }
+            row
         })
         .collect();
     let mut s = serde_json::to_string_pretty(&rows).expect("registry json");
@@ -420,6 +429,26 @@ mod tests {
         assert_eq!(ext.antipatterns_json, "[]\n");
     }
 
+    /// The extension's content scripts already run with their own globals,
+    /// and in Firefox a content script's `window` is an Xray wrapper of the
+    /// page's: natives built from it throw (`Permission denied to access
+    /// property Symbol.iterator`) and every extension capture failed. So the
+    /// page-world natives file stays out of every extension piece.
+    #[test]
+    fn extension_pieces_leave_out_the_page_world_natives() {
+        let natives = page_js("05-natives.js").unwrap();
+        for parts in [EXT_SNAPSHOT, EXT_OVERLAY, EXT_CORE] {
+            assert!(!parts.contains(&"05-natives.js"), "{parts:?}");
+        }
+        let ext = extension_pieces("const glue = 1;\n", &[0, 97, 115, 109], "[]\n");
+        for js in [&ext.snapshot_js, &ext.overlay_js, &ext.core_js] {
+            assert!(!js.contains(natives));
+            assert!(!js.contains("__impeccableBuildNatives"));
+        }
+        // The in-page bundle still carries it.
+        assert!(in_page_bundle("const glue = 1;\n", &[0, 97, 115, 109]).contains(natives));
+    }
+
     #[test]
     fn capture_contract_holds() {
         check_capture_contract().unwrap();
@@ -433,6 +462,8 @@ mod tests {
         let rows: Vec<serde_json::Value> = serde_json::from_str(&json).expect("valid json");
         assert_eq!(rows.len(), impeccable_core::registry::all_antipatterns().count());
         for row in &rows {
+            let ap = impeccable_core::registry::get_antipattern(row["id"].as_str().unwrap()).unwrap();
+            assert_eq!(row.get("severity").and_then(|v| v.as_str()), ap.severity);
             for key in ["id", "name", "category", "description"] {
                 assert!(row.get(key).is_some(), "row missing {key}: {row}");
             }

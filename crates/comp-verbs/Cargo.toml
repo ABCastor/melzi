@@ -15,7 +15,7 @@ publish.workspace = true
 
 [dependencies]
 impeccable-comp = { workspace = true }
-impeccable-common = { workspace = true }
+impeccable-common = { workspace = true, features = ["seed"] }
 # The plates -> hero gate reads the human plan review (component_review::plan::gate).
 impeccable-context = { workspace = true }
 serde = { workspace = true }

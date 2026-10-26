@@ -293,6 +293,13 @@ const __impeccableDom = {
     if (!__isImg(node)) return undefined;
     return typeof node.currentSrc === 'string' ? node.currentSrc : '';
   },
+  // `readyState` of an HTML <video>; -1 is "not a video".
+  video_ready_state(el) {
+    const node = __el(el);
+    if (!node || node.localName !== 'video' || node.namespaceURI !== 'http://www.w3.org/1999/xhtml'
+      || typeof node.readyState !== 'number') return -1;
+    return node.readyState;
+  },
   // getDirectTextRect(el) from the JS driver: union of the client rects of
   // the element's non-blank direct text nodes.
   direct_text_rect(el) {
@@ -350,5 +357,13 @@ const __impeccableDom = {
       out.push(r.left, r.top, r.width, r.height, r.top, r.right, r.bottom, r.left);
     }
     return out;
+  },
+  // Dom::last_word_rects: the word before the last, then the last, in eights
+  // as text_rects lays them out; empty under two words. The walk lives in
+  // 15-snapshot.js, which the in-page bundle concatenates after this file.
+  last_word_rects(el) {
+    const rects = __snapLastWordRects(__el(el), __rendersNoText);
+    if (!rects) return [];
+    return rects.flatMap(r => [r.left, r.top, r.width, r.height, r.top, r.right, r.bottom, r.left]);
   },
 };

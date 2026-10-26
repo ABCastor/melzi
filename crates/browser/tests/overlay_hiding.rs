@@ -13,6 +13,10 @@
 //! - A preloader that clears on its own is waited for and nothing is hidden.
 //! - A routing gate on a full-screen opaque layer named like a loader stays:
 //!   it holds controls, so it is not a preloader.
+//! - A click-to-enter splash is hidden (not clicked); an age gate on the
+//!   same kind of layer stays.
+//! - An intro named as one, with a gradient fill and a progress line, is
+//!   waited for, and hidden once its budget runs out.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -101,6 +105,8 @@ const KEEP: ScanOptions = ScanOptions {
     rule_pack: None,
     keep_consent_banners: false,
     keep_overlays: true,
+    unreported_rules: Vec::new(),
+    ignored_linked_stylesheet: None,
 };
 
 #[test]
@@ -181,6 +187,23 @@ fn a_stuck_preloader_is_waited_for_then_hidden() {
     assert!(evidence.scan_snapshot.as_deref().unwrap().contains("data-impeccable-hidden"));
     // Kept, the white layer covers the copy and it is not scored.
     assert!(!has(&flagged(&kept), "low-contrast", "#covered-copy"), "{kept:#?}");
+}
+
+/// A loader whose short message mentions entering but offers no way
+/// through is still a loader: waited for, then hidden (review on #1106).
+#[test]
+fn a_stuck_preloader_that_mentions_entering_is_hidden() {
+    let Some(engine) = engine() else { return };
+    let port = serve();
+    let url = format!("http://127.0.0.1:{port}/preloader-enter-text.html");
+    let mut browser = engine.launch().expect("launch");
+    let (findings, evidence) =
+        detect_url_evidence(&mut browser, &url, &ScanOptions::default(), "load", 100, &EvidenceRequest::default())
+            .expect("scan");
+    browser.close();
+    assert!(has(&flagged(&findings), "low-contrast", "#covered-copy"), "{findings:#?}");
+    let report = evidence.overlays.as_ref().expect("overlay report");
+    assert_eq!(report.hidden, vec![hidden("preloader", "div#preloader")]);
 }
 
 #[test]
@@ -289,4 +312,119 @@ fn a_lovable_badge_is_hidden_and_the_copy_under_it_scored() {
     // Kept, the badge's own label is scored as the page's.
     let shown = flagged(&kept);
     assert!(shown.iter().any(|(_, s)| s.contains("lovable-badge")), "{shown:#?}");
+}
+
+#[test]
+fn a_click_to_enter_splash_is_hidden() {
+    let Some(engine) = engine() else { return };
+    let port = serve();
+    let url = format!("http://127.0.0.1:{port}/splash.html");
+    let mut browser = engine.launch().expect("launch");
+    let (findings, evidence) =
+        detect_url_evidence(&mut browser, &url, &ScanOptions::default(), "load", 100, &EvidenceRequest::default())
+            .expect("scan");
+    let (kept, _) = detect_url_evidence(&mut browser, &url, &KEEP, "load", 100, &EvidenceRequest::default()).expect("scan");
+    browser.close();
+    assert!(has(&flagged(&findings), "low-contrast", "#covered-copy"), "{findings:#?}");
+    let report = evidence.overlays.as_ref().expect("overlay report");
+    assert_eq!(report.hidden, vec![hidden("splash", "div.splash (\"Enter NoteForge \u{2192}\")")]);
+    // Hidden at once: a splash is never waited for.
+    assert_eq!(report.waited_ms, 0);
+    assert!(!has(&flagged(&kept), "low-contrast", "#covered-copy"), "{kept:#?}");
+}
+
+#[test]
+fn an_age_gate_stays() {
+    let Some(engine) = engine() else { return };
+    let port = serve();
+    let url = format!("http://127.0.0.1:{port}/age-gate.html");
+    let scan = engine.detect_url_scan(&url, &ScanOptions::default()).expect("scan");
+    assert!(!has(&flagged(&scan.findings), "low-contrast", "#covered-copy"), "{:#?}", scan.findings);
+    assert!(scan.findings.iter().all(|f| f.extras.get("overlaysHidden").is_none()));
+}
+
+#[test]
+fn an_intro_that_ends_is_waited_for_and_nothing_hidden() {
+    let Some(engine) = engine() else { return };
+    let port = serve();
+    let url = format!("http://127.0.0.1:{port}/intro-clears.html");
+    let mut browser = engine.launch().expect("launch");
+    let (findings, evidence) =
+        detect_url_evidence(&mut browser, &url, &ScanOptions::default(), "load", 100, &EvidenceRequest::default())
+            .expect("scan");
+    browser.close();
+    assert!(has(&flagged(&findings), "low-contrast", "#covered-copy"), "{findings:#?}");
+    let report = evidence.overlays.as_ref().expect("overlay report");
+    assert!(report.hidden.is_empty(), "{report:?}");
+    assert!(report.waited_ms > 0 && report.waited_ms < impeccable_browser::overlays::PRELOADER_WAIT_MS, "{}", report.waited_ms);
+}
+
+#[test]
+fn an_intro_that_never_ends_is_hidden_after_its_budget() {
+    let Some(engine) = engine() else { return };
+    let port = serve();
+    let url = format!("http://127.0.0.1:{port}/intro-stuck.html");
+    let mut browser = engine.launch().expect("launch");
+    let (findings, evidence) =
+        detect_url_evidence(&mut browser, &url, &ScanOptions::default(), "load", 100, &EvidenceRequest::default())
+            .expect("scan");
+    browser.close();
+    assert!(has(&flagged(&findings), "low-contrast", "#covered-copy"), "{findings:#?}");
+    let report = evidence.overlays.as_ref().expect("overlay report");
+    assert_eq!(report.hidden, vec![hidden("intro", "div.cine-intro")]);
+    assert!(report.waited_ms >= impeccable_browser::overlays::INTRO_WAIT_MS, "{}", report.waited_ms);
+}
+
+/// A named intro whose text is longer than a splash allows and mentions
+/// entering is still an intro: waited for, then hidden.
+#[test]
+fn a_long_named_intro_that_says_enter_is_still_hidden() {
+    let Some(engine) = engine() else { return };
+    let port = serve();
+    let url = format!("http://127.0.0.1:{port}/intro-enter-text.html");
+    let mut browser = engine.launch().expect("launch");
+    let (findings, evidence) =
+        detect_url_evidence(&mut browser, &url, &ScanOptions::default(), "load", 100, &EvidenceRequest::default())
+            .expect("scan");
+    browser.close();
+    assert!(has(&flagged(&findings), "low-contrast", "#covered-copy"), "{findings:#?}");
+    let report = evidence.overlays.as_ref().expect("overlay report");
+    assert_eq!(report.hidden, vec![hidden("intro", "div.cine-intro")]);
+}
+
+/// A long named layer that says enter and states an age is an age gate:
+/// it stays.
+#[test]
+fn a_long_named_age_gate_stays() {
+    let Some(engine) = engine() else { return };
+    let port = serve();
+    let url = format!("http://127.0.0.1:{port}/intro-age-gate.html");
+    let mut browser = engine.launch().expect("launch");
+    let (_, evidence) =
+        detect_url_evidence(&mut browser, &url, &ScanOptions::default(), "load", 100, &EvidenceRequest::default())
+            .expect("scan");
+    browser.close();
+    let report = evidence.overlays.as_ref().expect("overlay report");
+    assert!(report.hidden.is_empty(), "{report:?}");
+}
+
+/// The review's probes: a one-screen site, a curtain hero with an Enter
+/// link, and a fixed hero named intro are the page, not a layer in front of
+/// it. Nothing is hidden and nothing is waited for.
+#[test]
+fn heroes_that_are_the_page_stay() {
+    let Some(engine) = engine() else { return };
+    let port = serve();
+    let mut browser = engine.launch().expect("launch");
+    for page in ["stay-landing.html", "stay-curtain.html", "stay-intro-hero.html"] {
+        let url = format!("http://127.0.0.1:{port}/{page}");
+        let (findings, evidence) =
+            detect_url_evidence(&mut browser, &url, &ScanOptions::default(), "load", 100, &EvidenceRequest::default())
+                .expect("scan");
+        assert!(has(&flagged(&findings), "low-contrast", "#own"), "{page}: {:#?}", flagged(&findings));
+        let report = evidence.overlays.as_ref().expect("overlay report");
+        assert!(report.hidden.is_empty(), "{page}: {report:?}");
+        assert_eq!(report.waited_ms, 0, "{page}");
+    }
+    browser.close();
 }

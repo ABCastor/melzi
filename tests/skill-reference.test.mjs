@@ -23,7 +23,8 @@ describe('skill reference authoring contracts', () => {
     assert.match(recordDecision, /development-only contract/);
     assert.match(recordDecision, /under `## Direction contract` in the relevant surface brief/);
     assert.match(recordDecision, /read the brief once more/i);
-    assert.match(recordDecision, /all six contract blocks and the seed key/);
+    assert.match(recordDecision, /all six contract blocks and the seed reference/);
+    assert.match(recordDecision, /SEED REFERENCE concept-seed printed .*never the raw seed key/);
 
     for (const block of ['THESIS', 'OWN-WORLD', 'STORY', 'FIRST VIEWPORT', 'FORM', 'FINISH']) {
       assert.match(recordDecision, new RegExp(`${block}:`));
@@ -49,6 +50,17 @@ describe('skill reference authoring contracts', () => {
     assert.doesNotMatch(newWork, /grep the built output/);
     assert.doesNotMatch(newWork, /emitted markup/);
     assert.doesNotMatch(newWork, /first child of the document's body/);
+  });
+
+  it('skips the detector and its degraded banner on native critique targets', () => {
+    const critique = readFileSync(join(ROOT, 'skill/reference/critique.md'), 'utf-8').replace(/\r\n?/g, '\n');
+    const orchestration = critique.match(/### Assessment Orchestration\n([\s\S]*?)\n<codex>/)?.[1] ?? '';
+
+    assert.match(orchestration, /\*\*Native platforms\*\* \(`ios` \/ `android` \/ `adaptive`\): Assessment B does not apply/);
+    assert.match(orchestration, /skip both sub-agent gates below, the Codex permission question included/);
+    assert.match(critique, /Native platforms run A alone \(see Assessment Orchestration\)/);
+    assert.match(critique, /- Native: `Method: design review only \(detector not applicable, native platform\)`/);
+    assert.match(critique, /write `not applicable \(native platform\)` instead/);
   });
 
   it('keeps reduced-motion guidance on the animation build path', () => {

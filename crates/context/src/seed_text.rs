@@ -42,7 +42,11 @@ pub const SAFER_BLOCK: &str = "SAFER REGISTER: the user asked for the familiar e
 
 pub const BOLDER_BLOCK: &str = "BOLDER REGISTER: the user asked for foreign forms at full commitment, so no\n  grounded direction is presented this round and the assigned index is\n  suspended. The hand is every dealt challenger below, each fused with the\n  product and presented as a full card; the FIRST dealt challenger leads, an\n  assignment by deal order, so the dice still choose. Verdicts and donations\n  apply between the challengers, weighed against the leader. The pick card\n  sits out; the canon stays, as always.";
 
-pub const TELEMETRY_BLOCK: &str = "TELEMETRY: after the user's choice resolves, rerun this script once with\n  --kind <assigned|pick|challenger|canon> --from @@KEY@@ --scope @@SCOPE@@@@MODE_FLAG@@,\n  adding --chosen <challenger-id> when a dealt challenger won and keeping\n  --register <safer|bolder> when the resolved round came from a steered hand.\n  One ping per resolved attended round. The ping is anonymous, the card kind\n  plus the catalog id when one won; your grounded candidates' names never\n  leave the machine, and the ping is skipped automatically when DO_NOT_TRACK\n  or IMPECCABLE_NO_TELEMETRY is set.\n";
+pub const TELEMETRY_BLOCK: &str = "TELEMETRY: once the round resolves, rerun this script once with\n  --from @@KEY@@ --scope @@SCOPE@@@@MODE_FLAG@@@@REROLL_FLAG@@ plus what the user did:\n@@TELEMETRY_CHOICE@@  - asked for another hand instead of choosing: --kind reroll, adding\n    --register <safer|bolder> when they steered it.\n  One ping per attended round the user resolved; when the decision page\n  already sent it, the rerun prints `choice already recorded`. The ping is anonymous, the card kind plus the catalog id when one\n  won; your grounded candidates' names never leave the machine, and the ping\n  is skipped automatically when DO_NOT_TRACK or IMPECCABLE_NO_TELEMETRY is set.\n";
+
+pub const TELEMETRY_CHOICE_DIRECTION: &str = "  - chose a card: --kind <assigned|pick|challenger|grounded|canon>, the kind the\n    card declares, adding --chosen <SOURCE ID> when a dealt challenger won (its\n    catalogId, never your card's id) and keeping --register <safer|bolder>\n    when the round came from a steered hand;\n";
+
+pub const TELEMETRY_CHOICE_SURFACE: &str = "  - chose a card: --kind assigned for the dealt lead, --kind challenger\n    --chosen <SOURCE ID> for a dealt challenger, or --option <n> (the card's\n    zero-based position on the page) for another dealt structure;\n";
 
 pub const ASSIGNED_BLOCK: &str = "@@ASSIGNED_OR_DEALT@@\n  @@PROMOTEDINSTRUCTION@@\n  The assignment exists to refuse the model's ranking rut, never to outrank\n  the user or the brief. Never expose assignment metadata in user-facing labels.";
 
@@ -101,3 +105,7 @@ pub const WAIT_AFTER_SKETCHES: &str = "After the last sketch lands,";
 pub const WAIT_NOW: &str = "Right after serving, with no comp to generate first,";
 
 pub const PRESENT_FALLBACK: &str = "- The structured question tool is the fallback, never the first channel: take it when --start exits 2, when --wait exits 4 after the page closed unanswered, or when your harness cannot hold a blocking --wait at all (say so in your first reply). It carries the same options and asks nothing about the build path.";
+
+pub const SEED_REFERENCE: &str = "SEED REFERENCE: @@REFERENCE@@. Write this, never the key, wherever the seed is recorded (the surface brief's FORM line, build-phase start --direction); on this machine --from accepts it in place of the key.\n";
+
+pub const SEED_REFERENCE_UNAVAILABLE: &str = "SEED REFERENCE: unavailable on this machine (no seed salt could be kept in ~/.impeccable/ or .impeccable/questions/). Record no seed: write `seed: none (unavailable)` on the surface brief's FORM line and pass --direction none to build-phase start; never write the key.\n";

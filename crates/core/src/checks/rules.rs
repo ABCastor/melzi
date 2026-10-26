@@ -81,6 +81,16 @@ impl Default for DeclaredCorners {
     }
 }
 
+/// Whether a declaration's property sets a radius: its lowercase name ends in
+/// `radius`. Corner longhands round the box, so they count; a custom property
+/// (`--btn-radius`) or a preprocessor variable (`$radius`, `@radius`) only
+/// names a value and does not.
+pub fn is_radius_property(prop: &str) -> bool {
+    !prop.starts_with("--")
+        && prop.starts_with(|c: char| c.is_ascii_alphabetic() || c == '-')
+        && prop.to_ascii_lowercase().ends_with("radius")
+}
+
 impl DeclaredCorners {
     /// Every corner at once, the way the `border-radius` shorthand sets them.
     pub fn set_all(&mut self, corners: Option<Corners>) {
@@ -448,6 +458,28 @@ pub fn find_solid_chromatic_bg(s: &str) -> Option<&str> {
     None
 }
 
+/// The first chromatic fill utility that applies at rest
+/// ([`find_solid_chromatic_bg`]) and is not a pale tint: gray-on-color's
+/// class form. Every Tailwind hue at `-50` and `-100` sits at OKLCH
+/// lightness 0.93 or more with chroma under 0.07, the off-whites the
+/// computed form leaves out ([`background_reads_as_colour`]), so the class
+/// form leaves them out as well. `-200` and darker keep reading as colour.
+pub fn find_gray_on_color_bg(s: &str) -> Option<&str> {
+    let mut from = 0usize;
+    while let Some(m) = TW_COLOR_BG.find_at(s, from) {
+        let shade = m.as_str().rsplit('-').next().unwrap_or("");
+        if s.as_bytes().get(m.end()) != Some(&b'/')
+            && !in_state_variant(s, m.start())
+            && shade != "50"
+            && shade != "100"
+        {
+            return Some(m.as_str());
+        }
+        from = m.start() + 1;
+    }
+    None
+}
+
 /// The first gray text utility that applies at rest and is not near-black ink.
 fn find_resting_gray_text(s: &str) -> Option<regex::Match<'_>> {
     TW_GRAY_TEXT
@@ -525,7 +557,7 @@ fn is_styled_control(opts: &ColorOpts, bg_image: &str) -> bool {
 /// Whether `check_colors` answers from `safe_tag_text_contrast` rather than
 /// from the full pass, which is the set of findings the per-page dedupe
 /// owns.
-fn scores_safe_tag_text(opts: &ColorOpts) -> bool {
+pub(crate) fn scores_safe_tag_text(opts: &ColorOpts) -> bool {
     set_has(SAFE_TAGS, opts.tag.as_str())
         && !is_styled_control(opts, opts.bg_image.as_deref().unwrap_or(""))
 }
@@ -792,6 +824,10 @@ pub fn is_declared_purple(c: &Rgba) -> bool {
     (250.0..=320.0).contains(&hue)
 }
 
+/// The HSL saturation large non-heading text needs before its violet counts
+/// as the purple-text tell.
+const PURPLE_LARGE_TEXT_MIN_SATURATION: f64 = 0.3;
+
 /// JS: checks.mjs#checkColors
 pub fn check_colors(opts: &ColorOpts) -> Vec<RuleHit> {
     let tag = opts.tag.as_str();
@@ -805,13 +841,20 @@ pub fn check_colors(opts: &ColorOpts) -> Vec<RuleHit> {
     if opts.has_direct_text && opts.text_color.is_some() && !opts.is_emoji_only {
         let text_color = opts.text_color.unwrap();
         // Gradient-clipped text paints the gradient, not `color`, so there
-        // is no background to score it against. Text with no letter and no
+        // is no background to score it against: `text`, or one `text` per
+        // layer (stripe.com's stats compute `text, text` under two gradients,
+        // and white was scored against the gradient they paint,
+        // observations-craft-1009 row 6). Where the adapter says the glyphs
+        // paint no colour of their own (`ink_unread`: a transparent fill, or
+        // an ancestor's background clipped to the text), the same holds.
+        // Text with no letter and no
         // digit (a lone circle, a pair of braces) is not read, which the
         // SAFE_TAGS path already says through `paints_own_text`.
         // A surface in exactly the text's own colour is the walk landing on
         // a fill the text does not sit on, the same guard the SAFE_TAGS path
         // applies (`resolved_bg_matches_text`).
-        if bg_clip != "text"
+        if !background_clips_to_text(bg_clip)
+            && !opts.ink_unread
             && !opts.is_glyph_only
             && !(opts.same_color_surface_is_unread && resolved_bg_matches_text(opts, &text_color))
         {
@@ -820,7 +863,13 @@ pub fn check_colors(opts: &ColorOpts) -> Vec<RuleHit> {
 
         if has_chroma(Some(&text_color), Some(50.0)) {
             let hue = get_hue(Some(&text_color));
-            if hue >= 260.0 && hue <= 310.0 && (is_heading_123(tag) || opts.font_size >= 20.0) {
+            // Large type that is not a heading reports only when it reads as
+            // purple: a muted lavender-gray subtitle (v0-memorial's
+            // `#7a6699`, HSL saturation 0.2) measures violet and reads as
+            // neutral secondary text.
+            let large_and_saturated = opts.font_size >= 20.0
+                && lightness_saturation(&text_color).1 >= PURPLE_LARGE_TEXT_MIN_SATURATION;
+            if hue >= 260.0 && hue <= 310.0 && (is_heading_123(tag) || large_and_saturated) {
                 findings.push(RuleHit::new(
                     "ai-color-palette",
                     format!(
@@ -832,7 +881,13 @@ pub fn check_colors(opts: &ColorOpts) -> Vec<RuleHit> {
         }
     }
 
-    if bg_clip == "text" && !bg_image.is_empty() && bg_image.contains("gradient") {
+    // A gradient whose stops are all one colour is a fill: the type is solid
+    // (cochat.ai's `linear-gradient(rgb(14, 15, 18) 0%, rgb(14, 15, 18) 53%)`).
+    if bg_clip == "text"
+        && !bg_image.is_empty()
+        && bg_image.contains("gradient")
+        && !gradient_stops_are_one_colour(bg_image)
+    {
         findings.push(RuleHit::new(
             "gradient-text",
             "background-clip: text + gradient".to_string(),
@@ -841,7 +896,7 @@ pub fn check_colors(opts: &ColorOpts) -> Vec<RuleHit> {
 
     if let Some(class_str) = opts.class_list.as_deref().filter(|s| !s.is_empty()) {
         let gray_match = find_resting_gray_text(class_str);
-        let color_bg_match = find_solid_chromatic_bg(class_str);
+        let color_bg_match = find_gray_on_color_bg(class_str);
         // A gray utility names the ink only when it wins the cascade, and a
         // custom scale may spell white with a gray name (hse.de's
         // `text-neutral-0`, rgb(255, 255, 255)). The browser computes the
@@ -1019,13 +1074,21 @@ fn safe_tag_text_contrast(opts: &ColorOpts) -> Vec<RuleHit> {
         return Vec::new();
     }
     // Gradient-clipped text paints the gradient, not `color`.
-    if opts.bg_clip.as_deref() == Some("text") {
+    if opts.bg_clip.as_deref().is_some_and(background_clips_to_text) {
         return Vec::new();
     }
     let Some(text_color) = opts.text_color else {
         return Vec::new();
     };
-    if resolved_bg_matches_text(opts, &text_color) {
+    // The browser engine has layout, and says whether a surface in exactly
+    // the ink's colour is one the text does not sit on
+    // (`same_color_surface_is_unread`), as the full pass asks. Where the
+    // stacks confirm the text sits on it, the `1.0:1` is real: a white link
+    // on its white card (v0-memorialqrwebsitecode-90's "Start Chat"). The
+    // static engine has no layout, and the coincidence is all it has.
+    if resolved_bg_matches_text(opts, &text_color)
+        && (!opts.detector_is_browser || opts.same_color_surface_is_unread)
+    {
         return Vec::new();
     }
     contrast_findings(opts, &text_color)
@@ -1071,6 +1134,140 @@ fn resolved_bg_matches_text(opts: &ColorOpts, text_color: &Rgba) -> bool {
         .map_or(false, |stops| stops.iter().any(same))
 }
 
+/// The channel distance under which two gradient stops are one colour.
+const GRADIENT_ONE_COLOUR_DELTA: f64 = 12.0;
+
+/// Whether every stop of a gradient value is the same colour (within
+/// [`GRADIENT_ONE_COLOUR_DELTA`] on each channel and alpha). Two stops at
+/// least are needed to say so; with fewer, or any stop that cannot be read
+/// ([`gradient_stops_all_readable`]), no.
+pub fn gradient_stops_are_one_colour(image: &str) -> bool {
+    if !gradient_stops_all_readable(image) {
+        return false;
+    }
+    let stops = crate::color::parse_gradient_colors(Some(image));
+    let Some(first) = stops.first() else { return false };
+    stops.len() >= 2
+        && stops.iter().all(|c| {
+            (c.r - first.r).abs() < GRADIENT_ONE_COLOUR_DELTA
+                && (c.g - first.g).abs() < GRADIENT_ONE_COLOUR_DELTA
+                && (c.b - first.b).abs() < GRADIENT_ONE_COLOUR_DELTA
+                && (c.alpha_or_one() - first.alpha_or_one()).abs() * 255.0 < GRADIENT_ONE_COLOUR_DELTA
+        })
+}
+
+/// Whether every colour stop the value's gradients author is one
+/// [`crate::color::parse_gradient_colors`] reads: a hex colour or a colour
+/// function. That parse drops what it cannot resolve, so
+/// `linear-gradient(#111, var(--accent), #111)` would read as two `#111`
+/// stops. The first argument may set the direction, shape or colour space;
+/// a lone length or percentage is a transition hint. Anything else (a
+/// `var()`, a named colour) is a stop the parse did not see.
+pub fn gradient_stops_all_readable(image: &str) -> bool {
+    let lower = js::to_lower_case(image);
+    let mut rest = lower.as_str();
+    while let Some(at) = rest.find("gradient(") {
+        let body_start = at + "gradient(".len();
+        let body = &rest[body_start..];
+        let mut depth = 0i32;
+        let mut end = body.len();
+        for (i, ch) in body.char_indices() {
+            match ch {
+                '(' => depth += 1,
+                ')' if depth == 0 => {
+                    end = i;
+                    break;
+                }
+                ')' => depth -= 1,
+                _ => {}
+            }
+        }
+        let mut args = Vec::new();
+        let (mut depth, mut from) = (0i32, 0usize);
+        for (i, ch) in body[..end].char_indices() {
+            match ch {
+                '(' => depth += 1,
+                ')' => depth -= 1,
+                ',' if depth == 0 => {
+                    args.push(body[from..i].trim());
+                    from = i + 1;
+                }
+                _ => {}
+            }
+        }
+        args.push(body[from..end].trim());
+        for (i, arg) in args.iter().enumerate() {
+            if gradient_arg_is_colour(arg) || is_transition_hint(arg) {
+                continue;
+            }
+            if i == 0 && gradient_arg_is_geometry(arg) {
+                continue;
+            }
+            return false;
+        }
+        rest = &body[end.min(body.len())..];
+    }
+    true
+}
+
+/// Whether a gradient argument opens with a colour the parse resolves: a
+/// hex colour, or a colour function `parse_any_color` reads
+/// (`rgb(var(--accent-rgb))` is a stop the parse drops).
+fn gradient_arg_is_colour(arg: &str) -> bool {
+    let token = if arg.starts_with('#') {
+        arg.split_whitespace().next().unwrap_or("")
+    } else if crate::color::COLOR_FUNCTION_NAMES
+        .iter()
+        .any(|name| arg.strip_prefix(name).is_some_and(|tail| tail.starts_with('(')))
+    {
+        let mut depth = 0i32;
+        let mut end = arg.len();
+        for (i, ch) in arg.char_indices() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = i + 1;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        &arg[..end]
+    } else {
+        return false;
+    };
+    crate::color::parse_any_color(Some(token)).is_some()
+}
+
+fn is_transition_hint(arg: &str) -> bool {
+    !arg.is_empty() && !arg.contains(' ') && arg.starts_with(|c: char| c.is_ascii_digit() || c == '.' || c == '-')
+}
+
+fn gradient_arg_is_geometry(arg: &str) -> bool {
+    arg.starts_with("to ")
+        || arg.starts_with("from ")
+        || arg.starts_with("at ")
+        || arg.starts_with("in ")
+        || arg.contains(" at ")
+        || arg.contains(" in ")
+        || ["circle", "ellipse", "closest-", "farthest-"].iter().any(|w| arg.contains(w))
+        || ["deg", "rad", "grad", "turn"]
+            .iter()
+            .any(|u| arg.strip_suffix(u).is_some_and(|n| n.trim_start_matches('-').parse::<f64>().is_ok()))
+}
+
+/// Whether a computed `background-clip` clips the background to the text:
+/// `text`, or one `text` per layer (`text, text`, which a stack of two
+/// gradients under `bg-clip-text` computes). A stack that clips any layer to
+/// a box paints that layer as a fill, and is not read as clipped text.
+pub fn background_clips_to_text(value: &str) -> bool {
+    let mut layers = value.split(',').map(js::trim).peekable();
+    layers.peek().is_some() && layers.all(|layer| layer == "text")
+}
+
 /// The alpha at or below which an ink paints no glyph a reader could see.
 pub(crate) const TRANSPARENT_INK_FLOOR: f64 = 0.02;
 
@@ -1098,6 +1295,16 @@ const GRAY_ON_COLOR_DARK_LUMINANCE: f64 = 0.01;
 /// (`#1e002f`, 0.005, spread 47) read as black, while a dark navy (`#001c47`,
 /// 0.013), a dark petrol (`#002733`, 0.017) and a very dark blue with a wide
 /// spread (`#00004d`, 0.005, spread 77) still read as colour.
+///
+/// A pale tint is the other end. The channel spread grows with the hue
+/// however faint it is, so cream `#feeed4` spreads 42 and clears the bar,
+/// while the eye reads it as an off-white: OKLCH puts it at L 0.955 and
+/// C 0.038, and `#fde6ba` at L 0.933, C 0.062 (glowcase.app 321836, a 6:1
+/// grey-brown on cream that both judges call legible). At OKLCH lightness
+/// [`GRAY_ON_COLOR_PALE_LIGHTNESS`] and above the background needs chroma
+/// [`GRAY_ON_COLOR_PALE_CHROMA`] as well: amber-300 `#fcd34d` (C 0.153)
+/// and a saturated yellow still read as colour, amber-100 `#fef3c7`
+/// (C 0.06) and blue-100 `#dbeafe` (C 0.04) do not.
 fn background_reads_as_colour(bg: &Rgba) -> bool {
     let lum = relative_luminance(bg);
     let scale = if lum >= GRAY_ON_COLOR_DARK_LUMINANCE {
@@ -1105,8 +1312,18 @@ fn background_reads_as_colour(bg: &Rgba) -> bool {
     } else {
         (GRAY_ON_COLOR_DARK_LUMINANCE / math_max(lum, 1e-4)).sqrt()
     };
-    has_chroma(Some(bg), Some(GRAY_ON_COLOR_BG_SPREAD * scale))
+    if !has_chroma(Some(bg), Some(GRAY_ON_COLOR_BG_SPREAD * scale)) {
+        return false;
+    }
+    let (lightness, chroma) = crate::color::rgb_to_oklch_lc(bg);
+    lightness < GRAY_ON_COLOR_PALE_LIGHTNESS || chroma >= GRAY_ON_COLOR_PALE_CHROMA
 }
+
+/// The OKLCH lightness at and above which a background is a pale tint, and
+/// reads as colour only with [`GRAY_ON_COLOR_PALE_CHROMA`].
+const GRAY_ON_COLOR_PALE_LIGHTNESS: f64 = 0.9;
+/// The OKLCH chroma a pale tint needs to read as colour.
+const GRAY_ON_COLOR_PALE_CHROMA: f64 = 0.09;
 
 fn contrast_findings(opts: &ColorOpts, text_color: &Rgba) -> Vec<RuleHit> {
     // Glyphs inked at (nearly) zero alpha paint nothing: a `color:
@@ -1194,6 +1411,46 @@ fn contrast_findings(opts: &ColorOpts, text_color: &Rgba) -> Vec<RuleHit> {
         }
     }
     findings
+}
+
+/// Contrast for text whose glyphs paint a gradient (`background-clip:
+/// text` under a transparent fill), against the solid `ground` the box sits
+/// on. Which stop shows under which glyph depends on the gradient's size
+/// and position, so the text is scored by the stop that reads best, and
+/// reports only where even that one fails: a pale cyan-to-violet tagline on
+/// a lavender panel (interplanetaryfund.base44.app, best stop 2.45:1). A
+/// gradient with a translucent stop, a picture layer, or no stop the parser
+/// reads is not scored, and neither is a translucent ground.
+pub fn clipped_gradient_text_contrast(bg_image: &str, ground: &Rgba, threshold: f64) -> Option<RuleHit> {
+    if ground.alpha_or_one() < 0.999 || bg_image.contains("url(") || !bg_image.contains("gradient") {
+        return None;
+    }
+    let stops = crate::color::parse_gradient_colors(Some(bg_image));
+    if stops.is_empty() || stops.iter().any(|s| s.alpha_or_one() < 0.999) {
+        return None;
+    }
+    let (best, ratio) = stops
+        .iter()
+        .map(|s| (*s, contrast_ratio(s, ground)))
+        .fold(None::<(Rgba, f64)>, |acc, cur| match acc {
+            Some(a) if a.1 >= cur.1 => Some(a),
+            _ => Some(cur),
+        })?;
+    if ratio >= threshold {
+        return None;
+    }
+    let mut hit = RuleHit::new(
+        "low-contrast",
+        format!(
+            "{}:1 (need {}:1) — gradient text, best stop {} on {}",
+            crate::color::ratio_label(ratio, threshold),
+            number_to_string(threshold),
+            color_to_hex(Some(&best)),
+            color_to_hex(Some(ground))
+        ),
+    );
+    hit.severity = contrast_severity(ratio, threshold);
+    Some(hit)
 }
 
 /// Placeholder text contrast, sibling of `check_hover_contrast`. Skips the
@@ -1758,6 +2015,23 @@ fn glow_extent_px(blur: f64, spread: f64) -> f64 {
 /// 28) is still reported.
 pub const GLOW_MIN_LIFT: f64 = 20.0;
 
+/// The HSL lightness under which a shadow colour darker than its surface is
+/// shade rather than coloured light: navy `#001d38` (0.11) under a tile on a
+/// teal band. Run 1004's judged glows on light grounds (a `#3b82f6` map
+/// marker halo, an `#ff6a28` focus glow, both 0.58 or more) read as light.
+const GLOW_SHADE_MAX_LIGHTNESS: f64 = 0.25;
+
+/// How far, in degrees of hue, a dark shadow may sit from its surface and
+/// still read as that surface's shade: navy `#001d38` (209deg) on teal
+/// (175deg) is 34deg away; rose-950 (343deg) and purple-950 (274deg) on the
+/// same teal read as coloured shadows.
+const GLOW_SHADE_MAX_HUE_DISTANCE: f64 = 50.0;
+
+fn hue_distance(a: f64, b: f64) -> f64 {
+    let d = (a - b).abs() % 360.0;
+    d.min(360.0 - d)
+}
+
 /// The share of the shadow colour's alpha a blurred shadow carries at the
 /// edge of its box.
 const GLOW_EDGE_DENSITY: f64 = 0.5;
@@ -1802,7 +2076,9 @@ pub(crate) fn glow_is_perceptible(
 }
 
 /// How far the chromatic layers of one shadow value lift `surface` at the
-/// edge of the box (see [`GLOW_MIN_LIFT`]). Neutral layers are elevation, not
+/// edge of the box (see [`GLOW_MIN_LIFT`]). A dark layer
+/// ([`GLOW_SHADE_MAX_LIGHTNESS`]) cast darker than the surface, in about its
+/// hue ([`GLOW_SHADE_MAX_HUE_DISTANCE`]), lifts nothing. Neutral layers are elevation, not
 /// glow light, and do not count, and neither does a layer carrying under half
 /// the light a glow needs ([`GLOW_MIN_STRENGTH_PX`]): Tailwind's `shadow-lg`
 /// in a 0.2 purple adds a 6px layer at 1.2px of light to its 15px one, and
@@ -1817,10 +2093,28 @@ fn glow_surface_lift(value: &str, surface: &Rgba, element_opacity: Option<f64>) 
             let color = info.color?;
             let vals = extract_shadow_lengths(layer, Some((info.start, info.end)));
             let blur = vals.get(2).copied().unwrap_or(0.0);
-            (blur * color.alpha_or_one() * opacity >= GLOW_MIN_STRENGTH_PX / 2.0).then_some(color)
+            let offset = vals.first().copied().unwrap_or(0.0) != 0.0 || vals.get(1).copied().unwrap_or(0.0) != 0.0;
+            (blur * color.alpha_or_one() * opacity >= GLOW_MIN_STRENGTH_PX / 2.0).then_some((color, offset))
         })
-        .filter(|color| has_chroma(Some(color), Some(30.0)))
-        .map(|color| {
+        .filter(|(color, _)| has_chroma(Some(color), Some(30.0)))
+        .map(|(color, offset)| {
+            // A dark shadow cast darker than its surface, in about the
+            // surface's own hue, is shade, not light: a navy drop shadow at
+            // 20% under the logo tiles on a teal band
+            // (v0-morbiawebsite.vercel.app) lifted it like a teal glow when
+            // scored as a distance. A colour bright enough to read as light
+            // keeps the distance (a blue halo on a white map still tints
+            // it), and so does a dark shadow in a hue of its own (a maroon
+            // smear on teal reads as coloured) and a zero-offset halo, which
+            // is not cast.
+            let shade = offset
+                && lightness_saturation(&color).0 < GLOW_SHADE_MAX_LIGHTNESS
+                && relative_luminance(&color) < relative_luminance(surface)
+                && has_chroma(Some(surface), Some(30.0))
+                && hue_distance(get_hue(Some(&color)), get_hue(Some(surface))) <= GLOW_SHADE_MAX_HUE_DISTANCE;
+            if shade {
+                return 0.0;
+            }
             let difference = (color.r - surface.r)
                 .abs()
                 .max((color.g - surface.g).abs())
@@ -2065,8 +2359,28 @@ fn dominant_type_role_size(role: &str, samples: &[f64]) -> Option<f64> {
             .map(|(size, _)| *size)
             .reduce(math_max);
     }
+    // A near tie with the larger size second settles nothing either for a
+    // heading level under the h1: midilibre.fr sets 48 h2s at 16px (teaser
+    // titles) and 41 at 24px (section titles), and the 16px mode put the
+    // h2s level with the body. The level stays out as in an exact tie. The
+    // h1 and the body keep their most frequent size.
+    // Only two sizes a full step apart straddle the ladder: telekom.de's h2s
+    // at 21 and 24px, or joongang.co.kr's at 14 and 16px, are flat at either
+    // size, and the most frequent stands for the level as before.
+    if role != "h1"
+        && role != "body"
+        && ranked.len() > 1
+        && ranked[1].1 >= ranked[0].1 * (1.0 - TYPE_ROLE_NEAR_TIE)
+        && ranked[1].0 >= ranked[0].0 * TYPE_HIERARCHY_MIN_STEP_RATIO
+    {
+        return None;
+    }
     ranked.first().map(|(size, _)| *size)
 }
+
+/// How close in count, as a share of the most frequent size, a larger
+/// second size has to come before a heading role has no settled size.
+const TYPE_ROLE_NEAR_TIE: f64 = 0.25;
 
 /// JS: checks.mjs#checkFlatTypeHierarchySamples
 pub fn check_flat_type_hierarchy_samples(samples: &[TypeSample]) -> Vec<RuleHit> {
@@ -2185,6 +2499,19 @@ pub fn check_flat_type_hierarchy_samples(samples: &[TypeSample]) -> Vec<RuleHit>
 mod tests {
     use super::*;
 
+    #[test]
+    fn one_colour_gradient_needs_every_stop_read() {
+        assert!(gradient_stops_are_one_colour("linear-gradient(#111, #111)"));
+        assert!(gradient_stops_are_one_colour("linear-gradient(to right, rgb(17, 17, 17) 0%, 40%, #111 100%)"));
+        assert!(gradient_stops_are_one_colour("conic-gradient(from 90deg at 50% 50%, #111, #121212)"));
+        assert!(gradient_stops_are_one_colour("radial-gradient(circle at top, #111, #111)"));
+        assert!(!gradient_stops_are_one_colour("linear-gradient(#111, var(--accent), #111)"));
+        assert!(!gradient_stops_are_one_colour("linear-gradient(180deg, #111, red, #111)"));
+        assert!(!gradient_stops_are_one_colour("linear-gradient(#111, #f0f)"));
+        // A colour function the parse cannot read is a stop it dropped.
+        assert!(!gradient_stops_are_one_colour("linear-gradient(#111, rgb(var(--accent-rgb)), #111)"));
+    }
+
     fn rgb(r: f64, g: f64, b: f64) -> Rgba {
         Rgba::new(r, g, b, 1.0)
     }
@@ -2244,6 +2571,34 @@ mod tests {
         // At or above a luminance of 0.01 the bar is the old 40.
         assert!(background_reads_as_colour(&rgb(16.0, 185.0, 129.0)));
         assert!(!background_reads_as_colour(&rgb(120.0, 140.0, 150.0)));
+    }
+
+    /// The class form agrees with the computed one on Tailwind's pale tints.
+    #[test]
+    fn gray_on_color_class_form_leaves_pale_tints_out() {
+        assert_eq!(find_gray_on_color_bg("text-gray-500 bg-amber-100"), None);
+        assert_eq!(find_gray_on_color_bg("text-gray-500 bg-blue-50"), None);
+        assert_eq!(find_gray_on_color_bg("bg-sky-100 text-slate-500 md:bg-sky-600"), Some("bg-sky-600"));
+        assert_eq!(find_gray_on_color_bg("text-gray-500 bg-amber-200"), Some("bg-amber-200"));
+        assert_eq!(find_gray_on_color_bg("text-gray-500 bg-emerald-500/10"), None);
+        // The side-tab stripe-child reader still sees a pale fill.
+        assert_eq!(find_solid_chromatic_bg("bg-amber-100"), Some("bg-amber-100"));
+    }
+
+    /// glowcase.app 321836: grey-brown on cream reads as near-neutral.
+    #[test]
+    fn gray_on_color_pale_tints_need_chroma() {
+        let hex = |h: &str| crate::color::parse_any_color(Some(h)).unwrap();
+        // Pale tints a hue spreads past 40 that the eye reads as off-white.
+        for pale in ["#feeed4", "#fde6ba", "#fef3c7", "#dbeafe"] {
+            assert!(!background_reads_as_colour(&hex(pale)), "{pale}");
+        }
+        // Pale colours with chroma, and the oracle's should-flag fills.
+        for colour in ["#fcd34d", "#ffff00", "#fde68a", "#1e3a8a", "#115e59", "#10b981"] {
+            assert!(background_reads_as_colour(&hex(colour)), "{colour}");
+        }
+        let (l, c) = crate::color::rgb_to_oklch_lc(&hex("#feeed4"));
+        assert!((l - 0.955).abs() < 0.005 && (c - 0.038).abs() < 0.005, "{l} {c}");
     }
 
     #[test]
@@ -2491,6 +2846,44 @@ mod tests {
         assert!(hits[0].snippet.starts_with("Role sizes: h4 12px, body 14px, h1 16px, h3 16px"), "{hits:?}");
     }
 
+    /// midilibre.fr 324492: 48 h2 teaser titles at 16px and 41 section
+    /// titles at 24px. The 16px mode put the h2s level with the body.
+    #[test]
+    fn flat_type_hierarchy_leaves_out_a_near_tied_heading_level() {
+        let mut page = vec![("h1", 16.0)];
+        page.extend([("body", 16.0); 300]);
+        page.extend([("h2", 16.0); 48]);
+        page.extend([("h2", 24.0); 41]);
+        page.extend([("h3", 18.0); 6]);
+        assert!(check_flat_type_hierarchy_samples(&samples(&page)).is_empty(), "the h2 level drops out");
+        // A clear majority still settles the level.
+        let mut clear = vec![("h1", 16.0)];
+        clear.extend([("body", 16.0); 300]);
+        clear.extend([("h2", 16.0); 48]);
+        clear.extend([("h2", 24.0); 30]);
+        clear.extend([("h3", 18.0); 6]);
+        assert_eq!(check_flat_type_hierarchy_samples(&samples(&clear)).len(), 1);
+        // A near tie between two sizes under a step apart is flat either way,
+        // and still reports.
+        let mut flat_tie = vec![("h1", 16.0)];
+        flat_tie.extend([("body", 16.0); 300]);
+        flat_tie.extend([("h2", 16.0); 48]);
+        flat_tie.extend([("h2", 17.0); 41]);
+        flat_tie.extend([("h3", 18.0); 6]);
+        let hits = check_flat_type_hierarchy_samples(&samples(&flat_tie));
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert!(hits[0].snippet.contains("h2 16px"), "{hits:?}");
+        // A near tie whose larger size comes first settles on it, as before.
+        let mut larger_first = vec![("h1", 16.0)];
+        larger_first.extend([("body", 16.0); 300]);
+        larger_first.extend([("h2", 17.0); 48]);
+        larger_first.extend([("h2", 16.0); 41]);
+        larger_first.extend([("h3", 18.0); 6]);
+        let hits = check_flat_type_hierarchy_samples(&samples(&larger_first));
+        assert_eq!(hits.len(), 1, "{hits:?}");
+        assert!(hits[0].snippet.contains("h2 17px"), "{hits:?}");
+    }
+
     #[test]
     fn a_provisional_claim_gives_way_to_a_copy_on_screen() {
         let hit = || RuleHit::new("low-contrast", "2.2:1 (need 4.5:1) — text #c9a3c8 on #ffffff".to_string());
@@ -2546,6 +2939,63 @@ mod tests {
         assert_eq!(check_colors_deduped(&span(0.7), &mut seen, &mut |_| true).len(), 1);
         assert_eq!(check_colors_deduped(&span(0.8), &mut seen, &mut |_| true).len(), 1);
         assert!(check_colors_deduped(&span(0.8), &mut seen, &mut |_| true).is_empty());
+    }
+
+    #[test]
+    fn the_safe_tag_guard_asks_the_browser_engine() {
+        let white = Rgba::new(255.0, 255.0, 255.0, 1.0);
+        let opts = |browser: bool, guard: bool| ColorOpts {
+            tag: "a".to_string(),
+            text_color: Some(white),
+            effective_bg: Some(white),
+            font_size: 18.0,
+            font_weight: 500.0,
+            has_direct_text: true,
+            paints_own_text: true,
+            detector_is_browser: browser,
+            same_color_surface_is_unread: guard,
+            ..Default::default()
+        };
+        let flags = |o: &ColorOpts| check_colors(o).iter().any(|h| h.id == "low-contrast");
+        // A white link on a white card the stacks confirm: reported.
+        assert!(flags(&opts(true, false)));
+        // The surface is one the text does not sit on, or the engine has no
+        // layout to say: no verdict.
+        assert!(!flags(&opts(true, true)));
+        assert!(!flags(&opts(false, false)));
+    }
+
+    /// stripe.com's stats: white `h4`s under two gradients clipped to the
+    /// text compute `background-clip: text, text`. Clipped on every layer,
+    /// the gradient paints the glyphs and white is not scored against it, on
+    /// either path; gradient-text still reads the gradient. A stack that
+    /// clips one layer to a box paints that layer as a fill and is scored.
+    #[test]
+    fn a_text_clip_on_every_layer_takes_no_contrast_verdict() {
+        let white = Rgba::new(255.0, 255.0, 255.0, 1.0);
+        let pale = Rgba::new(216.0, 221.0, 245.0, 1.0);
+        let image = "linear-gradient(90deg, rgb(255, 120, 60), rgb(255, 80, 160)), linear-gradient(rgb(216, 221, 245), rgb(172, 167, 251))";
+        let opts = |tag: &str, clip: &str| ColorOpts {
+            tag: tag.to_string(),
+            text_color: Some(white),
+            effective_bg: Some(pale),
+            font_size: 40.0,
+            font_weight: 600.0,
+            has_direct_text: true,
+            paints_own_text: true,
+            detector_is_browser: true,
+            bg_clip: Some(clip.to_string()),
+            bg_image: Some(image.to_string()),
+            ..Default::default()
+        };
+        let low = |o: &ColorOpts| check_colors(o).iter().any(|h| h.id == "low-contrast");
+        assert!(!low(&opts("h4", "text, text")));
+        assert!(!low(&opts("span", "text, text")));
+        assert!(low(&opts("h4", "text, border-box")));
+        // Glyphs whose fill the adapter says is transparent take none either.
+        let unread = ColorOpts { bg_clip: Some("border-box".into()), ink_unread: true, ..opts("em", "") };
+        assert!(!low(&unread));
+        assert!(low(&ColorOpts { ink_unread: false, ..unread }));
     }
 
     #[test]
@@ -2737,6 +3187,44 @@ mod tests {
     }
 
     #[test]
+    fn a_shadow_darker_than_its_surface_lifts_nothing() {
+        let glow = |shadow: &str, surface: Rgba| {
+            check_glow(&GlowOpts {
+                box_shadow: Some(shadow.to_string()),
+                text_shadow: None,
+                effective_bg: Some(Rgba::new(10.0, 40.0, 50.0, 1.0)),
+                element_opacity: Some(1.0),
+                element_size: Some((160.0, 72.0)),
+                surface: Some(surface),
+            })
+        };
+        let teal = Rgba::new(13.0, 148.0, 136.0, 1.0);
+        // v0-morbiawebsite.vercel.app's navy drop shadow under pale logo
+        // tiles on a teal band (at 0.4 here, where the distance it was read
+        // as clears the lift floor): dark and darker than the band, so no
+        // light.
+        assert!(glow("rgba(0, 29, 56, 0.4) 0px 12px 28px 0px", teal).is_empty());
+        // The same blur and alpha in a light cyan lifts it.
+        assert_eq!(glow("rgba(103, 232, 249, 0.6) 0px 12px 28px 0px", teal).len(), 1);
+        // Neon on near-black is unchanged.
+        let ink = Rgba::new(10.0, 10.0, 10.0, 1.0);
+        assert_eq!(glow("rgba(0, 169, 255, 0.6) 0px 0px 24px 0px", ink).len(), 1);
+        // A blue halo on a white map tints it: bright enough to read as
+        // light, so it keeps the distance (run 1004's map markers).
+        let white = Rgba::new(255.0, 255.0, 255.0, 1.0);
+        assert_eq!(glow("rgba(59, 130, 246, 0.6) 0px 0px 24px 0px", white).len(), 1);
+        // A dark shadow in a hue of its own is a coloured shadow: rose-950
+        // and purple-950 on the teal band.
+        assert_eq!(glow("rgba(76, 5, 25, 0.9) 0px 12px 40px 0px", teal).len(), 1);
+        assert_eq!(glow("rgba(59, 7, 100, 0.9) 0px 12px 40px 0px", teal).len(), 1);
+        // A zero-offset navy halo is not cast: not shade, whatever its hue.
+        assert_eq!(glow("rgba(0, 29, 56, 0.4) 0px 0px 28px 0px", teal).len(), 1);
+        // On a neutral surface no hue says shade: the distance decides, as
+        // before.
+        assert_eq!(glow("rgba(0, 29, 56, 0.6) 0px 8px 24px 0px", white).len(), 1);
+    }
+
+    #[test]
     fn glow_needs_to_be_perceptible() {
         let glow = |shadow: &str, opacity: f64, size: Option<(f64, f64)>| {
             check_glow(&GlowOpts {
@@ -2908,6 +3396,36 @@ mod tests {
             glyph.iter().all(|h| h.id != "low-contrast" && h.id != "gray-on-color"),
             "{glyph:?}"
         );
+    }
+
+    /// observations-1004 row 24 (v0-memorial 10046886): a 20px subtitle in
+    /// a muted lavender gray (`#7a6699`, HSL saturation 0.2) is neutral
+    /// text. A saturated violet at that size, and the muted one on an h2,
+    /// keep the purple-text finding.
+    #[test]
+    fn purple_text_on_large_copy_needs_saturation() {
+        let purple = |tag: &str, ink: Rgba| {
+            check_colors(&ColorOpts {
+                tag: tag.to_string(),
+                text_color: Some(ink),
+                effective_bg: Some(Rgba::new(255.0, 255.0, 255.0, 1.0)),
+                visible_text: Some(ink),
+                font_size: 20.0,
+                font_weight: 400.0,
+                has_direct_text: true,
+                bg_clip: Some("border-box".to_string()),
+                bg_image: Some("none".to_string()),
+                ..Default::default()
+            })
+            .into_iter()
+            .filter(|h| h.id == "ai-color-palette")
+            .count()
+        };
+        let muted = Rgba::new(122.0, 102.0, 153.0, 1.0);
+        let violet = Rgba::new(124.0, 58.0, 237.0, 1.0);
+        assert_eq!(purple("p", muted), 0, "muted lavender subtitle");
+        assert_eq!(purple("p", violet), 1, "violet-600 subtitle");
+        assert_eq!(purple("h2", muted), 1, "a heading keeps its reading");
     }
 
     #[test]

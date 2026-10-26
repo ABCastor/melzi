@@ -50,6 +50,12 @@
   .mono { font-family: "Courier New", monospace; }
   .output { margin: 0; font-family: "Courier New", monospace; font-size: 13px; line-height: 20px; }
   .seek { width: 240px; height: 8px; border-radius: 4px; background: #e4e4e7; }
+  .link-strip { display: flex; gap: 16px; border: 1px solid #e4e4e7; border-radius: 12px; padding: 12px 16px; background: #ffffff; }
+  .link-strip a { display: block; width: 112px; height: 40px; font-size: 14px; line-height: 40px; }
+  .split { display: flex; height: 240px; padding: 0; overflow: hidden; }
+  .split-main { width: 280px; padding: 24px; }
+  .split-side { display: flex; flex-direction: column; justify-content: flex-end; width: 160px; margin-left: auto; overflow: hidden; }
+  .corner-tab { height: 64px; border-top: 1px solid #e4e4e7; border-left: 1px solid #e4e4e7; border-radius: 0 0 16px 0; background: #f1f5f9; padding: 12px; }
 </style>
 </head>
 <body>
@@ -84,6 +90,14 @@
       <div class="inner border rounded-xl" id="flag-controls-inner">
         <p>Email me when a scan finishes, with a summary of what changed.</p>
         <button type="button" style="width: 96px; height: 32px">Save</button>
+      </div>
+    </div>
+
+    <div class="case card border rounded-2xl" id="flag-two-links-outer">
+      <p>Outer card holding a bordered box of two links.</p>
+      <div class="link-strip" id="flag-two-links-inner">
+        <a href="#">Release notes</a>
+        <a href="#">Status page</a>
       </div>
     </div>
 
@@ -266,6 +280,22 @@ Verdict: malicious</pre>
         <p>Sample audio, speaker A</p>
         <button type="button" aria-label="Play" style="width: 32px; height: 32px"></button>
         <div class="seek" role="slider" aria-label="Audio progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" tabindex="0"></div>
+      </div>
+    </div>
+
+    <div class="case card border rounded-2xl" id="pass-link-strip-outer">
+      <p>Outer card holding a bordered row of links: one control.</p>
+      <div class="link-strip" id="pass-link-strip-inner">
+        <a href="#">Overview</a>
+        <a href="#">Plans</a>
+        <a href="#">Support</a>
+      </div>
+    </div>
+
+    <div class="case card border rounded-2xl split" id="pass-corner-tab-outer">
+      <div class="split-main"><p>A panel with a clipped side column.</p></div>
+      <div class="split-side">
+        <div id="pass-corner-tab-inner" class="corner-tab"><p>Statistics and reports</p></div>
       </div>
     </div>
 

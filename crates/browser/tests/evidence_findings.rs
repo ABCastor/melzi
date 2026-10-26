@@ -306,6 +306,16 @@ fn text_overflow_skips_marked_truncation_and_keeps_real_spills() {
         // A spill under a positioned image, and under a filled box.
         "flag-under-positioned-image",
         "flag-under-positioned-box",
+        // An icon link whose label starts inside its y clip.
+        "flag-icon-label-crosses-clip",
+        // The same at `overflow: clip` with a clip margin the label paints in.
+        "flag-icon-label-in-clip-margin",
+        // An unwrapped code sample the column cuts.
+        "flag-pre-unwrapped",
+        // A heading too wide for its box, with nothing animating it.
+        "flag-typing-at-rest",
+        // A label that runs out of the button it paints.
+        "flag-label-past-button",
     ] {
         assert!(
             overflow.iter().any(|(s, sel)| s.contains(flag) || sel.contains(flag)),
@@ -317,5 +327,5 @@ fn text_overflow_skips_marked_truncation_and_keeps_real_spills() {
         .filter(|(s, sel)| s.contains("pass-") || sel.contains("pass-") || sel.contains("ellipsis"))
         .collect();
     assert!(stray.is_empty(), "should-pass boxes flagged: {stray:?}");
-    assert_eq!(overflow.len(), 11, "{overflow:?}");
+    assert_eq!(overflow.len(), 16, "{overflow:?}");
 }

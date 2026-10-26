@@ -5,6 +5,7 @@
 
 use impeccable_core::findings::Finding;
 use impeccable_core::js::{self, math_round, number_to_string, parse_float, parse_int};
+use impeccable_core::js_ext_b::utf16_len;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json::{Map, Value};
@@ -88,7 +89,7 @@ pub struct DetectionConfig {
     pub ignore_values: Vec<IgnoreValueEntry>,
     pub design_system_enabled: Option<bool>,
     pub advisory_rules: Option<String>,
-    pub extensions: Vec<String>,
+    pub extensions: Vec<ExtensionEntry>,
 }
 
 impl DetectionConfig {
@@ -133,27 +134,31 @@ fn apply_detection_config_source(config: &mut DetectionConfig, raw: Option<&Map<
         config.ignore_values = merge_ignore_values(&config.ignore_values, values);
     }
     if let Some(Value::Array(list)) = raw.get("extensions") {
-        config.extensions = unique_strings(
-            config
-                .extensions
-                .iter()
-                .cloned()
-                .chain(normalize_detection_extensions(list))
-                .collect(),
-        );
+        config.extensions = merge_extensions(&config.extensions, list);
     }
 }
 
-fn normalize_detection_extensions(entries: &[Value]) -> Vec<String> {
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExtensionEntry {
+    pub ext: String,
+    pub engine: String,
+}
+
+/// JS: template-extensions.mjs#normalizeExtensionEntries
+pub fn normalize_extension_entries(entries: &[Value]) -> Vec<ExtensionEntry> {
     let mut out = Vec::new();
     for entry in entries {
-        let raw = match entry {
-            Value::String(s) => Some(s.as_str()),
-            Value::Object(o) => match o.get("ext") {
-                Some(Value::String(s)) => Some(s.as_str()),
-                _ => None,
-            },
-            _ => None,
+        let (raw, is_string, engine_text) = match entry {
+            Value::String(s) => (Some(s.as_str()), true, false),
+            Value::Object(o) => (
+                match o.get("ext") {
+                    Some(Value::String(s)) => Some(s.as_str()),
+                    _ => None,
+                },
+                false,
+                o.get("engine") == Some(&Value::String("text".to_string())),
+            ),
+            _ => (None, false, false),
         };
         let Some(raw) = raw else { continue };
         let mut ext = js::to_lower_case(js::trim(raw));
@@ -163,9 +168,56 @@ fn normalize_detection_extensions(entries: &[Value]) -> Vec<String> {
         if !ext.starts_with('.') {
             ext = format!(".{ext}");
         }
-        out.push(ext);
+        let engine = if !is_string && engine_text {
+            "text"
+        } else {
+            "html"
+        };
+        out.push(ExtensionEntry {
+            ext,
+            engine: engine.to_string(),
+        });
     }
     out
+}
+
+/// JS: template-extensions.mjs#mergeExtensions
+pub fn merge_extensions(existing: &[ExtensionEntry], incoming: &[Value]) -> Vec<ExtensionEntry> {
+    // JS Map semantics: insertion order, later set replaces the value in place.
+    let mut map: Vec<ExtensionEntry> = Vec::new();
+    for e in existing.iter().cloned().chain(normalize_extension_entries(incoming)) {
+        match map.iter_mut().find(|slot| slot.ext == e.ext) {
+            Some(slot) => *slot = e,
+            None => map.push(e),
+        }
+    }
+    map
+}
+
+/// JS: template-extensions.mjs#matchConfiguredExtension
+pub fn match_configured_extension<'a>(
+    file_path: &str,
+    extensions: &'a [ExtensionEntry],
+) -> Option<&'a ExtensionEntry> {
+    if extensions.is_empty() {
+        return None;
+    }
+    let name = js::to_lower_case(&jsp::basename(file_path));
+    if name.is_empty() {
+        return None;
+    }
+    let mut best: Option<&ExtensionEntry> = None;
+    for entry in extensions {
+        if utf16_len(&name) > utf16_len(&entry.ext)
+            && name.ends_with(entry.ext.as_str())
+            && best
+                .map(|b| utf16_len(&entry.ext) > utf16_len(&b.ext))
+                .unwrap_or(true)
+        {
+            best = Some(entry);
+        }
+    }
+    best
 }
 
 fn unique_strings(values: Vec<String>) -> Vec<String> {
@@ -694,11 +746,13 @@ fn glob_to_regex(glob: &str) -> Option<Regex> {
         let c = chars[i];
         if c == '*' {
             if chars.get(i + 1) == Some(&'*') {
-                re.push_str(DOT);
-                re.push('*');
                 i += 2;
                 if chars.get(i) == Some(&'/') {
+                    re.push_str(&format!("(?:{DOT}*/)?"));
                     i += 1;
+                } else {
+                    re.push_str(DOT);
+                    re.push('*');
                 }
             } else {
                 re.push_str("[^/]*");
@@ -1136,6 +1190,18 @@ mod tests {
     }
 
     #[test]
+    fn globstar_slash_keeps_the_directory_boundary() {
+        let nested = ["src/**/a.html".to_string()];
+        assert!(matches_any_glob("src/a.html", &nested));
+        assert!(matches_any_glob("src/pages/a.html", &nested));
+        assert!(!matches_any_glob("src/xa.html", &nested));
+        let leading = ["**/foo.html".to_string()];
+        assert!(matches_any_glob("foo.html", &leading));
+        assert!(matches_any_glob("bar/foo.html", &leading));
+        assert!(!matches_any_glob("barfoo.html", &leading));
+    }
+
+    #[test]
     fn colors() {
         assert_eq!(color_ignore_key("#fff"), "255,255,255,255");
         assert_eq!(
@@ -1170,10 +1236,24 @@ mod tests {
             r#"{"detector":{"extensions":[{"ext":".html.erb","engine":"html"},"blade.php"]}}"#,
         )
         .unwrap();
+        let entry = |ext: &str, engine: &str| ExtensionEntry {
+            ext: ext.to_string(),
+            engine: engine.to_string(),
+        };
         let config = read_detection_config(dir.to_str().unwrap());
         assert_eq!(
             config.extensions,
-            vec![".html.erb".to_string(), ".blade.php".to_string()]
+            vec![entry(".html.erb", "html"), entry(".blade.php", "html")]
+        );
+        std::fs::write(
+            impeccable.join("config.local.json"),
+            r#"{"detector":{"extensions":[{"ext":".html.erb","engine":"text"}]}}"#,
+        )
+        .unwrap();
+        let config = read_detection_config(dir.to_str().unwrap());
+        assert_eq!(
+            config.extensions,
+            vec![entry(".html.erb", "text"), entry(".blade.php", "html")]
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

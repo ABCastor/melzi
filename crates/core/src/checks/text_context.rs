@@ -18,6 +18,12 @@
 //!   that opens with an asterisk or a footnote mark) as advisory under the
 //!   three rules. A consent or form label is not fine print and keeps
 //!   failing." The rules are `line-length`, `tiny-text` and `tight-leading`.
+//!   Decision 3 of round 13 (2026-10-22) moves part of it from advisory to
+//!   exempt: "Legal/footnote blocks are exempt from line-length and
+//!   tiny-text; links inside them keep undersized-ui-text." [`fine_print`]
+//!   tells the two tiers apart: a block under a legal or footnote marker
+//!   reports nothing under those two rules and stays advisory under
+//!   `tight-leading`.
 //! - **r5-p3, micro-labels** ([`is_micro_label`]): "Report text under the
 //!   floor as advisory when it is a label with no reading job: a tick or
 //!   axis label inside a chart, a unit or step marker beside a number, a
@@ -510,7 +516,9 @@ const PAGINATION_PARTS: &[&str] =
     &["bullet", "bullets", "indicator", "indicators", "pager", "pagination"];
 /// Tags a demo frame is never read from, and where the walk up ends.
 const FRAME_STOP_TAGS: &[&str] = &["html", "body", "main"];
-/// Landmarks that are never themselves a frame; the walk passes through.
+/// Landmarks that are never themselves a frame by scale, tilt, size or a
+/// caption; the walk passes through. A window drawn on one is still read by
+/// its traffic lights ([`is_traffic_light_window`]).
 const FRAME_SKIP_TAGS: &[&str] = &["section", "article", "header", "footer", "nav"];
 /// Controls whose text keeps its severity inside a demo frame.
 const DEMO_CONTROL_TAGS: &[&str] = &["button", "select", "textarea", "input", "summary", "label"];
@@ -521,6 +529,10 @@ const DOT_SKIP_TAGS: &[&str] = &["a", "button", "input", "li", "svg", "img"];
 /// A title-bar dot's side, in px.
 const DOT_MIN_PX: f64 = 5.0;
 const DOT_MAX_PX: f64 = 16.0;
+/// The shortest first child that reads as a title bar, in px, and the
+/// shortest one that does when it carries a trio of dots.
+const TITLE_BAR_MIN_PX: f64 = 12.0;
+const TITLE_BAR_MIN_DOTS_PX: f64 = 8.0;
 /// The tallest first child that still reads as a title bar, in px.
 const TITLE_BAR_MAX_PX: f64 = 72.0;
 
@@ -615,30 +627,124 @@ fn bar_has_preview_caption<N: ContextNode>(bar: &N) -> bool {
     false
 }
 
-/// A box whose first child is a title bar carrying three dots at its left,
-/// or a preview caption (then the box must be drawn as a frame).
-fn is_demo_window<N: ContextNode>(c: &N) -> bool {
+/// The box's first child when it reads as a title bar: it spans the box at
+/// its top, and the box is at least twice its height.
+fn title_bar<N: ContextNode>(c: &N) -> Option<N> {
     let kids = c.children();
-    let Some(bar) = kids.first() else { return false };
+    let bar = kids.first()?.clone();
     if kids.len() < 2 {
-        return false;
+        return None;
     }
     if let (Some(b), Some(w)) = (bar.rect(), c.rect()) {
         let spans = b.2 >= w.2 * 0.6;
         let at_top = (b.1 - w.1).abs() <= 24.0;
-        let is_bar = (12.0..=TITLE_BAR_MAX_PX).contains(&b.3) && w.3 >= b.3 * 2.0;
+        // A bar that carries traffic lights needs only to hold them: a phone
+        // layout shrinks smartbi.ca's 21px bar to 11px around 8px dots. A
+        // bar read by its caption needs room for a line of text.
+        let floor = if b.3 < TITLE_BAR_MIN_PX && find_dot_trio(&bar).is_some() {
+            TITLE_BAR_MIN_DOTS_PX
+        } else {
+            TITLE_BAR_MIN_PX
+        };
+        let is_bar = (floor..=TITLE_BAR_MAX_PX).contains(&b.3) && w.3 >= b.3 * 2.0;
         if !(spans && at_top && is_bar && w.2 >= FRAME_MIN_WIDTH_PX) {
-            return false;
+            return None;
         }
     }
-    if let Some(trio) = find_dot_trio(bar) {
-        // Traffic lights sit at the bar's leading edge.
-        return match (trio[2].rect(), bar.rect()) {
-            (Some(d), Some(b)) => d.0 + d.2 <= b.0 + b.2 * 0.5,
-            _ => true,
-        };
+    Some(bar)
+}
+
+/// Three dots at the title bar's leading edge: `Some(true)` when the bar
+/// carries them there, `Some(false)` when its dots sit elsewhere, `None`
+/// when it has no dot trio.
+fn bar_leads_with_traffic_lights<N: ContextNode>(bar: &N) -> Option<bool> {
+    let trio = find_dot_trio(bar)?;
+    // Traffic lights sit at the bar's leading edge.
+    Some(match (trio[2].rect(), bar.rect()) {
+        (Some(d), Some(b)) => d.0 + d.2 <= b.0 + b.2 * 0.5,
+        _ => true,
+    })
+}
+
+/// A box whose first child is a title bar carrying three dots at its left,
+/// or a preview caption (then the box must be drawn as a frame).
+fn is_demo_window<N: ContextNode>(c: &N) -> bool {
+    let Some(bar) = title_bar(c) else { return false };
+    if let Some(leads) = bar_leads_with_traffic_lights(&bar) {
+        return leads;
     }
-    is_frame_box(c) && bar_has_preview_caption(bar)
+    is_frame_box(c) && bar_has_preview_caption(&bar)
+}
+
+/// A window drawn by its traffic lights alone: a title bar with three dots
+/// at its leading edge. The one demo-window test a landmark is asked
+/// ([`FRAME_SKIP_TAGS`]): glowcase.app draws its product tour on an
+/// `<article>` with a 44px title bar and three dots, and a page's own
+/// article, section or header does not open with a row of traffic lights.
+/// The preview-caption form stays off landmarks, where a section's first
+/// child is often a heading band. A landmark is held to the measured test:
+/// its box, its bar and the dots all have rects, so the bar's size and
+/// place and the dots' leading edge are read, not assumed.
+fn is_traffic_light_window<N: ContextNode>(c: &N) -> bool {
+    let Some(bar) = title_bar(c) else { return false };
+    let measured = c.rect().is_some()
+        && bar.rect().is_some()
+        && find_dot_trio(&bar).is_some_and(|trio| trio.iter().all(|d| d.rect().is_some()));
+    measured && bar_leads_with_traffic_lights(&bar) == Some(true) && !landmark_holds_the_page(c)
+}
+
+/// Whether a landmark is the page's own content rather than a drawing on
+/// it: it holds the page's `h1`, or at least half the page's text. A blog
+/// theme that draws its post as a macOS window keeps the post's findings at
+/// their own severity.
+fn landmark_holds_the_page<N: ContextNode>(c: &N) -> bool {
+    const MAX_VISITED: usize = 2000;
+    let mut stack = c.children();
+    let mut visited = 0usize;
+    while let Some(n) = stack.pop() {
+        visited += 1;
+        if visited > MAX_VISITED {
+            // Too large to be a drawing.
+            return true;
+        }
+        if n.tag() == "h1" {
+            return true;
+        }
+        stack.extend(n.children());
+    }
+    let mut root = c.clone();
+    while let Some(p) = root.parent() {
+        root = p;
+    }
+    // Every label inside the window asks this again, so the page count
+    // stops as soon as it settles the answer: past twice the landmark's
+    // own text, the landmark cannot hold half of it.
+    let own = rendered_text_chars(c, usize::MAX);
+    let page = rendered_text_chars(&root, own.saturating_mul(2).saturating_add(1));
+    page > 0 && own * 2 >= page
+}
+
+/// Elements whose text is source, not words on the page.
+const SOURCE_TEXT_TAGS: &[&str] = &["script", "style", "noscript", "template"];
+
+/// The non-whitespace characters of the text `n` and its descendants put
+/// on the page. `textContent` would count a `<script>` bundle or a
+/// `<style>` sheet, which can outweigh a page's whole copy. Counting stops
+/// once it passes `cap`.
+fn rendered_text_chars<N: ContextNode>(n: &N, cap: usize) -> usize {
+    let mut count = 0usize;
+    let mut stack = vec![n.clone()];
+    while let Some(e) = stack.pop() {
+        if count > cap {
+            break;
+        }
+        if SOURCE_TEXT_TAGS.contains(&e.tag().as_str()) {
+            continue;
+        }
+        count += e.direct_text().chars().filter(|ch| !ch.is_whitespace()).count();
+        stack.extend(e.children());
+    }
+    count
 }
 
 /// A device frame that is tilted in 3D, or drawn as a frame and scaled down.
@@ -769,6 +875,11 @@ fn framed_walk<N: ContextNode>(el: &N, mut passed_frame: bool) -> Option<Frame> 
         {
             return Some(Frame::Chrome);
         }
+        // A landmark is never a frame by its scale, tilt or size, but a
+        // window drawn on one still has its traffic lights.
+        if depth > 0 && FRAME_SKIP_TAGS.contains(&tag.as_str()) && is_traffic_light_window(&c) {
+            return Some(Frame::Chrome);
+        }
         if depth > 0 && !FRAME_SKIP_TAGS.contains(&tag.as_str()) && is_sized_frame_box(&c) {
             // r8-t1: the panel carries a sample caption.
             if has_sample_caption_on(&c) {
@@ -800,10 +911,13 @@ fn framed_walk<N: ContextNode>(el: &N, mut passed_frame: bool) -> Option<Frame> 
 /// tilted in 3D, or a frame box under a wrapper scaled into the frame
 /// range, or a frame box with a sample caption on it or beside it. `nested-cards` asks it of an inner card, which can be the
 /// window itself (stroq.dev's editor window inside a card), as well as
-/// asking [`in_framed_demo`] (decision r6-t3-nested-cards-mockups).
+/// asking [`in_framed_demo`] (decision r6-t3-nested-cards-mockups). A
+/// landmark counts only as a window with traffic lights.
 pub fn is_demo_frame<N: ContextNode>(el: &N) -> bool {
-    !FRAME_SKIP_TAGS.contains(&el.tag().as_str())
-        && !has_part(&el.class_list(), SLIDE_PARTS)
+    if FRAME_SKIP_TAGS.contains(&el.tag().as_str()) {
+        return !has_part(&el.class_list(), SLIDE_PARTS) && is_traffic_light_window(el);
+    }
+    !has_part(&el.class_list(), SLIDE_PARTS)
         && (is_transformed_frame(el)
             || is_demo_window(el)
             // maritime.sh's window is the frame box; the scale sits on a
@@ -840,12 +954,40 @@ const FINE_PRINT_SKIP_TAGS: &[&str] = &["html", "body", "main", "article", "form
 /// A mark a footnote opens with.
 const FOOTNOTE_MARKS: &[char] = &['*', '†', '‡', '§', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
 
-/// Whether a class or id names fine print: a marker as a whole token
-/// (`legal`, `copyright-notice`, `fine-print`, `footnote_2`, plural
-/// `disclaimers`, camelCase `legalNotice`), never a part of a longer word
-/// (`illegal`, `testimonials`).
-fn has_fine_print_marker(class_or_id: &str) -> bool {
-    class_or_id.split_whitespace().any(|token| {
+/// The markers that name a legal or footnote block outright (decision 3,
+/// round 13): text under one of them is exempt from `line-length` and
+/// `tiny-text`. `copyright` and `terms` stay advisory: they also mark a
+/// photo credit, a timing note or a row of links. `disclosure` is strict
+/// only in the plural ([`LEGAL_PLURAL_ONLY`]).
+pub const LEGAL_BLOCK_MARKERS: &[&str] = &[
+    "legal",
+    "fineprint",
+    "fine-print",
+    "smallprint",
+    "small-print",
+    "disclaimer",
+    "footnote",
+];
+/// Markers that name a legal block only in the plural. A `disclosure`, in
+/// the singular, is also the WAI-ARIA name of an expand/collapse widget
+/// (target.com's `menuDisclosure`, Osano's `osano-cm-disclosure__toggle`),
+/// so it stays advisory; `disclosures` is a list of them.
+pub const LEGAL_PLURAL_ONLY: &[&str] = &["disclosure"];
+/// Words that turn a following `footnote` into the name of a type size
+/// (Apple's "Footnote" text style: `text-footnote`, `upl-type-footnote`).
+const TYPE_SCALE_WORDS: &[&str] = &["type", "text", "typography", "font", "fs"];
+
+/// Which markers a class or id carries: `None`, any of
+/// [`FINE_PRINT_MARKERS`] (`Advisory`), or one of [`LEGAL_BLOCK_MARKERS`]
+/// or the plural of [`LEGAL_PLURAL_ONLY`] (`Exempt`). A marker counts as a
+/// whole token (`legal`, `copyright-notice`, `fine-print`, `footnote_2`,
+/// plural `disclaimers`, camelCase `legalNotice`), never as a part of a
+/// longer word (`illegal`, `testimonials`). A `footnote` after a type-scale
+/// word in the same token (`text-footnote`) is a size name and only
+/// advisory.
+fn fine_print_marker(class_or_id: &str) -> FinePrint {
+    let mut found = FinePrint::No;
+    for token in class_or_id.split_whitespace() {
         // Words split at `-`, `_` and a lowercase-to-uppercase step.
         let mut spaced = String::with_capacity(token.len() + 4);
         let mut prev_lower = false;
@@ -862,17 +1004,109 @@ fn has_fine_print_marker(class_or_id: &str) -> bool {
             spaced.extend(ch.to_lowercase());
         }
         let words: Vec<&str> = spaced.split_whitespace().collect();
-        FINE_PRINT_MARKERS.iter().any(|m| {
-            // A marker of two words (`fine-print`) is two words in a row.
-            // The last word may be plural (`disclaimers`, `footnotes`).
+        // Where a marker of one or more words (`fine-print` is two in a
+        // row) starts, with its last word as typed or plural.
+        let starts = |m: &str, plural_only: bool| -> Vec<usize> {
             let parts: Vec<&str> = m.split('-').collect();
-            words.windows(parts.len()).any(|w| {
-                let last = parts.len() - 1;
-                w[..last] == parts[..last]
-                    && (w[last] == parts[last] || w[last].strip_suffix('s') == Some(parts[last]))
+            let last = parts.len() - 1;
+            words
+                .windows(parts.len())
+                .enumerate()
+                .filter(|(_, w)| {
+                    w[..last] == parts[..last]
+                        && ((!plural_only && w[last] == parts[last])
+                            || w[last].strip_suffix('s') == Some(parts[last]))
+                })
+                .map(|(i, _)| i)
+                .collect()
+        };
+        let strict = LEGAL_BLOCK_MARKERS.iter().any(|m| {
+            starts(m, false).into_iter().any(|i| {
+                !(*m == "footnote" && i > 0 && TYPE_SCALE_WORDS.contains(&words[i - 1]))
             })
-        })
-    })
+        }) || LEGAL_PLURAL_ONLY.iter().any(|m| !starts(m, true).is_empty());
+        if strict {
+            return FinePrint::Exempt;
+        }
+        if FINE_PRINT_MARKERS.iter().any(|m| !starts(m, false).is_empty()) {
+            found = FinePrint::Advisory;
+        }
+    }
+    found
+}
+
+/// Whether a box marked as a legal block is, or directly holds, an
+/// expand/collapse widget: a `details`, a `summary` or a control with
+/// `aria-expanded`. Its text is an accordion panel a visitor opened, so the
+/// marker stays advisory (freenet.de's `footer-footnote-accordion` keeps
+/// its advisory, not silence).
+fn is_disclosure_widget<N: ContextNode>(c: &N) -> bool {
+    let widget = |k: &N| matches!(k.tag().as_str(), "details" | "summary") || k.attr("aria-expanded").is_some();
+    widget(c) || c.children().iter().any(widget)
+}
+
+/// The fewest characters a legal block holds to read as a policy page's
+/// body (about a screen of 14px text).
+pub const LEGAL_PAGE_MIN_CHARS: usize = 2000;
+
+/// [`rendered_text_chars`] without hidden subtrees (a `hidden` attribute
+/// no author `display` undoes, `aria-hidden="true"` or `display: none`): a hidden mobile copy of a
+/// policy is not text a visitor reads, on either side of the comparison.
+fn visible_text_chars<N: ContextNode>(n: &N, cap: usize) -> usize {
+    let mut count = 0usize;
+    let mut stack = vec![n.clone()];
+    while let Some(e) = stack.pop() {
+        if count > cap {
+            break;
+        }
+        // A `hidden` element that author CSS sets to a display renders
+        // (`[hidden].reveal { display: block }`), except `until-found`.
+        let display = e.style("display");
+        let display = display.trim();
+        let hidden_attr = e.attr("hidden").is_some_and(|v| {
+            v.trim().eq_ignore_ascii_case("until-found") || display.is_empty() || display == "none"
+        });
+        if SOURCE_TEXT_TAGS.contains(&e.tag().as_str())
+            || hidden_attr
+            || e.attr("aria-hidden").is_some_and(|v| v.trim().eq_ignore_ascii_case("true"))
+            || display == "none"
+        {
+            continue;
+        }
+        count += e.direct_text().chars().filter(|ch| !ch.is_whitespace()).count();
+        stack.extend(e.children());
+    }
+    count
+}
+
+/// Whether a box marked as a legal block is a policy page's own body text
+/// rather than a block on the page: it sits under no `footer` or
+/// `role="contentinfo"`, holds at least [`LEGAL_PAGE_MIN_CHARS`]
+/// characters, and holds at least half the page's text. A privacy policy
+/// under `div.legal-content` at 14px is a document a visitor reads, so it
+/// stays advisory.
+fn is_legal_page_body<N: ContextNode>(el: &N, marked: &N) -> bool {
+    let mut cur = Some(el.clone());
+    let mut root = el.clone();
+    while let Some(c) = cur {
+        if c.tag() == "footer" || c.attr("role").is_some_and(|r| r.trim().eq_ignore_ascii_case("contentinfo")) {
+            return false;
+        }
+        root = c.clone();
+        cur = c.parent();
+    }
+    let own = visible_text_chars(marked, usize::MAX);
+    if own < LEGAL_PAGE_MIN_CHARS {
+        return false;
+    }
+    let page = visible_text_chars(&root, own.saturating_mul(2).saturating_add(1));
+    page > 0 && own * 2 >= page
+}
+
+/// Whether a class or id names fine print by any of [`FINE_PRINT_MARKERS`].
+#[cfg(test)]
+fn has_fine_print_marker(class_or_id: &str) -> bool {
+    fine_print_marker(class_or_id) != FinePrint::No
 }
 
 /// The shortest block, in characters, that reads as a footnote when it
@@ -900,28 +1134,58 @@ fn opens_with_footnote_mark(el: &impl ContextNode) -> bool {
         && collapse(&el.direct_text()).chars().count() >= FOOTNOTE_MIN_CHARS / 2
 }
 
+/// How an element's text reads as fine print. Both tiers are set under
+/// [`FINE_PRINT_MAX_PX`] and are never a heading, a label or a control's
+/// text.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FinePrint {
+    /// Not fine print.
+    No,
+    /// Fine print by weaker evidence: a `small` tag, a `copyright` or
+    /// `terms` marker, or a block that opens with a footnote mark. It reports
+    /// as advisory under `line-length`, `tiny-text` and `tight-leading`
+    /// (taste call r5-p27).
+    Advisory,
+    /// A legal or footnote block: one of [`LEGAL_BLOCK_MARKERS`] on the
+    /// element or up to [`FINE_PRINT_MARKER_DEPTH`] levels up. Exempt from
+    /// `line-length` and `tiny-text`, advisory under `tight-leading`
+    /// (decision 3, round 13). Links inside it keep `undersized-ui-text`,
+    /// which does not read this.
+    Exempt,
+}
+
+/// Whether an element's text is legal fine print, in either tier of
+/// [`fine_print`].
+pub fn is_fine_print<N: ContextNode>(el: &N) -> bool {
+    fine_print(el) != FinePrint::No
+}
+
 /// Whether an element's text is legal fine print: set under
 /// [`FINE_PRINT_MAX_PX`], and marked by a `small` tag, or by a class or id
 /// (on it or up to [`FINE_PRINT_MARKER_DEPTH`] levels up), or opening with
-/// an asterisk or a footnote mark.
+/// an asterisk or a footnote mark. A legal or footnote marker
+/// ([`LEGAL_BLOCK_MARKERS`]) in that reach makes it [`FinePrint::Exempt`];
+/// the rest is [`FinePrint::Advisory`]. A leading mark alone stays
+/// advisory: it counts as a footnote only inside such a block, which the
+/// marker already settles.
 ///
 /// Not fine print: text in a `label` (a consent line a visitor has to read
 /// to tick the box), a block holding a form control, and a heading.
-pub fn is_fine_print<N: ContextNode>(el: &N) -> bool {
+pub fn fine_print<N: ContextNode>(el: &N) -> FinePrint {
     if is_heading(el) {
-        return false;
+        return FinePrint::No;
     }
     // Fine print is set small. A rules page under a `legal` wrapper at body
     // size (agenticworldcup.ai/rules, 17px) is a document a visitor reads.
     let size = el.font_size();
     if !(size > 0.0 && size < FINE_PRINT_MAX_PX) {
-        return false;
+        return FinePrint::No;
     }
     let mut cur = Some(el.clone());
     while let Some(c) = cur {
         let tag = c.tag();
         if tag == "label" || is_heading(&c) {
-            return false;
+            return FinePrint::No;
         }
         if FRAME_STOP_TAGS.contains(&tag.as_str()) {
             break;
@@ -950,8 +1214,14 @@ pub fn is_fine_print<N: ContextNode>(el: &N) -> bool {
         })
     });
     if el.children().iter().any(control) || beside {
-        return false;
+        return FinePrint::No;
     }
+    // The walk climbs past a `small` or a weaker marker: mercury.com sets
+    // its banner disclaimer in a `small` inside `#disclaimer-banner`.
+    let mut found = FinePrint::No;
+    // Every legal-marked box in reach, inner first: an inner `p.footnote`
+    // inside a marked accordion or policy body is demoted with it.
+    let mut legal: Vec<N> = Vec::new();
     let mut cur = Some(el.clone());
     for _ in 0..=FINE_PRINT_MARKER_DEPTH {
         let Some(c) = cur else { break };
@@ -959,12 +1229,27 @@ pub fn is_fine_print<N: ContextNode>(el: &N) -> bool {
         if FINE_PRINT_SKIP_TAGS.contains(&tag.as_str()) {
             break;
         }
-        if tag == "small" || has_fine_print_marker(&c.class_list()) || has_fine_print_marker(&c.id_attr()) {
-            return true;
+        let marker = fine_print_marker(&c.class_list()).max(fine_print_marker(&c.id_attr()));
+        if marker == FinePrint::Exempt {
+            legal.push(c.clone());
+        } else if tag == "small" || marker == FinePrint::Advisory {
+            found = FinePrint::Advisory;
         }
         cur = c.parent();
     }
-    opens_with_footnote_mark(el)
+    if let Some(outer) = legal.last() {
+        // An accordion panel and a policy page's body are demoted, not
+        // dropped (decision 3 review, round 13). The outermost marked box
+        // holds the most text, so it alone settles the policy-page test.
+        if legal.iter().any(is_disclosure_widget) || is_legal_page_body(el, outer) {
+            return FinePrint::Advisory;
+        }
+        return FinePrint::Exempt;
+    }
+    if found == FinePrint::No && opens_with_footnote_mark(el) {
+        found = FinePrint::Advisory;
+    }
+    found
 }
 
 // ─── r5-p3: micro-labels ────────────────────────────────────────────────────
@@ -1432,6 +1717,67 @@ mod tests {
     }
 
     #[test]
+    fn a_window_drawn_on_a_landmark_is_read_by_its_traffic_lights() {
+        // glowcase.app 321817: the product tour is an `<article>` with a
+        // 44px title bar and three dots.
+        let (_t, body) = Tree::new();
+        body.add("p").text("Glowcase turns your product into an interactive demo that buyers explore on their own.");
+        let (win, _bar, label) = window(&body);
+        (win.0).0.borrow_mut()[win.1].tag = "article".into();
+        assert!(in_framed_demo(&label));
+        assert!(is_demo_frame(&win));
+        // The same window holding the page's h1 is the page's own post.
+        let h1 = win.add("h1").text("Notes");
+        assert!(!in_framed_demo(&label));
+        (h1.0).0.borrow_mut()[h1.1].tag = "h2".into();
+        assert!(in_framed_demo(&label));
+        // Holding most of the page's text, it is the page too.
+        let (_t, body) = Tree::new();
+        let (win, _bar, label) = window(&body);
+        (win.0).0.borrow_mut()[win.1].tag = "article".into();
+        assert!(!in_framed_demo(&label), "the only text on the page");
+        // A script bundle or a style sheet is not text on the page.
+        body.add("script").text(&"window.__APP_STATE__ = {};".repeat(200));
+        body.add("style").text(&".a { color: red; }".repeat(200));
+        assert!(!in_framed_demo(&label), "the only words on the page, beside a bundle");
+        // A section whose title bar carries a preview caption but no dots
+        // stays a landmark the walk passes through.
+        let (_t, body) = Tree::new();
+        let sec = body.add("section").rect(0.0, 0.0, 600.0, 400.0).style("borderTopWidth", "1px");
+        let head = sec.add("div").rect(0.0, 0.0, 600.0, 36.0);
+        head.add("span").text("Live preview").font(10.0);
+        let pane = sec.add("div").rect(0.0, 36.0, 600.0, 364.0);
+        let plain = pane.add("span").text("847 results").font(9.0);
+        assert!(!in_framed_demo(&plain));
+        assert!(!is_demo_frame(&sec));
+        // Dots at the trailing edge of a landmark's bar are not traffic lights.
+        let (_t, body) = Tree::new();
+        let art = body.add("article").rect(0.0, 0.0, 600.0, 400.0);
+        let bar = art.add("div").rect(0.0, 0.0, 600.0, 36.0);
+        let lights = bar.add("div").rect(500.0, 12.0, 42.0, 10.0);
+        for i in 0..3 {
+            dot(&lights, 500.0 + 16.0 * i as f64);
+        }
+        let pane = art.add("div").rect(0.0, 36.0, 600.0, 364.0);
+        let text = pane.add("span").text("847 results").font(9.0);
+        assert!(!in_framed_demo(&text));
+        // An unsized landmark whose unsized first child holds three dots
+        // (review): with no rects for the box and the bar, their size and
+        // place and the dots' leading edge are not known, and the landmark
+        // stays one the walk passes through.
+        let (_t, body) = Tree::new();
+        body.add("p").text("Glowcase turns your product into an interactive demo that buyers explore on their own.");
+        let art = body.add("article");
+        let bar = art.add("div");
+        let lights = bar.add("div");
+        for i in 0..3 {
+            dot(&lights, 12.0 + 16.0 * i as f64);
+        }
+        let text = art.add("div").add("span").text("847 results").font(9.0);
+        assert!(!in_framed_demo(&text));
+    }
+
+    #[test]
     fn a_window_with_three_title_bar_dots_is_a_demo() {
         let (_t, body) = Tree::new();
         let (_win, bar, label) = window(&body);
@@ -1451,6 +1797,41 @@ mod tests {
         assert!(!in_framed_demo(&tab));
         let role = pane.add("div").attr("role", "tab").add("span").text("Codex").font(10.5);
         assert!(!in_framed_demo(&role));
+    }
+
+    /// observations-1004 row 15 (smartbi.ca 10047914): the phone layout
+    /// shrinks the title bar to 11px around 8px dots. A bar that short is a
+    /// title bar only by its dots; a caption needs the old 12px.
+    #[test]
+    fn a_short_title_bar_is_read_by_its_dots() {
+        let short_window = |bar_h: f64, dot_side: f64| {
+            let (_t, body) = Tree::new();
+            let win = body.add("div").rect(0.0, 0.0, 330.0, 239.0);
+            let bar = win.add("div").rect(0.0, 0.0, 310.0, bar_h);
+            let lights = bar.add("div").rect(0.0, 0.0, 34.0, bar_h);
+            for i in 0..3 {
+                lights
+                    .add("span")
+                    .rect(13.0 * i as f64, 1.5, dot_side, dot_side)
+                    .style("borderRadius", "9999px")
+                    .style("backgroundColor", "rgb(238, 58, 58)");
+            }
+            let label = win.add("div").rect(0.0, 20.0, 330.0, 219.0).add("span").text("-4.2%").font(10.0);
+            in_framed_demo(&label)
+        };
+        assert!(short_window(11.0, 8.0), "an 11px bar holding 8px dots");
+        assert!(short_window(8.0, 6.0), "the floor");
+        assert!(!short_window(7.0, 6.0), "under the floor");
+        // A caption in a bar that short is not read as a title bar.
+        let (_t, body) = Tree::new();
+        let frame = body
+            .add("div")
+            .rect(0.0, 0.0, 600.0, 400.0)
+            .style("borderRadius", "12px")
+            .style("boxShadow", "rgba(0, 0, 0, 0.2) 0px 8px 24px");
+        frame.add("div").rect(0.0, 0.0, 600.0, 11.0).add("span").text("Live preview");
+        let label = frame.add("div").rect(0.0, 11.0, 600.0, 389.0).add("span").text("Draft saved");
+        assert!(!in_framed_demo(&label), "an 11px caption bar");
     }
 
     #[test]
@@ -1913,6 +2294,158 @@ mod tests {
             assert!(!in_framed_demo(&win.add("span").text("Ready")), "{props:?}");
             assert!(!is_demo_frame(&win), "{props:?}");
         }
+    }
+
+    #[test]
+    fn legal_block_markers_are_the_strict_tier() {
+        for name in [
+            "footnote-3",
+            "homepage-footnotes__item",
+            "LegalFooterSection__content",
+            "footer-disclaimers",
+            "disclaimers",
+            "disclaimer-banner",
+            "carrier-disclosures",
+            "footer-disclosures",
+            "hpPriceDisclosures",
+            "fine-print",
+            "smallPrint",
+        ] {
+            assert_eq!(fine_print_marker(name), FinePrint::Exempt, "{name}");
+        }
+        // A singular `disclosure` is also the name of an expand/collapse
+        // widget, and a `footnote` after a type-scale word is a type size.
+        for name in [
+            "copyright",
+            "offer-terms",
+            "terms-links",
+            "site-copyright_notice",
+            "disclosure__panel",
+            "styles_menuDisclosure__x1",
+            "osano-cm-disclosure__toggle",
+            "text-footnote",
+            "upl-type-footnote",
+            "fsFootnote",
+        ] {
+            assert_eq!(fine_print_marker(name), FinePrint::Advisory, "{name}");
+        }
+        for name in ["illegal-moves", "testimonials", "footer", "notes"] {
+            assert_eq!(fine_print_marker(name), FinePrint::No, "{name}");
+        }
+        // One strict token among weaker ones settles it.
+        assert_eq!(fine_print_marker("terms legal"), FinePrint::Exempt);
+    }
+
+    #[test]
+    fn fine_print_tiers() {
+        let (_t, body) = Tree::new();
+        let body = body.font(12.0);
+        // A footnote list item two levels up (apple's `li#footnote-3 > p`).
+        let li = body.add("ol").add("li").with(|r| r.id = "footnote-3".into());
+        let p = li.add("p").text("Trade-in values vary based on the condition, year and configuration.");
+        assert_eq!(fine_print(&p), FinePrint::Exempt);
+        // A `small` inside a disclaimer banner: the walk climbs past the
+        // `small` to the marker (mercury's `#disclaimer-banner > small > p`).
+        let banner = body.add("div").with(|r| r.id = "disclaimer-banner".into());
+        let p = banner.add("small").add("p").text("Mercury is a fintech company, not an FDIC-insured bank.");
+        assert_eq!(fine_print(&p), FinePrint::Exempt);
+        // Weaker evidence stays advisory: a bare `small`, `terms`,
+        // `copyright` and a leading mark with no marker around it.
+        let small = body.add("div").add("small").text("Use 8 or more characters with a number and a symbol.");
+        assert_eq!(fine_print(&small), FinePrint::Advisory);
+        let terms = body.add("p").class("offer-terms").text("Monthly price reflects the net monthly payment.");
+        assert_eq!(fine_print(&terms), FinePrint::Advisory);
+        let credit = body.add("p").class("copyright").text("Photograph by the studio, used with permission.");
+        assert_eq!(fine_print(&credit), FinePrint::Advisory);
+        let star = body.add("p").text("* for free flu shot: select vaccines are no cost with most insurance.");
+        assert_eq!(fine_print(&star), FinePrint::Advisory);
+        // The strict tier keeps every gate of the advisory one: size,
+        // heading, label, a control.
+        let big = body.add("p").class("disclaimer-intro").font(16.0).text("Read these disclosures before you open an account.");
+        assert_eq!(fine_print(&big), FinePrint::No);
+        let h = body.add("h4").class("disclaimers").text("Disclaimers and footnotes");
+        assert_eq!(fine_print(&h), FinePrint::No);
+        let consent = body.add("div").class("disclaimer").add("label").text("I agree to receive the newsletter.");
+        assert_eq!(fine_print(&consent), FinePrint::No);
+        let far = body.add("div").class("legal-page");
+        let deep = far.add("div").add("div").add("div").add("p").text("You agree to the following terms of service.");
+        assert_eq!(fine_print(&deep), FinePrint::No);
+        // An accordion panel under a strict marker is demoted, not dropped:
+        // the marked box is a `details`, or holds an `aria-expanded` toggle.
+        let acc = body.add("details").class("footer-footnote-accordion");
+        let p = acc.add("p").text("Rates apply to new customers and may change at any time.");
+        assert_eq!(fine_print(&p), FinePrint::Advisory);
+        let faq = body.add("div").class("legal-faq");
+        faq.add("button").attr("aria-expanded", "true").text("How do refunds work?");
+        let p = faq.add("div").add("p").text("Refunds go back to the card you paid with.");
+        assert_eq!(fine_print(&p), FinePrint::Advisory);
+        // An inner marker does not hide the marked accordion around it.
+        let acc = body.add("details").class("footer-footnote-accordion");
+        acc.add("summary").text("Rates");
+        let p = acc.add("p").class("footnote").text("Rates apply to new customers and may change at any time.");
+        assert_eq!(fine_print(&p), FinePrint::Advisory);
+        // Should-flag twin: the same inner marker under a plain box is exempt.
+        let p = body.add("div").add("p").class("footnote").text("Rates apply to new customers and may change at any time.");
+        assert_eq!(fine_print(&p), FinePrint::Exempt);
+    }
+
+    #[test]
+    fn a_policy_pages_body_stays_advisory() {
+        let long = "We keep account data for as long as your account stays open. ".repeat(60);
+        // A policy page: the legal box holds the page's text, outside a footer.
+        let (_t, body) = Tree::new();
+        let body = body.font(14.0);
+        body.add("h1").font(32.0).text("Privacy policy");
+        let p = body.add("div").class("legal-content").add("p").text(&long);
+        assert_eq!(fine_print(&p), FinePrint::Advisory);
+        // The same block in a footer is a legal block.
+        let (_t, body) = Tree::new();
+        let body = body.font(14.0);
+        let p = body.add("footer").add("div").class("legal-content").add("p").text(&long);
+        assert_eq!(fine_print(&p), FinePrint::Exempt);
+        // A short legal block on a page is a legal block.
+        let (_t, body) = Tree::new();
+        let body = body.font(14.0);
+        let p = body.add("div").class("legal-content").add("p").text("Offer subject to credit approval.");
+        assert_eq!(fine_print(&p), FinePrint::Exempt);
+        // A long legal block under half of the page's text is a block too.
+        let (_t, body) = Tree::new();
+        let body = body.font(14.0);
+        body.add("main").add("p").font(16.0).text(&long.repeat(2));
+        let p = body.add("div").class("disclaimers").add("p").text(&long);
+        assert_eq!(fine_print(&p), FinePrint::Exempt);
+        // A marked paragraph inside a marked policy body: the outer box
+        // settles it.
+        let (_t, body) = Tree::new();
+        let body = body.font(14.0);
+        body.add("h1").font(32.0).text("Privacy policy");
+        let policy = body.add("div").class("legal-content");
+        let p = policy.add("p").class("legal-paragraph").text("Offer subject to credit approval.");
+        policy.add("p").class("legal-paragraph").text(&long);
+        assert_eq!(fine_print(&p), FinePrint::Advisory);
+        // A hidden copy of the policy is not page text.
+        let (_t, body) = Tree::new();
+        let body = body.font(14.0);
+        body.add("h1").font(32.0).text("Privacy policy");
+        let p = body.add("div").class("legal-content").add("p").text(&long);
+        body.add("div").attr("hidden", "").class("legal-content-mobile").add("p").text(&long);
+        assert_eq!(fine_print(&p), FinePrint::Advisory);
+        // A `hidden` policy that author CSS reveals is page text: it keeps
+        // the policy-page demotion.
+        let (_t, body) = Tree::new();
+        let body = body.font(14.0);
+        body.add("h1").font(32.0).text("Privacy policy");
+        let shown = body.add("div").attr("hidden", "").class("legal-content").style("display", "block");
+        let p = shown.add("p").text(&long);
+        assert_eq!(fine_print(&p), FinePrint::Advisory);
+        // Should-flag twin: the same copy left visible is half the page, and
+        // the policy is a block on it.
+        let (_t, body) = Tree::new();
+        let body = body.font(14.0);
+        body.add("h1").font(32.0).text("Privacy policy");
+        let p = body.add("div").class("legal-content").add("p").text(&long);
+        body.add("div").class("legal-content-mobile").add("p").text(&long);
+        assert_eq!(fine_print(&p), FinePrint::Exempt);
     }
 
     #[test]

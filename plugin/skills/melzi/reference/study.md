@@ -11,7 +11,7 @@ Not to be confused with `extract`, which pulls repeated patterns out of a codeba
 - An argument beginning `http://` or `https://` is **URL mode**. So is a bare host with a dot and no whitespace (`stripe.com`); resolve it as `https://`.
 - An attached image, or a path ending `.png`, `.jpg`, `.jpeg`, `.webp`, or `.avif`, is **image mode**.
 - Both arriving together: run URL mode, and read the image for the fields a stylesheet cannot answer.
-- Anything else, including a brand name with no link, a description of a site from memory, or a URL that fails to load: STOP and call the AskUserQuestion tool to clarify. Ask exactly one question offering the two inputs. One question, not an interview, and never study a site from memory of it.
+- Anything else, including a brand name with no link, a description of a site from memory, or a URL that fails to load: Ask with the AskUserQuestion tool and wait for the answer before continuing. Ask exactly one question offering the two inputs. One question, not an interview, and never study a site from memory of it.
 
 Run section 2 before fetching anything.
 

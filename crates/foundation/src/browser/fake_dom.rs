@@ -40,6 +40,8 @@ pub struct FakeEl {
     /// The rects of the element's rendered text. `None` is a DOM that cannot
     /// say where the lines are, the way a snapshot without them cannot.
     pub text_line_rects: Option<Vec<Rect>>,
+    /// `Dom::last_word_rects`: the word before the last, then the last.
+    pub last_word_rects: Option<[Rect; 2]>,
     /// Selectors (exact strings) this element matches beyond `*` and its tag.
     pub selectors: Vec<String>,
     /// `id` IDL property override (`None` = "not a string", falls back to attr).
@@ -59,6 +61,8 @@ pub struct FakeEl {
     pub image_complete: Option<bool>,
     /// [`Dom::image_current_src`].
     pub image_current_src: Option<String>,
+    /// [`Dom::video_ready_state`].
+    pub video_ready_state: Option<u8>,
     /// The shadow host of a shadow tree's top-level node.
     pub shadow_host: Option<ElId>,
     /// `assignedSlot`.
@@ -215,6 +219,13 @@ impl FakeDom {
             self.el_mut(id).direct_text_rect = Some(Rect::from_xywh(left, top, right - left, bottom - top));
         }
         self.el_mut(id).text_line_rects = Some(rects);
+        self
+    }
+    /// Where the last two words of `id`'s text rendered: the word before the
+    /// last, then the last, each `(x, y, w, h)`.
+    pub fn set_last_words(&mut self, id: ElId, before: (f64, f64, f64, f64), last: (f64, f64, f64, f64)) -> &mut Self {
+        let rect = |(x, y, w, h): (f64, f64, f64, f64)| Rect::from_xywh(x, y, w, h);
+        self.el_mut(id).last_word_rects = Some([rect(before), rect(last)]);
         self
     }
     pub fn add_text(&mut self, id: ElId, text: &str) -> &mut Self {
@@ -644,11 +655,17 @@ impl Dom for FakeDom {
     fn image_current_src(&self, el: ElId) -> Option<String> {
         self.els[el as usize].image_current_src.clone()
     }
+    fn video_ready_state(&self, el: ElId) -> Option<u8> {
+        self.els[el as usize].video_ready_state
+    }
     fn direct_text_rect(&self, el: ElId) -> Option<Rect> {
         self.els[el as usize].direct_text_rect
     }
     fn text_line_rects(&self, el: ElId) -> Option<Vec<Rect>> {
         let rects = self.els[el as usize].text_line_rects.clone()?;
         Some(super::dom::merge_text_rects_into_lines(rects))
+    }
+    fn last_word_rects(&self, el: ElId) -> Option<[Rect; 2]> {
+        self.els[el as usize].last_word_rects
     }
 }

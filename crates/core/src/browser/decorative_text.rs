@@ -3,7 +3,8 @@
 
 use crate::checks::decorative_text::{
     avatar_sized, centred_in, classify_decorative_text, is_mockup_marker, is_signature_marker,
-    DecorativeShape, DecorativeTextFacts, MOCKUP_MARKER_SKIP_TAGS,
+    is_wordmark_size, DecorativeShape, DecorativeTextFacts, MOCKUP_MARKER_SKIP_TAGS, WORDMARK_H1_PATH_MIN_PX, WORDMARK_MAX_OPACITY,
+    WORDMARK_MIN_PX,
 };
 use super::dom::{class_attr, closest_or_none, pf0, tag_lower, Dom, ElId};
 use crate::color::{parse_any_color, parse_rgb, Rgba};
@@ -149,18 +150,116 @@ fn marked_signature(dom: &dyn Dom, el: ElId) -> bool {
     })
 }
 
+/// How much of its ink `el` shows once it settles: its effective opacity as
+/// the paint gates count it (a box a scroll timeline or a timed entrance
+/// holds at 0 at its end frame, [`super::painted::effective_opacity_scrolled`])
+/// times its colour's alpha. A heading caught mid-entrance is not a faint
+/// wordmark. A colour that does not parse counts as opaque.
+fn shown_opacity(dom: &dyn Dom, el: ElId) -> f64 {
+    let ink = parse_rgb_or_any(&dom.style(el, "color")).map_or(1.0, |c| c.alpha_or_one());
+    // A heading whose opacity is moving toward an end the capture cannot
+    // read, or that a paused loop holds part way, is not known to be faint.
+    super::painted::settled_opacity(dom, el).unwrap_or(1.0) * ink
+}
+
+/// The names the site goes by: its host name run together and without its
+/// top-level label (`screen.movie` gives `screenmovie` and `screen`), and
+/// its `og:site_name` or `application-name`. Where neither meta names it,
+/// the title: whole when it has one part, and otherwise only the parts
+/// between separators that the host name holds (`Incredible · AI that does
+/// tasks` on incredible.ai gives `Incredible`). The other parts name a page
+/// or a section (`Pricing | Acme`), and a faint display heading that
+/// repeats one is not the site's wordmark.
+fn site_names(dom: &dyn Dom) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    let host = js::to_lower_case(&dom.hostname());
+    let host = host.strip_prefix("www.").unwrap_or(&host);
+    let labels: Vec<&str> = host.split('.').filter(|l| !l.is_empty()).collect();
+    if !labels.is_empty() {
+        names.push(labels.concat());
+        if labels.len() > 1 {
+            names.push(labels[..labels.len() - 1].concat());
+        }
+    }
+    let mut declared = false;
+    for selector in ["meta[property=\"og:site_name\"]", "meta[name=\"application-name\"]"] {
+        for meta in dom.query_all(None, selector).unwrap_or_default() {
+            if let Some(content) = dom.attr(meta, "content").filter(|c| !js::trim(c).is_empty()) {
+                names.push(content);
+                declared = true;
+            }
+        }
+    }
+    if declared {
+        return names;
+    }
+    if let Some(title) = dom.query_one(None, "title").ok().flatten() {
+        let title = collapsed_text(dom, title);
+        // A hyphen joins words (`e-commerce`) and separates nothing here.
+        let parts: Vec<String> = title
+            .split(['|', '·', '•', '—', '–', ':'])
+            .map(|part| js::trim(part).to_string())
+            .filter(|part| !part.is_empty())
+            .collect();
+        if parts.len() > 1 {
+            let run = |text: &str| -> String {
+                text.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
+            };
+            // The host read the same way, without its top-level label:
+            // `get-acme-studio.com` holds `Acme Studio`, and a part that only
+            // repeats the TLD (`Studio` on acme.studio) names nothing.
+            let site_labels = if labels.len() > 1 { &labels[..labels.len() - 1] } else { &labels[..] };
+            let host_run = run(&site_labels.concat());
+            for part in parts {
+                let joined = run(&part);
+                if joined.chars().count() >= 3 && host_run.contains(&joined) {
+                    names.push(part);
+                }
+            }
+        } else {
+            names.push(title);
+        }
+    }
+    names
+}
+
 /// What the `Dom` says about one element's text.
 pub fn decorative_text_facts_dom(dom: &dyn Dom, el: ElId) -> DecorativeTextFacts {
     let text = collapsed_text(dom, el);
-    let control_label = closest_or_none(dom, el, CONTROL_SELECTOR)
-        .is_some_and(|c| collapsed_text(dom, c) == text);
+    let control = closest_or_none(dom, el, CONTROL_SELECTOR);
+    let control_label = control.is_some_and(|c| collapsed_text(dom, c) == text);
     let (picture_ancestor, mockup_ancestor) = marked_mockup(dom, el);
+    let font_size_px = pf0(&dom.style(el, "fontSize"));
+    // The page's `h1` sizes decide only type between the h1 path's floor and
+    // the plain display floor; the walk over the page is skipped for the
+    // rest, which is nearly every text the checks ask about.
+    let largest_h1_px = if (WORDMARK_H1_PATH_MIN_PX..WORDMARK_MIN_PX).contains(&font_size_px) {
+        dom.query_all(None, "h1")
+            .unwrap_or_default()
+            .into_iter()
+            .map(|h| pf0(&dom.style(h, "fontSize")))
+            .fold(0.0, f64::max)
+    } else {
+        0.0
+    };
+    let display = is_wordmark_size(font_size_px, largest_h1_px);
+    let shown_opacity = if display { shown_opacity(dom, el) } else { 1.0 };
+    let site_names = if display && shown_opacity <= WORDMARK_MAX_OPACITY {
+        site_names(dom)
+    } else {
+        Vec::new()
+    };
     DecorativeTextFacts {
+        font_size_px,
+        largest_h1_px,
+        shown_opacity,
+        site_names,
         avatar_box: !text.is_empty() && text.chars().count() <= 3 && in_avatar_box(dom, el, &text),
         in_kbd: closest_or_none(dom, el, "kbd").is_some(),
         font_family: dom.style(el, "fontFamily"),
         in_heading: closest_or_none(dom, el, HEADING_SELECTOR).is_some(),
         control_label,
+        in_control: control.is_some(),
         signature_marked: marked_signature(dom, el),
         mockup_ancestor,
         picture_ancestor,
@@ -202,6 +301,143 @@ mod tests {
         d2.set_styles(tile, &[("backgroundColor", "rgb(19, 130, 232)")]);
         d2.set_rect(tile, 0.0, 0.0, 40.0, 40.0);
         assert_eq!(decorative_text_shape_dom(&d2, tile), None);
+    }
+
+    /// The page's `h1` sizes are read only for type the h1 path can decide:
+    /// body text and plain display type skip the walk over the page.
+    #[test]
+    fn the_h1_walk_runs_only_where_it_decides() {
+        let mut d = FakeDom::new();
+        let (_h, body) = d.with_page();
+        let h1 = d.add(Some(body), "h1");
+        d.add_text(h1, "Title");
+        d.set_style(h1, "fontSize", "30px");
+        let p = d.add(Some(body), "p");
+        d.add_text(p, "Body copy");
+        for (size, h1_read) in [("14px", 0.0), ("96px", 30.0), ("160px", 0.0)] {
+            d.set_style(p, "fontSize", size);
+            assert_eq!(decorative_text_facts_dom(&d, p).largest_h1_px, h1_read, "{size}");
+        }
+    }
+
+    /// incredible.one (10048155): `span.br-footer-monogram`, "Incredible" at
+    /// 272px in `rgba(0, 0, 0, 0.07)`, the site's `og:site_name`.
+    #[test]
+    fn a_faint_footer_wordmark_is_decorative() {
+        let mut d = FakeDom::new();
+        let (html, body) = d.with_page();
+        d.hostname = "www.incredible.one".into();
+        let head = d.add(Some(html), "head");
+        let title = d.add(Some(head), "title");
+        d.add_text(title, "Incredible · AI that does tasks on your computer");
+        let h1 = d.add(Some(body), "h1");
+        d.add_text(h1, "Do more with less");
+        d.set_style(h1, "fontSize", "64px");
+        let footer = d.add(Some(body), "footer");
+        let mark = d.add(Some(footer), "span");
+        d.add_text(mark, "Incredible");
+        d.set_styles(mark, &[("fontSize", "272.102px"), ("color", "rgba(0, 0, 0, 0.07)")]);
+        d.set_rect(mark, 42.0, 10411.0, 1173.0, 201.0);
+        assert_eq!(decorative_text_shape_dom(&d, mark), Some(DecorativeShape::Wordmark));
+        // The same name in ink a reader is meant to read is not.
+        d.set_style(mark, "color", "rgba(0, 0, 0, 0.6)");
+        assert_eq!(decorative_text_shape_dom(&d, mark), None);
+        // Faded by its box rather than its colour, it is.
+        d.set_style(mark, "color", "rgb(255, 255, 255)");
+        d.set_style(footer, "opacity", "0.1");
+        assert_eq!(decorative_text_shape_dom(&d, mark), Some(DecorativeShape::Wordmark));
+        // Caught at 0 by a timed entrance that settles at 1, it is the name
+        // in full ink, not a faint wordmark.
+        d.keyframes.insert(
+            "reveal".into(),
+            vec![
+                crate::browser::dom::KeyframeFrame { decls: vec![("opacity".into(), "0".into())] },
+                crate::browser::dom::KeyframeFrame { decls: vec![("opacity".into(), "1".into())] },
+            ],
+        );
+        d.keyframe_keys.insert("reveal".into(), vec!["0%".into(), "100%".into()]);
+        d.set_styles(
+            footer,
+            &[
+                ("opacity", "0"),
+                ("animationName", "reveal"),
+                ("animationIterationCount", "1"),
+                ("animationFillMode", "forwards"),
+                ("animationDirection", "normal"),
+                ("animationDuration", "0.6s"),
+                ("animationDelay", "1s"),
+                ("animationTimeline", "auto"),
+                ("animationPlayState", "running"),
+                ("animationComposition", "replace"),
+            ],
+        );
+        d.set_running_animations(footer, &["opacity"]);
+        assert_eq!(decorative_text_shape_dom(&d, mark), None);
+        // Review of #1044: caught at 0.2 part way through the same fade, it
+        // settles at 1 and is not a wordmark either.
+        d.set_style(footer, "opacity", "0.2");
+        assert_eq!(decorative_text_shape_dom(&d, mark), None);
+        // An opacity transition running, whose end the capture cannot read,
+        // leaves where it settles unknown: not a wordmark.
+        d.set_styles(footer, &[("animationName", "none"), ("transitionProperty", "opacity"), ("transitionDuration", "0.6s")]);
+        assert_eq!(decorative_text_shape_dom(&d, mark), None);
+        // The same footer at 0.2 with nothing moving it is a faint wordmark.
+        d.set_running_animations(footer, &[]);
+        assert_eq!(decorative_text_shape_dom(&d, mark), Some(DecorativeShape::Wordmark));
+        d.set_styles(footer, &[("animationName", "reveal"), ("opacity", "0"), ("transitionProperty", "all"), ("transitionDuration", "0s")]);
+        d.set_running_animations(footer, &["opacity"]);
+        // A section name in the middle of a title is not the site's name,
+        // and a hyphen separates nothing.
+        d.add_text(title, " | Blog | Latest");
+        let blog = d.add(Some(footer), "span");
+        d.add_text(blog, "Blog");
+        d.set_styles(blog, &[("fontSize", "272.102px"), ("color", "rgb(255, 255, 255)")]);
+        assert_eq!(decorative_text_shape_dom(&d, blog), None);
+        // Another word at the same size and opacity is not the site's name.
+        let other = d.add(Some(footer), "span");
+        d.add_text(other, "Tasks");
+        d.set_styles(other, &[("fontSize", "272.102px"), ("color", "rgb(255, 255, 255)")]);
+        assert_eq!(decorative_text_shape_dom(&d, other), None);
+    }
+
+    /// #1076: a faint display heading that repeats the page's part of the
+    /// title (a 120px "Pricing" on "Pricing | Acme") is a page name, not
+    /// the site's wordmark. Only the part the host name or an explicit
+    /// site name corroborates names the site.
+    #[test]
+    fn a_title_part_names_the_site_only_where_something_backs_it() {
+        let build = |host: &str, site_name: Option<&str>, title_text: &str, text: &str| {
+            let mut d = FakeDom::new();
+            let (html, body) = d.with_page();
+            d.hostname = host.into();
+            let head = d.add(Some(html), "head");
+            let title = d.add(Some(head), "title");
+            d.add_text(title, title_text);
+            if let Some(name) = site_name {
+                let meta = d.add(Some(head), "meta");
+                d.add_selector(meta, "meta[property=\"og:site_name\"]");
+                d.set_attr(meta, "property", "og:site_name");
+                d.set_attr(meta, "content", name);
+            }
+            let mark = d.add(Some(body), "span");
+            d.add_text(mark, text);
+            d.set_styles(mark, &[("fontSize", "160px"), ("color", "rgba(0, 0, 0, 0.1)")]);
+            d.set_rect(mark, 0.0, 400.0, 900.0, 160.0);
+            decorative_text_shape_dom(&d, mark)
+        };
+        let wordmark = Some(DecorativeShape::Wordmark);
+        assert_eq!(build("", None, "Pricing | Acme", "Pricing"), None);
+        assert_eq!(build("", None, "Pricing | Acme", "Acme"), None, "nothing backs either part");
+        assert_eq!(build("getacme.io", None, "Pricing | Acme", "Acme"), wordmark);
+        assert_eq!(build("getacme.io", None, "Pricing | Acme", "Pricing"), None);
+        assert_eq!(build("get-acme-studio.com", None, "Pricing | Acme Studio", "Acme Studio"), wordmark);
+        assert_eq!(build("acme.studio", None, "Pricing | Studio", "Studio"), None);
+        assert_eq!(build("www.acme.io", None, "Acme | io", "io"), None);
+        assert_eq!(build("www.acme.io", None, "Acme | io", "Acme"), wordmark);
+        assert_eq!(build("", Some("Acme"), "Pricing | Acme", "Acme"), wordmark);
+        assert_eq!(build("", Some("Acme"), "Pricing | Acme", "Pricing"), None);
+        // A title of one part is the site's name, opened word for word.
+        assert_eq!(build("", None, "Screen Movie Blog", "Screen Movie"), wordmark);
     }
 
     #[test]

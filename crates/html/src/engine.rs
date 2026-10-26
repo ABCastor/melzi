@@ -31,6 +31,7 @@ use crate::profile::{self, Meta, ProfileSink};
 use crate::quality::{check_element_quality, check_page_quality_from_doc, pf0};
 use impeccable_core::checks::css_scan::{side_stripe_index, CssHostIndex};
 use impeccable_core::checks::html_patterns::{check_html_patterns, HtmlPatternCorpora};
+use impeccable_core::checks::row_stripe::scan_css_text_for_row_stripe;
 use impeccable_core::checks::rules::{is_rounded_away_from_side, RuleHit, SafeTagTextSeen};
 use impeccable_core::findings::{try_finding, Finding};
 use impeccable_core::inline_ignores::apply_inline_ignores;
@@ -89,6 +90,10 @@ pub struct DetectHtmlOptions<'a> {
     /// Sink for the JS `process.stderr.write` notices (unreadable linked
     /// stylesheets); `None` drops them.
     pub warn: Option<&'a dyn Fn(&str)>,
+    /// Whether `detector.ignoreFiles` waives a linked stylesheet (given its
+    /// resolved path). It is still read for the cascade but leaves the
+    /// page-level pattern scan; `None` keeps every linked sheet in.
+    pub ignored_linked_stylesheet: Option<&'a dyn Fn(&str) -> bool>,
     /// A rule pack's static-document hook: rules over the parsed page.
     pub static_rule_pack: Option<&'static dyn StaticRulePack>,
     /// The same pack's engine-wide text hook. An HTML file gets **one** pack
@@ -116,6 +121,7 @@ const STATIC_ELEMENT_RULES: &[(&str, &str)] = &[
     ("color-rules", "*"),
     ("hover-color-rules", "*"),
     ("dark-glow", "*"),
+    ("hard-offset-shadow", "*"),
     ("motion-rules", "*"),
     ("icon-tile-stack", "h1,h2,h3,h4,h5,h6"),
     ("stripe-child", "div,span"),
@@ -147,6 +153,7 @@ fn run_rule(
             let base = el.parent_element().unwrap_or(*el);
             check_element_glow(style, resolve_background(&base, None))
         }
+        "hard-offset-shadow" => crate::adapters::check_element_hard_offset_shadow(el),
         "motion-rules" => check_element_motion(tag, style),
         "icon-tile-stack" => check_element_icon_tile(el, tag),
         "stripe-child" => check_element_stripe_child(el, style),
@@ -223,7 +230,14 @@ pub fn detect_html_source(
         Meta::new("parse-html", "parse-document", fp),
         || StaticDocument::parse(html),
     );
-    let css_text = collect_static_css_text(&doc, &file_dir, profile, fp, options.warn);
+    let (css_text, pattern_css_text) = collect_static_css_text(
+        &doc,
+        &file_dir,
+        profile,
+        fp,
+        options.warn,
+        options.ignored_linked_stylesheet,
+    );
     build_static_style_map(&mut doc, css_text.as_str(), profile, fp);
     // A stylesheet the engine could not read may round any card it never saw
     // a radius for; the side-accent gate keeps those findings.
@@ -354,7 +368,7 @@ pub fn detect_html_source(
                 class_attr_parts.push(c.to_string());
             }
         }
-        let mut style_parts = vec![css_text.clone()];
+        let mut style_parts = vec![pattern_css_text];
         style_parts.extend(style_attr_parts);
         let corpora = HtmlPatternCorpora {
             style_text: style_parts.join("\n"),
@@ -422,6 +436,57 @@ pub fn detect_html_source(
             }
         }
 
+        // A side stripe on a status row or cell, which the card scans above
+        // skip: it reports when the page has a row or cell it paints.
+        let row_hits = profile::findings(
+            profile,
+            Meta::new("page", "row-stripe", fp),
+            |f: &impeccable_core::checks::css_scan::PatternFinding| f.id.as_str(),
+            || scan_css_text_for_row_stripe(&corpora.style_text, None),
+        );
+        for f in row_hits {
+            let Some(selector) = f.selector.as_deref() else { continue };
+            // The selector as written when the engine reads it, so a
+            // `:not()` keeps excluding; stripped of what it cannot read
+            // otherwise.
+            let stripped = PSEUDO_STRIP_RE.replace_all(selector, "");
+            let query = if doc.compile(selector).is_ok() {
+                selector
+            } else {
+                impeccable_core::js::trim(&stripped)
+            };
+            if doc.compile(query).is_err() {
+                continue;
+            }
+            // A row by class only that may be rounded (another rule's
+            // radius, or one the engine cannot see) is a card, and the card
+            // scans above report it: a table or ARIA row or cell is a row
+            // whatever its corners.
+            let hosts: Vec<_> = doc
+                .query_selector_all(query)
+                .into_iter()
+                .filter(|el| {
+                    let tag = el.tag_lower();
+                    let role = el.get_attribute("role").unwrap_or("").to_ascii_lowercase();
+                    if matches!(tag.as_str(), "tr" | "td" | "th")
+                        || matches!(role.as_str(), "row" | "cell" | "gridcell" | "rowheader")
+                    {
+                        return true;
+                    }
+                    let style = el.style();
+                    resolve_side_accent_corners(el, style, pf0(sv(style, "width"))).is_some_and(|c| {
+                        [c.top_left, c.top_right, c.bottom_right, c.bottom_left].iter().all(|r| *r <= 0.0)
+                    })
+                })
+                .collect();
+            if hosts.is_empty() || hosts.iter().all(|el| scoped_ignore_active(el, &f.id)) {
+                continue;
+            }
+            if let Some(item) = mk(&f.id, &f.snippet) {
+                findings.push(item);
+            }
+        }
+
         if let Some(analyzers) = options.text_content_analyzers {
             let text_findings = profile::findings(
                 profile,
@@ -480,7 +545,7 @@ pub fn unsupported_selectors(html: &str, file_path: &Path) -> Vec<String> {
         .map(|p| p.to_path_buf())
         .unwrap_or_default();
     let mut doc = StaticDocument::parse(html);
-    let css_text = collect_static_css_text(&doc, &file_dir, None, &file_str, None);
+    let (css_text, _) = collect_static_css_text(&doc, &file_dir, None, &file_str, None, None);
     build_static_style_map(&mut doc, &css_text, None, &file_str);
     doc.unsupported_selectors()
 }

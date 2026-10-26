@@ -148,6 +148,8 @@ fn nested_cards_read_the_computed_box() {
             "#flag-illustration-inner",
             "#flag-dialog-nested-inner",
             "#flag-mono-button-inner",
+            // observations-1006 row 19: two links are not a strip.
+            "#flag-two-links-inner",
         ],
         &[
             "#pass-band-inner",
@@ -168,6 +170,10 @@ fn nested_cards_read_the_computed_box() {
             "#pass-player-inner",
             "#pass-dialog-inner",
             "#flag-dialog-group",
+            // observations-1006 row 19: a row of three links, and a tab
+            // spanning a clipped column in the card's corner.
+            "#pass-link-strip-inner",
+            "#pass-corner-tab-inner",
         ],
     );
 }
@@ -299,8 +305,9 @@ fn label_collectors_climb_and_scale() {
             "Ring Tile",
             "Framer Card Heading",
             "Contents Wrapped Tile",
+            "Emoji In A Span",
         ],
-        &["Far From The Tile", "Sarah Chen", "Inline Side By Side"],
+        &["Far From The Tile", "Sarah Chen", "Inline Side By Side", "Word In A Span", "Hidden Emoji In A Span"],
     );
 
     let Some(findings) = scan("kicker-above-heading.html") else {
@@ -325,7 +332,7 @@ fn label_collectors_climb_and_scale() {
     assert_marks(
         &findings,
         "numbered-section-labels",
-        &["Alpha ships first", "Instant deployment", "Omega grows larger"],
-        &["Nu sits too close in size", "Epsilon reads large"],
+        &["Alpha ships first", "Instant deployment", "Omega grows larger", "Xi connects", "Omicron remembers"],
+        &["Nu sits too close in size", "Epsilon reads large", "Lambda sits in a card", "Pi keeps its card", "Rho sits in a linked card", "Sigma sits in a drawn wrapper", "Tau ranks first", "Upsilon ranks second"],
     );
 }

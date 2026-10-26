@@ -65,6 +65,16 @@ for (const [key, config] of Object.entries(PROVIDERS)) {
       expect(fs.existsSync(refPath)).toBe(true);
     });
 
+    if (key === 'omp') {
+      test('uses Pi-style guidance placeholders rather than Cursor fallbacks', () => {
+        const skills = [{ name: 'test', description: 'Test', body: 'Read {{config_file}} before asking {{model}}.' }];
+        transform(skills, TEST_DIR);
+        const content = fs.readFileSync(skillPath(config, 'test'), 'utf-8');
+        expect(content).toContain('Read AGENTS.md before asking the model.');
+        expect(content).not.toContain('.cursorrules');
+      });
+    }
+
     if (key === 'dsh') {
       test('uses DSH tools and resource paths without installing unsupported hooks or agents', () => {
         transform([{
@@ -76,7 +86,7 @@ for (const [key, config] of Object.entries(PROVIDERS)) {
           references: [{ name: 'polish', content: 'Run `{{scripts_path}}/impeccable detect`.', filePath: '/fake/polish.md' }],
         }], TEST_DIR);
         const content = fs.readFileSync(skillPath(config, 'impeccable'), 'utf8');
-        expect(content).toContain('call the ask_user_question tool');
+        expect(content).toContain('Ask with the ask_user_question tool');
         expect(content).toContain('.dsh/skills/impeccable/scripts/impeccable context');
         expect(parseFrontmatter(content).frontmatter['allowed-tools']).toBeUndefined();
         const root = path.join(TEST_DIR, 'dsh', '.dsh');

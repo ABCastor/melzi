@@ -42,5 +42,8 @@ export function engineEnv(bin, extra = {}) {
     IMPECCABLE_SKILL_DIR: path.join(REPO_ROOT, 'skill'),
     IMPECCABLE_SELF: bin,
     ...extra,
+    // Any roll API request a test makes is tagged as test traffic. Set last,
+    // so neither the shell nor a test's extras can untag it.
+    IMPECCABLE_TELEMETRY_CHANNEL: 'test',
   };
 }

@@ -148,6 +148,7 @@ This is a test skill body.`;
     transformers.transformClaudeCode(skills, DIST_DIR, patterns);
     transformers.transformGemini(skills, DIST_DIR, patterns);
     transformers.transformCodex(skills, DIST_DIR, patterns);
+    transformers.transformOmp(skills, DIST_DIR, patterns);
     transformers.transformAntigravity(skills, DIST_DIR, patterns);
 
     // Verify Cursor outputs
@@ -345,18 +346,20 @@ Please audit {{target}} for technical quality. Ask {{model}} for help.`;
     transformCodexSpy.mockRestore();
   });
 
-  test('should include agents and kiro transformers', () => {
+  test('should include agents, omp, and kiro transformers', () => {
     const { skills } = utils.readSourceFiles(TEST_DIR);
     const patterns = utils.readPatterns(TEST_DIR);
     const DIST_DIR = path.join(TEST_DIR, 'dist');
 
     // These should not throw
     transformers.transformAgents(skills, DIST_DIR, patterns);
+    transformers.transformOmp(skills, DIST_DIR, patterns);
     transformers.transformGitHub(skills, DIST_DIR, patterns);
     transformers.transformKiro(skills, DIST_DIR, patterns);
 
     // Verify outputs
     expect(fs.existsSync(path.join(DIST_DIR, 'agents/.agents/skills'))).toBe(true);
+    expect(fs.existsSync(path.join(DIST_DIR, 'omp/.omp/skills'))).toBe(true);
     expect(fs.existsSync(path.join(DIST_DIR, 'github/.github/skills'))).toBe(true);
     expect(fs.existsSync(path.join(DIST_DIR, 'kiro/.kiro/skills'))).toBe(true);
   });
@@ -391,6 +394,14 @@ describe('skill scripts payload', () => {
     ]) {
       expect(names.has(expected)).toBe(true);
     }
+  });
+
+  test('ships the Windows launcher with CRLF line endings (#1098)', () => {
+    // cmd.exe cannot resolve `call :label` in an LF-only batch file, so the
+    // payload is CRLF whatever line endings this checkout holds.
+    const cmd = scripts.find((s) => s.name === 'impeccable.cmd');
+    expect(cmd.content).toContain('\r\n');
+    expect(cmd.content).not.toMatch(/(^|[^\r])\n/);
   });
 
   test('ships no engine entry points and no bundled detector', () => {
@@ -738,5 +749,24 @@ describe('agent bodies resolve placeholders on every surface that ships them', (
     // The model name belongs to PROVIDER_PLACEHOLDERS and may change; what
     // this pins is that {{model}} resolved to something.
     expect(codexToml).toMatch(/and ask \S+\./);
+  });
+});
+
+describe('batch line endings', () => {
+  const dir = path.join(process.cwd(), 'test-tmp-batch-eol');
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  test('toCrlf converts LF and leaves CRLF alone', () => {
+    expect(utils.toCrlf('a\nb\r\nc\n')).toBe('a\r\nb\r\nc\r\n');
+  });
+
+  test('findBatchFilesWithBareLf flags only batch files with a bare LF', () => {
+    fs.mkdirSync(path.join(dir, 'a', 'scripts'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'a', 'scripts', 'good.cmd'), '@echo off\r\ncall :x\r\n');
+    fs.writeFileSync(path.join(dir, 'a', 'scripts', 'bad.cmd'), '@echo off\r\ncall :x\n');
+    fs.writeFileSync(path.join(dir, 'a', 'scripts', 'impeccable'), '#!/bin/sh\nexit 0\n');
+    const bad = utils.findBatchFilesWithBareLf([dir, path.join(dir, 'missing')]);
+    expect(bad).toEqual([path.join(dir, 'a', 'scripts', 'bad.cmd')]);
   });
 });

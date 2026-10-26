@@ -236,56 +236,94 @@ fn resolve_hook_script_path(token: &str, root: &str) -> Option<String> {
 }
 
 /// JS: checkHookInstallation
-pub fn check_hook_installation(project_root: &str, repo_root: Option<&str>, provider_id: &str) -> Vec<Finding> {
+pub fn check_hook_installation(
+    project_root: &str,
+    repo_root: Option<&str>,
+    provider_id: &str,
+    user_manifest: Option<&str>,
+) -> Vec<Finding> {
     let mut out = Vec::new();
     let manifests = crate::context_cli::hook_manifests_for(provider_id);
     if manifests.is_empty() {
         return out;
     }
-    let roots = unique_roots(project_root, repo_root);
-    let mut installed_at: Option<String> = None;
-    for root in &roots {
+    let project_roots = unique_roots(project_root, repo_root);
+    let mut entries: Vec<(&str, String, bool)> = Vec::new();
+    for root in &project_roots {
         for rel in manifests {
-            let mp = jsp::join(&[root, rel]);
-            let Some(raw) = read_json(&mp) else { continue };
-            let Some(hooks) = raw.get("hooks") else { continue };
-            if !js_truthy(hooks) {
-                continue;
-            }
-            let mut commands = Vec::new();
-            collect_hook_commands(hooks, &mut commands);
-            if commands.is_empty() {
-                continue;
-            }
-            let base = if project_root.is_empty() { root.as_str() } else { project_root };
-            installed_at = to_relative(Some(&mp), base);
-            let broken: Vec<&String> = commands
-                .iter()
-                .filter(|c| {
-                    let Some(token) = hook_script_token_from(c) else { return false };
-                    let Some(abs) = resolve_hook_script_path(&token, root) else { return false };
-                    !exists(&abs)
-                })
-                .collect();
-            if !broken.is_empty() {
-                let ia = installed_at.clone().unwrap();
-                out.push(finding(
-                    "hook-script-missing",
-                    "hook manifest",
-                    Some(ia.clone()),
-                    "mention",
-                    format!(
-                        "{} installs the design hook, but its script path does not exist: {}. The hook runs as a no-op, so UI edits have been going unscanned while the project looks covered.",
-                        ia,
-                        broken.iter().map(|c| format!("`{}`", c)).collect::<Vec<_>>().join(", ")
-                    ),
-                    "Reinstall with `/melzi hooks on`, which rewrites the manifest against the skill's current location.".to_string(),
-                ));
-            }
+            entries.push((root, jsp::join(&[root, rel]), false));
+        }
+    }
+    if let Some(mp) = user_manifest {
+        let mp = jsp::resolve(mp, &[]);
+        if !entries.iter().any(|(_, existing, _)| *existing == mp) {
+            entries.push((project_root, mp, true));
+        }
+    }
+    let mut installed_at: Option<String> = None;
+    for (root, mp, is_user) in &entries {
+        let Some(raw) = read_json(mp) else { continue };
+        let Some(hooks) = raw.get("hooks") else { continue };
+        if !js_truthy(hooks) {
+            continue;
+        }
+        let mut commands = Vec::new();
+        collect_hook_commands(hooks, &mut commands);
+        if commands.is_empty() {
+            continue;
+        }
+        let base = if project_root.is_empty() { *root } else { project_root };
+        installed_at = to_relative(Some(mp), base);
+        let broken: Vec<&String> = commands
+            .iter()
+            .filter(|c| {
+                let Some(token) = hook_script_token_from(c) else { return false };
+                let Some(abs) = resolve_hook_script_path(&token, root) else { return false };
+                !exists(&abs)
+            })
+            .collect();
+        if provider_id == "cursor" && crate::hook_markers::cursor_manifest_has_retired_gate(&raw) {
+            let ia = installed_at.clone().unwrap();
+            out.push(finding(
+                "cursor-hook-pre-edit-gate",
+                "hook manifest",
+                Some(ia.clone()),
+                "auto",
+                format!(
+                    "{} still runs the design hook as Cursor's `preToolUse` write gate, which is retired. Cursor now runs it after each edit on `postToolUse` and hands the findings to the agent as context.",
+                    ia
+                ),
+                "Move the entry to `postToolUse`: `impeccable doctor --fix`, `/melzi hooks on`, or the next `impeccable update` does it.".to_string(),
+            ));
+        }
+        if !broken.is_empty() {
+            let ia = installed_at.clone().unwrap();
+            out.push(finding(
+                "hook-script-missing",
+                "hook manifest",
+                Some(ia.clone()),
+                "mention",
+                format!(
+                    "{} installs the design hook, but its script path does not exist: {}. The hook runs as a no-op, so UI edits have been going unscanned while the project looks covered.",
+                    ia,
+                    broken.iter().map(|c| format!("`{}`", c)).collect::<Vec<_>>().join(", ")
+                ),
+                // `update --user` rewrites only Claude's user manifest; other
+                // providers get project hooks, and a launcher entry in their
+                // home file is never repointed.
+                if *is_user && provider_id == "claude-code" {
+                    "Reinstall with `impeccable update --user`, which rewrites this user-level manifest against the skill's current location."
+                } else if *is_user {
+                    "Edit this user-level manifest by hand: point the command at the installed skill's launcher, or remove the Melzi entry. `impeccable update --user` installs project hooks and does not repoint this file."
+                } else {
+                    "Reinstall with `/melzi hooks on`, which rewrites the manifest against the skill's current location."
+                }
+                .to_string(),
+            ));
         }
     }
     if let Some(ia) = installed_at {
-        for root in &roots {
+        for root in &project_roots {
             for name in ["config.json", "config.local.json"] {
                 let cp = jsp::join(&[root, ".impeccable", name]);
                 let Some(raw) = read_json(&cp) else { continue };
@@ -473,7 +511,7 @@ mod tests {
             ".claude/settings.local.json",
             r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" hook"}]}]}}"#,
         );
-        assert!(check_hook_installation(&root, None, "claude-code").is_empty());
+        assert!(check_hook_installation(&root, None, "claude-code", None).is_empty());
 
         // Launcher form pointing at a missing launcher: reported.
         write(
@@ -481,7 +519,7 @@ mod tests {
             ".claude/settings.local.json",
             r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.other/skills/melzi/scripts/impeccable\" hook"}]}]}}"#,
         );
-        let f = check_hook_installation(&root, None, "claude-code");
+        let f = check_hook_installation(&root, None, "claude-code", None);
         assert_eq!(f.len(), 1, "{f:?}");
         assert_eq!(f[0].id, "hook-script-missing");
 
@@ -491,10 +529,104 @@ mod tests {
             ".claude/settings.local.json",
             r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"node \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/hook.mjs\""}]}]}}"#,
         );
-        let f = check_hook_installation(&root, None, "claude-code");
+        let f = check_hook_installation(&root, None, "claude-code", None);
         assert_eq!(f.len(), 1, "{f:?}");
         write(&root, ".claude/skills/melzi/scripts/hook.mjs", "");
-        assert!(check_hook_installation(&root, None, "claude-code").is_empty());
+        assert!(check_hook_installation(&root, None, "claude-code", None).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn cursor_gate_is_an_auto_finding_and_the_post_edit_hook_is_not() {
+        let root = tmp();
+        write(&root, ".cursor/skills/melzi/scripts/impeccable", "#!/bin/sh\n");
+        write(&root, ".cursor/hooks.json", r#"{"version":1,"hooks":{"preToolUse":[{"command":"\".cursor/skills/melzi/scripts/impeccable\" hook-before-edit","timeout":5}]}}"#);
+        let f = check_hook_installation(&root, None, "cursor", None);
+        assert_eq!(f.len(), 1, "{:?}", f.iter().map(|x| &x.id).collect::<Vec<_>>());
+        assert_eq!(f[0].id, "cursor-hook-pre-edit-gate");
+        assert_eq!(f[0].severity, "auto");
+        write(&root, ".cursor/hooks.json", r#"{"version":1,"hooks":{"postToolUse":[{"command":"\".cursor/skills/melzi/scripts/impeccable\" hook","matcher":"^Write$","timeout":5}]}}"#);
+        assert!(check_hook_installation(&root, None, "cursor", None).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn user_scope_claude_hook_is_checked_from_home() {
+        let root = tmp();
+        let project = crate::jsp::join(&[&root, "project"]);
+        let home = crate::jsp::join(&[&root, "home"]);
+        std::fs::create_dir_all(&project).unwrap();
+        let launcher = crate::jsp::join(&[
+            &home,
+            ".claude",
+            "skills",
+            "impeccable",
+            "scripts",
+            "impeccable",
+        ]);
+        let manifest = crate::jsp::join(&[&home, ".claude", "settings.json"]);
+        write(&home, ".claude/skills/melzi/scripts/impeccable", "#!/bin/sh\n");
+        write(
+            &home,
+            ".claude/settings.json",
+            &serde_json::json!({
+                "hooks": {
+                    "PostToolUse": [{
+                        "hooks": [{
+                            "type": "command",
+                            "command": format!("\"{launcher}\" hook"),
+                        }],
+                    }],
+                },
+            })
+            .to_string(),
+        );
+        write(
+            &home,
+            ".claude/settings.local.json",
+            r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"/missing/user-local/melzi\" hook"}]}]}}"#,
+        );
+        assert!(check_hook_installation(&project, None, "claude-code", Some(&manifest)).is_empty());
+
+        std::fs::remove_file(&launcher).unwrap();
+        let findings = check_hook_installation(&project, None, "claude-code", Some(&manifest));
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].id, "hook-script-missing");
+        assert!(findings[0].fix.starts_with("Reinstall with `impeccable update --user`"), "{:?}", findings[0].fix);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn user_scope_codex_hook_is_checked_from_codex_home() {
+        let root = tmp();
+        let project = crate::jsp::join(&[&root, "project"]);
+        let home = crate::jsp::join(&[&root, "home"]);
+        std::fs::create_dir_all(&project).unwrap();
+        let launcher = crate::jsp::join(&[&home, ".agents", "skills", "melzi", "scripts", "impeccable"]);
+        let manifest = crate::jsp::join(&[&root, "codex-home", "hooks.json"]);
+        write(&home, ".agents/skills/melzi/scripts/impeccable", "#!/bin/sh\n");
+        write(
+            &root,
+            "codex-home/hooks.json",
+            &serde_json::json!({
+                "hooks": {
+                    "Stop": [{
+                        "hooks": [{
+                            "type": "command",
+                            "command": format!("[ ! -f '{launcher}' ] || '{launcher}' hook"),
+                        }],
+                    }],
+                },
+            })
+            .to_string(),
+        );
+        assert!(check_hook_installation(&project, None, "codex", Some(&manifest)).is_empty());
+
+        std::fs::remove_file(&launcher).unwrap();
+        let findings = check_hook_installation(&project, None, "codex", Some(&manifest));
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].id, "hook-script-missing");
+        assert!(findings[0].fix.contains("by hand"), "{:?}", findings[0].fix);
         let _ = std::fs::remove_dir_all(&root);
     }
 }

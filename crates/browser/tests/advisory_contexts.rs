@@ -142,11 +142,30 @@ fn micro_labels_are_advisory() {
 #[test]
 fn fine_print_is_advisory_under_three_rules() {
     let Some(f) = scan("fine-print.html") else { return };
-    // The id row is named by its id in the selector.
-    for class in ["adv-class", "#disclaimer-2", "adv-small", "adv-star", "adv-sup", "adv-list"] {
+    // Weaker evidence: advisory under tiny-text and tight-leading.
+    for class in ["adv-small", "adv-star", "adv-sup"] {
         assert_eq!(on(&f, "tiny-text", class), ["advisory"], "{class}: {f:#?}");
         assert_eq!(on(&f, "tight-leading", class), ["advisory"], "{class}: {f:#?}");
     }
+    assert_eq!(on(&f, "tiny-text", "adv-hint"), ["advisory"], "{f:#?}");
+    // A singular `disclosure` widget panel, a footnote-marked accordion and a
+    // type-scale `text-footnote` class stay advisory (decision 3 review).
+    for class in ["adv-disclosure-panel", "adv-accordion", "adv-inner-footnote", "adv-type-footnote"] {
+        assert_eq!(on(&f, "tiny-text", class), ["advisory"], "{class}: {f:#?}");
+    }
+    assert_eq!(on(&f, "line-length", "adv-faq-wide"), ["advisory"], "{f:#?}");
+    assert_eq!(on(&f, "tiny-text", "adv-terms"), ["advisory"], "{f:#?}");
+    // A legal or footnote block (decision 3, round 13): exempt from
+    // tiny-text, advisory under tight-leading. The id row is named by its id.
+    for class in ["adv-class", "#disclaimer-2", "adv-list", "adv-banner"] {
+        assert!(on(&f, "tiny-text", class).is_empty(), "{class}: {f:#?}");
+        assert_eq!(on(&f, "tight-leading", class), ["advisory"], "{class}: {f:#?}");
+    }
+    assert!(on(&f, "tiny-text", "#footnote-4").is_empty(), "{f:#?}");
+    assert_eq!(on(&f, "tight-leading", "#footnote-4"), ["advisory"], "{f:#?}");
+    // Links inside a footnote or a terms row keep undersized-ui-text.
+    assert_eq!(on(&f, "undersized-ui-text", "fail-footnote-link"), ["warning"], "{f:#?}");
+    assert_eq!(on(&f, "undersized-ui-text", "fail-terms-link"), ["warning"], "{f:#?}");
     for class in ["fail-plain", "fail-deep"] {
         assert_eq!(on(&f, "tiny-text", class), ["warning"], "{class}: {f:#?}");
         assert_eq!(on(&f, "tight-leading", class), ["warning"], "{class}: {f:#?}");
@@ -155,10 +174,42 @@ fn fine_print_is_advisory_under_three_rules() {
     // The consent label is not fine print under any rule.
     assert_eq!(on(&f, "tight-leading", "fail-consent"), ["warning"], "{f:#?}");
     assert_eq!(on(&f, "undersized-ui-text", "fail-consent"), ["warning"], "{f:#?}");
-    // line-length needs layout: the marked terms are advisory, the copy fails.
+    // line-length needs layout: the terms row is advisory, the disclaimer
+    // row is exempt, and copy fails, a disclaimer at body size included.
     assert_eq!(on(&f, "line-length", "adv-wide"), ["advisory"], "{f:#?}");
+    assert!(on(&f, "line-length", "ex-wide").is_empty(), "{f:#?}");
     assert_eq!(on(&f, "line-length", "fail-wide"), ["warning"], "{f:#?}");
     assert_eq!(on(&f, "line-length", "fail-document"), ["warning"], "{f:#?}");
+    assert_eq!(on(&f, "line-length", "fail-disclaimer-intro"), ["warning"], "{f:#?}");
+}
+
+#[test]
+fn a_policy_pages_body_stays_advisory() {
+    let Some(f) = scan("fine-print-policy.html") else { return };
+    // The legal wrapper holds the page's text outside a footer: advisory.
+    let policy = on(&f, "line-length", "adv-policy");
+    assert!(!policy.is_empty() && policy.iter().all(|s| *s == "advisory"), "{f:#?}");
+    // The legal block in the footer is exempt.
+    assert!(on(&f, "line-length", "ex-footer-legal").is_empty(), "{f:#?}");
+}
+
+#[test]
+fn a_policy_body_with_inner_markers_stays_advisory() {
+    let Some(f) = scan("fine-print-policy-nested.html") else { return };
+    // Each paragraph carries its own legal marker; the wrapper around them
+    // is the page's body, and it settles them.
+    let policy = on(&f, "line-length", "adv-policy-nested");
+    assert!(!policy.is_empty() && policy.iter().all(|s| *s == "advisory"), "{f:#?}");
+    // Should-flag twin: the same marker inside the footer's legal block is exempt.
+    assert!(on(&f, "line-length", "ex-footer-legal").is_empty(), "{f:#?}");
+}
+
+#[test]
+fn a_hidden_copy_does_not_shrink_a_policy_page() {
+    let Some(f) = scan("fine-print-policy-hidden.html") else { return };
+    let policy = on(&f, "line-length", "adv-policy-visible");
+    assert!(!policy.is_empty() && policy.iter().all(|s| *s == "advisory"), "{f:#?}");
+    assert!(on(&f, "line-length", "hidden-copy").is_empty(), "{f:#?}");
 }
 
 #[test]

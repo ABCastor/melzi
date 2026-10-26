@@ -30,6 +30,7 @@ describe('workflow execution boundaries', () => {
     const verify = workflows['sync-generated-output.yml'];
     expect(verify.permissions).toEqual({ contents: 'read' });
     expect(JSON.stringify(verify)).not.toMatch(/git push|git commit|SYNC_GENERATED_OUTPUT_TOKEN/);
+    expect(verify.env.GENERATED_PATHS.split(/\s+/)).toContain('.omp');
   });
 
   test('triage preview cannot post comments or close contributions', () => {
