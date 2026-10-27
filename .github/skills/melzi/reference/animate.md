@@ -9,6 +9,7 @@ Use motion to explain state, relationship, and hierarchy, or to create one autho
 - **Persuade + Experience:** motion may carry the voice. Prefer one rehearsed focal sequence to repeated section reveals.
 - **Operate + Read:** motion serves feedback, state, and continuity. Keep routine transitions fast and do not make users wait through page-load choreography.
 - **Native (`ios` / `android` / `adaptive`):** follow the Motion section of [ios.md](ios.md) or [android.md](android.md), including the platform's Reduce Motion behavior. Do not apply the web tooling below.
+- **Rendered (a film, reel or ad exported to video, or a talk deck where slides move):** the thesis, material and timing below still apply; brief, storyboard, review, export and delivery follow [motion-film.md](motion-film.md).
 
 ## Find the job
 
@@ -30,6 +31,7 @@ Write a short plan before implementation:
 - **Continuity:** the state, layout, or navigation changes that need explanation.
 - **Feedback:** the controls and outcomes that need acknowledgment.
 - **Budget:** which effects may be expensive and how often they run.
+- **Character:** three or four words for how things move (soft or sharp, slow or quick, many pauses or few, gentle or forceful) and one image in the form "like a surface catching light". Character chooses the easing and the timing; a curve name chosen first rarely carries one.
 
 The focal moment must come from this product and surface concept. A generic fade-and-rise, hover lift, parallax layer, or scroll reveal is not a thesis.
 
@@ -60,6 +62,18 @@ Timing should express distance and consequence:
 
 Exit faster than entrance. Use natural deceleration such as `cubic-bezier(0.16, 1, 0.3, 1)` for confident arrivals; do not use bounce or elastic curves by reflex. Long feedback feels like latency.
 
+Each curve family has a character; pick it from the thesis, not from habit:
+
+| Curve | Reads as | Use for |
+|---|---|---|
+| ease-out, expo-out | arriving with confidence | entrances; the default |
+| ease-in | gathering speed to leave | exits |
+| ease-in-out | travelling between two rests | moves and morphs within the frame |
+| back-out (overshoot) | springy, playful | an earned moment, never routine UI |
+| anticipation (a small wind-up before the move) | gathering itself | a deliberate reveal |
+| `steps()` | mechanical, discrete | typewriter text, counters, pixel worlds |
+| linear | machine-constant | continuous loops, progress, rotation |
+
 ## Implement to the runtime
 
 - Use CSS transitions and keyframes for declarative state and bounded sequences.
@@ -69,6 +83,12 @@ Exit faster than entrance. Use natural deceleration such as `cubic-bezier(0.16, 
 - Do not add a dependency for an effect the existing stack can express cleanly.
 
 Keep content visible in the default state so failed scripts do not hide the page. Avoid casually animating layout-driving properties such as `width`, `height`, `top`, `left`, and margins; use FLIP, transforms, or grid techniques when appropriate. Bound blur, filter, shadow, canvas, and shader work to isolated regions. Apply `will-change` only during known animation. Measure on target viewports and devices rather than assuming transform means fast.
+
+Three traps that look like bugs elsewhere:
+
+- An animation with `fill-mode: both` (or `forwards` / `backwards`) owns `opacity` and `transform` for as long as it applies, so the element's static values in those properties silently stop working. Put the resting state and the animation on different elements, typically a wrapper.
+- A mask with `overflow: hidden`, such as a text-rise container, clips everything that leaves it. Decoration meant to spill out sits outside the mask.
+- When morphing between two layouts, never switch `display` or `flex-direction` mid-move: measure both states and FLIP each element.
 
 ## Accessibility and control
 
@@ -90,7 +110,7 @@ node .github/skills/melzi/scripts/motion-eyes.mjs \
 
 Interactions are semicolon-separated: `wait <duration>`, `scroll <start>..<end> over <duration>`, `hover <css-selector> [for <duration>]`, `click <css-selector> [then <duration>]`. Durations take `ms` or `s`; scroll positions are percentages of the document unless suffixed with `px`. `--help` carries the rest. Requires a Playwright install the script can resolve, and installs nothing itself.
 
-Read `motion-review-frames.png` first. Twelve stamped frames in one image show choreography: which elements entered and in what order, how far the scroll travelled, whether a reveal overshoots, whether the opening and closing states cohere. Then watch `motion-review.webm` before saying anything about smoothness, frame pacing, easing shape, perceived latency, interruption, or scroll coupling. A hitch that falls between two sampled frames leaves no trace on the sheet, so the sheet can confirm those properties but never rule a defect out.
+Read `motion-review-frames.png` first. Twelve stamped frames in one image show choreography: which elements entered and in what order, how far the scroll travelled, whether a reveal overshoots, whether the opening and closing states cohere. Then watch `motion-review.webm` before saying anything about smoothness, frame pacing, easing shape, perceived latency, interruption, or scroll coupling. Judge easing shape at quarter speed as well as full speed (playback rate 0.25), since at full speed most curves look alike. A hitch that falls between two sampled frames leaves no trace on the sheet, so the sheet can confirm those properties but never rule a defect out.
 
 Check `uniqueFrameCount` in the JSON before trusting either artifact. Frames that are all identical mean the page never moved or the capture never saw it move, and the sheet then looks like evidence while carrying none.
 
