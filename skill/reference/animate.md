@@ -174,7 +174,7 @@ Every technique degrades to a complete experience:
 ```
 
 ```javascript
-if ('gpu' in navigator) { /* WebGPU */ }
+if ('gpu' in navigator && await navigator.gpu.requestAdapter()) { /* WebGPU */ }
 else if (canvas.getContext('webgl2')) { /* WebGL2 fallback */ }
 /* The CSS-only result remains complete. */
 ```
