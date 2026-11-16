@@ -26,6 +26,14 @@ The film and talk-deck production method in `skill/reference/motion-film.md` (fo
 **Original license:** none stated
 **Author:** Elisabetta Cavataio
 
+## Declarative Dragging
+
+The model-driven dragging entry in `skill/reference/animate.md` (declare which model states a drag may reach, render them speculatively, interpolate mid-drag, settle on the nearest legal state) comes from Joshua Horowitz, Andrew Blinn and Jeffrey Heer, *Declarative Dragging* (UIST 2026), and its library Dragology. No text or code was copied; the entry was written here.
+
+**Original work:** https://declarative-dragging.github.io/ and https://github.com/declarative-dragging/dragology (read at commit d89d1337f7c0b1aa9dc379f5267d1c8658b291c4)
+**Original license:** MIT
+**Authors:** Joshua Horowitz, Andrew Blinn, Jeffrey Heer
+
 ## Self-critique gates in other design skills
 
 Two ideas in `skill/reference/taste-bar.md` were prompted by reading other public design skills on 10 November 2026. No text or code was copied; the tests, the axes, and the prose were written here.

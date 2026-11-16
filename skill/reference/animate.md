@@ -156,6 +156,10 @@ The `overdrive` alias loads this catalogue after [bolder.md](bolder.md) settles 
 - **OffscreenCanvas:** keep custom rendering off the main thread when the browser supports it.
 - **WASM:** use near-native computation for work such as image processing, physics, or codecs only when profiling shows JavaScript is the bottleneck.
 
+### Direct manipulation
+
+- **Model-driven dragging:** when a surface needs a bespoke drag (reorder a structure, move a piece between slots, pull the parts of a diagram or an explorable), declare for each draggable element which next states of the model a drag may lead to, and let the engine render those states speculatively, interpolate between them mid-drag and settle on the nearest legal one on drop. The element can only land where the product's rules allow, and the drag feels continuous because every frame is a blend of real states. For React and SVG, Dragology implements it, with composable modifiers for floating, snapping and transitions; in any other runtime, keep the same contract by hand: legal states first, geometry derived from them, never free pixel dragging validated afterwards. Every drag also gets a keyboard and click path to the same states, and passes harden's interrupted-gesture checks.
+
 ### Device interaction
 
 - **Web Audio API:** audio-reactive work or sonic feedback, started only by a user gesture and with explicit consent.
