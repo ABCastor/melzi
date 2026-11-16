@@ -14,9 +14,20 @@ The `skill/reference/ios.md` and `skill/reference/android.md` platform reference
 
 The `study` command's idea (point at a design you admire, extract its design DNA, optionally lock that DNA into a portable design system) comes from nutlope's `hallmark`. No text or code was copied; the command, its prose, and its routing into this fork's signature and world pool were written here.
 
+Five checks in `skill/reference/taste-bar.md` also come from Hallmark's gates and build order (read at commit 04977e15f3dfd6ee4b74c887dac3eb52665d6c92): the 320 to 1920 width sweep for mechanical breaks, judging the first viewport before the sections under it, the before-and-after inventory of links, fields, handlers, script hooks and headings when changing an existing screen, the refusal of a success state with no request behind it, and pictures that are real and licensed rather than borrowed. Only the ideas were taken; the text was written here, and Hallmark's scripts, theme catalogue and photo data were not used.
+
 **Original work:** https://github.com/nutlope/hallmark
 **Original license:** MIT
 **Author:** nutlope
+
+## unslop
+
+Two ideas in section 5 of `skill/reference/taste-bar.md` come from Damir Sokolovsky's `unslop` (read at commit 620163eedb3529d9cd23a3994ed8d287d06f760d): deciding how much an existing screen needs before changing it, including saying so when it is already good, and working in layers across the whole screen in a set order. No text was copied; the section was written here.
+
+**Original work:** https://github.com/heydamir/unslop
+**Original license:** Creative Commons Attribution 4.0 International (CC BY 4.0), https://creativecommons.org/licenses/by/4.0/
+**Author:** Damir Sokolovsky (@heydamir)
+**Changes:** ideas only, restated in new prose and adapted to this skill's taste bar.
 
 ## I Like to Move It
 
