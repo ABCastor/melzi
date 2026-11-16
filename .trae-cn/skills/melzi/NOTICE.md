@@ -18,6 +18,14 @@ The `study` command's idea (point at a design you admire, extract its design DNA
 **Original license:** MIT
 **Author:** nutlope
 
+## I Like to Move It
+
+The film and talk-deck production method in `skill/reference/motion-film.md` (formats first, a static storyboard gate, a seekable timeline captured frame by frame, low-resolution drafts, per-format recomposition, and a click-stepped offline deck), plus the motion character line, the easing-character table and three runtime traps in `skill/reference/animate.md`, come from Elisabetta Cavataio's `i-like-to-move-it-skills`, shown at the Claude Community Event in Torino on 26 October 2026. The repository carries no license file; its README invites readers to use and adapt the skills. Only the ideas were taken: no text or code was copied, and the prose and examples were written here.
+
+**Original work:** https://github.com/elisabettacavataio-design/i-like-to-move-it-skills (read at commit 6e0129a8eae13349ca787ee47527bc3b19565356)
+**Original license:** none stated
+**Author:** Elisabetta Cavataio
+
 ## This project is a derivative (fork) of Impeccable
 
 Base work: **Impeccable** by Paul Bakaus, https://github.com/pbakaus/impeccable

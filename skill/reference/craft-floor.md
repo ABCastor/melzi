@@ -49,4 +49,6 @@ Surface habits:
 - Claims and configuration come from supplied truth; label illustrative values honestly. Naming a concept and then ironizing it is not a claim. <!-- rule:skill-codex-material-honesty --> <!-- rule:skill-ban-codex-x-theater -->
 </codex>
 
-The floor holds the mechanics; it never picks the direction. With every check green, spend the page on the committed world, and when torn between refined and committed, commit. <!-- rule:skill-floor-not-ceiling -->
+The floor holds the mechanics; it never picks the direction. With every check green, spend the page on the committed world, and when torn between refined and committed, commit. On an Operate or Read surface, commit through structure, proportion and type; adding world material there is the costume [taste-bar.md](taste-bar.md) tests for. <!-- rule:skill-floor-not-ceiling -->
+
+The floor says what must not be wrong. [taste-bar.md](taste-bar.md), loaded alongside this file, says what good looks like and carries the director's pass you run on every render before it is shown.
