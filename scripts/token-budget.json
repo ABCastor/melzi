@@ -1,55 +1,59 @@
 {
   "_doc": "Byte budgets for what the skill puts in an agent's context. Every LLM-facing skill file has a cap, and each common use has a cap on what it loads before its first edit. A cap is a reviewed decision: raise one only with the reason in the PR. scripts/lib/token-budget.js enforces it in bun run build; `node scripts/lib/token-budget.js` prints current sizes.",
   "files": {
-    "SKILL.src.md": 12750,
+    "SKILL.src.md": 18500,
     "agents/impeccable-asset-producer.md": 9000,
     "agents/impeccable-documenter.md": 4000,
     "agents/impeccable-finish-reviewer.md": 17000,
     "agents/impeccable-manual-edit-applier.md": 8000,
     "agents/impeccable-motion-reviewer.md": 6750,
-    "reference/adapt.md": 12000,
     "reference/adapt.native.md": 4250,
     "reference/android.md": 5500,
-    "reference/animate.md": 8750,
-    "reference/audit.md": 12000,
+    "reference/animate.md": 18750,
+    "reference/audit.md": 19250,
     "reference/audit.native.md": 8750,
-    "reference/bolder.md": 3750,
-    "reference/clarify.md": 5000,
+    "reference/bolder.md": 9000,
+    "reference/clarify.md": 7500,
     "reference/colorize.md": 5000,
     "reference/component-review.md": 8500,
     "reference/craft-floor.md": 7750,
-    "reference/craft.md": 750,
     "reference/critique-rubric.md": 21000,
     "reference/critique.md": 30500,
-    "reference/delight.md": 4000,
-    "reference/distill.md": 6000,
     "reference/doctor.md": 6000,
-    "reference/document.md": 29750,
-    "reference/extract.md": 3500,
+    "reference/document.md": 32500,
+    "reference/explore.md": 15250,
     "reference/foundations.md": 8000,
     "reference/generate.md": 13750,
+    "reference/genesis.md": 10500,
+    "reference/handdrawn.md": 7750,
     "reference/harden.md": 11500,
     "reference/hooks.md": 18250,
+    "reference/identity.md": 28250,
+    "reference/imagegen.md": 40250,
     "reference/init.md": 12750,
     "reference/ios.md": 5000,
     "reference/layout.md": 5500,
     "reference/live-setup.md": 9000,
     "reference/live.md": 44000,
+    "reference/macrostructures.md": 4250,
     "reference/mode-operate.md": 5000,
     "reference/mode-persuade.md": 4000,
     "reference/mode-read.md": 4750,
+    "reference/motion-film.md": 9500,
     "reference/new-work-comp.md": 15500,
     "reference/new-work-world.md": 21250,
-    "reference/new-work.md": 35750,
-    "reference/onboard.md": 8500,
+    "reference/new-work.md": 40250,
     "reference/operate.md": 5500,
-    "reference/optimize.md": 8000,
-    "reference/overdrive.md": 9750,
-    "reference/polish.md": 7000,
-    "reference/quieter.md": 5250,
+    "reference/polish.md": 13500,
+    "reference/quieter.md": 8250,
     "reference/region-map.md": 3500,
+    "reference/review-layer.md": 8500,
+    "reference/rigor.md": 4500,
     "reference/routing.md": 3500,
     "reference/shape.md": 3750,
+    "reference/study.md": 14250,
+    "reference/taste-bar.md": 15250,
+    "reference/taste.md": 17750,
     "reference/typeset.md": 7250,
     "reference/visualize.md": 14750
   },
@@ -60,14 +64,14 @@
         "reference/polish.md",
         "reference/craft-floor.md"
       ],
-      "max": 27250
+      "max": 39750
     },
     "critique": {
       "loads": [
         "SKILL.src.md",
         "reference/critique.md"
       ],
-      "max": 43250
+      "max": 49500
     },
     "build": {
       "loads": [
@@ -75,7 +79,7 @@
         "reference/new-work.md",
         "reference/craft-floor.md"
       ],
-      "max": 56000
+      "max": 66500
     },
     "build-new-world": {
       "loads": [
@@ -84,14 +88,14 @@
         "reference/new-work-world.md",
         "reference/craft-floor.md"
       ],
-      "max": 77250
+      "max": 87750
     },
     "first-run": {
       "loads": [
         "SKILL.src.md",
         "reference/init.md"
       ],
-      "max": 25500
+      "max": 31250
     }
   },
   "cli": {
