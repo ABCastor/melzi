@@ -1,4 +1,4 @@
-Load this when the motion leaves the live page: a reel, ad, product film or explainer exported to video, or a talk deck in which every slide moves. [animate.md](animate.md) still owns the motion thesis, the material and the timing; this file owns production, review and delivery.
+Load this when the motion leaves the live page: a reel, ad, product film or explainer exported to video, or a talk deck in which every slide moves. [animate.md](animate.md) still owns the motion thesis, the material and the timing; this file owns production, review and delivery. A presentation film for a Castor product goes through the Castor film system instead: [castor-film.md](castor-film.md).
 
 ---
 
