@@ -30,6 +30,11 @@ describe('VS Code skill extension', () => {
     assert.equal(manifest.name, 'melzi');
     assert.equal(manifest.repository.url, 'https://github.com/ABCastor/melzi.git');
     assert.deepEqual(manifest.contributes, { chatSkills: [{ path: './skills/melzi/SKILL.md' }] });
+    assert.deepEqual(manifest.capabilities, {
+      untrustedWorkspaces: { supported: false },
+      virtualWorkspaces: false,
+      agentsWindow: { supported: true },
+    });
     for (const key of ['main', 'browser', 'activationEvents', 'scripts']) assert.equal(key in manifest, false);
     assert.equal(manifest.version, JSON.parse(fs.readFileSync(path.join(repo, '.claude-plugin/plugin.json'))).version);
     assert.deepEqual(fs.readdirSync(extension).sort(), ['.vscodeignore', 'LICENSE', 'NOTICE.md', 'README.md', 'docs', 'icon.png', 'package.json', 'skills']);

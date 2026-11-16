@@ -31,6 +31,7 @@ describe('workflow execution boundaries', () => {
     expect(verify.permissions).toEqual({ contents: 'read' });
     expect(JSON.stringify(verify)).not.toMatch(/git push|git commit|SYNC_GENERATED_OUTPUT_TOKEN/);
     expect(verify.env.GENERATED_PATHS.split(/\s+/)).toContain('.omp');
+    expect(verify.env.GENERATED_PATHS.split(/\s+/)).toContain('.devin');
   });
 
   test('triage preview cannot post comments or close contributions', () => {

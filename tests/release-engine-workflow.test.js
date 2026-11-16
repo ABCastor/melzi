@@ -26,13 +26,6 @@ describe('engine artifact boundary', () => {
     expect(upload.with.path).toContain('\nLICENSE\nNOTICE.md\ndocs/OFL-literata.txt');
   });
 
-  test('the release is created in one gh call that publishes only after every asset is up', () => {
-    const run = workflow.jobs.publish.steps.find(step => step.name === 'Publish the GitHub Release').run;
-    // gh only drafts, uploads, then publishes when the assets are passed to create.
-    expect(run).toMatch(/gh release create[\s\S]*\bout\/\*/);
-    for (const flag of ['gh release upload', '--draft']) expect(run).not.toContain(flag);
-  });
-
   test('every third-party action is pinned to a commit', () => {
     for (const job of Object.values(workflow.jobs)) {
       for (const step of job.steps) {

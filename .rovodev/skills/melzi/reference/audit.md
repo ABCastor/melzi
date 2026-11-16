@@ -4,8 +4,6 @@ This is a code-level audit, not a design critique. Check what's measurable and v
 
 **Web only.** Native platforms (`ios` / `android` / `adaptive`) route to [audit.native.md](audit.native.md) instead; if the project is native, switch to it now.
 
-Read [rigor.md](rigor.md) before scoring. It is mandatory for this command: a scan is not accessibility, a detector hit is evidence of a pattern rather than proof of a problem, and every finding carries the narrowest accurate evidence label.
-
 ## Diagnostic Scan
 
 Run comprehensive checks across 5 dimensions. Score each dimension 0-4 using the criteria below.
@@ -55,13 +53,20 @@ Run comprehensive checks across 5 dimensions. Score each dimension 0-4 using the
 - **Text scaling**: Layouts that break when text size increases
 - **Missing breakpoints**: No mobile/tablet variants
 
-**Score 0-4**: 0=Desktop-only (breaks on mobile), 1=Major issues (some breakpoints, many failures), 2=Partial (works on mobile, rough edges), 3=Good (responsive, minor touch target or overflow issues), 4=Excellent (fluid, all viewports, proper touch targets, gestures work under touch)
+On RTL-declared pages, each of the following is a signal to verify the rendered result, not a defect in itself; flag only where the rendering is actually wrong:
+- **Physical directional properties**: `margin-left/right`, `padding-left/right`, `text-align: left/right`, `float: left/right`, `border-left/right` where logical equivalents (`margin-inline-start/end`, `padding-inline-start/end`, `text-align: start/end`, `float: inline-start/end`, `border-inline-start/end`) would be expected. A direction-scoped override like `[dir="rtl"] .x { margin-right:1rem }` is correct only when it also clears the conflicting base property (e.g. `margin-left: 0`); without that, both margins apply
+- **Physical positioning on positioned elements**: `left:` or `right:` instead of `inset-inline-start` / `inset-inline-end`. Note: `left:50%; transform:translateX(-50%)` is a direction-agnostic centering pattern that works correctly in both LTR and RTL; replacing `left` with `inset-inline-start` there breaks the centering because `translateX` is physical and does not mirror
+- **Directional icons and assets**: arrows, chevrons, and navigation icons that point the wrong direction for the reading order. An RTL-only page may ship assets already drawn correctly without a `[dir="rtl"]` flip; verify the rendered icon rather than assuming a missing `transform: scaleX(-1)` is a defect
+
+**RTL scope**: flag physical directional properties only on pages that declare `dir="rtl"` on the `<html>` or `<body>` element. A `lang` attribute alone does not set direction (browsers take direction from `dir`, never from `lang`), but treat an RTL-script `lang` (`ar`, `fa`, `ur`, `ps`, `ckb`, `he`, `yi`, `ug`, `sd`, `dv`) without an explicit `dir` as a signal worth noting.
+
+**Score 0-4**: 0=Desktop-only (breaks on mobile), 1=Major issues (some breakpoints, many failures), 2=Partial (works on mobile, rough edges), 3=Good (responsive, minor touch target or overflow issues), 4=Excellent (fluid, all viewports, proper touch targets, gestures work under touch). On RTL-declared pages, reduce by 1 for pervasive rendered RTL failures
 
 ### 5. Implementation Integrity (CRITICAL)
 
 Run the bundled detector and verify each finding in context. Look for repeated implementation shortcuts, design-system drift, misleading or decorative content, and structure that is interchangeable with an unrelated product. Keep deterministic findings separate from visual judgment and call out false positives.
 
-**Desktop apps** (Electron, NW.js, CEF, WebView2): launch the app with a local DevTools port (`--remote-debugging-port=9222`, or `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` for WebView2; keep it on 127.0.0.1, never exposed), seed the state to audit, keep the window on screen (a hidden one skips the pixel contrast reads), then run `.rovodev/skills/melzi/scripts/impeccable detect --cdp 9222 --target <part of the page URL or title> --json`. It returns the same JSON as a URL scan and leaves the window as found. Take screenshots through the harness's CDP tooling, and leave the window as you found it too. Tauri on macOS (WKWebView) and on Linux (WebKitGTK) expose no CDP: scan the source and say the rendered check did not run.
+**Desktop apps** (Electron, NW.js, CEF, WebView2): launch the app with a local DevTools port (`--remote-debugging-port=9222`, or `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` for WebView2; keep it on 127.0.0.1, never exposed), seed the state to audit, keep the window on screen (a hidden one skips the pixel contrast reads), then run `.pi/skills/impeccable/scripts/impeccable detect --cdp 9222 --target <part of the page URL or title> --json`. It returns the same JSON as a URL scan and leaves the window as found. Take screenshots through the harness's CDP tooling, and leave the window as you found it too. Tauri on macOS (WKWebView) and on Linux (WebKitGTK) expose no CDP: scan the source and say the rendered check did not run.
 
 **Score 0-4**: 0=systemic drift, 1=major repeated failures, 2=several verified issues, 3=minor isolated issues, 4=coherent and intentional
 
@@ -104,7 +109,7 @@ For each issue, document:
 - **Impact**: How it affects users
 - **WCAG/Standard**: Which standard it violates (if applicable)
 - **Recommendation**: How to fix it
-- **Suggested command**: Which command to use (prefer: /melzi animate, /melzi audit, /melzi bolder, /melzi clarify, /melzi colorize, /melzi critique, /melzi document, /melzi explore, /melzi generate, /melzi handdrawn, /melzi harden, /melzi identity, /melzi init, /melzi layout, /melzi live, /melzi polish, /melzi quieter, /melzi shape, /melzi study, /melzi teach, /melzi typeset)
+- **Suggested command**: Which command to use (prefer: /impeccable adapt, /impeccable animate, /impeccable audit, /impeccable bolder, /impeccable clarify, /impeccable colorize, /impeccable critique, /impeccable delight, /impeccable distill, /impeccable document, /impeccable harden, /impeccable layout, /impeccable onboard, /impeccable optimize, /impeccable overdrive, /impeccable polish, /impeccable quieter, /impeccable shape, /impeccable typeset)
 
 ### Patterns & Systemic Issues
 
@@ -123,13 +128,13 @@ List recommended commands in priority order (P0 first, then P1, then P2):
 1. **[P?] `/command-name`**: Brief description (specific context from audit findings)
 2. **[P?] `/command-name`**: Brief description (specific context)
 
-**Rules**: Only recommend commands from: /melzi animate, /melzi audit, /melzi bolder, /melzi clarify, /melzi colorize, /melzi critique, /melzi document, /melzi explore, /melzi generate, /melzi handdrawn, /melzi harden, /melzi identity, /melzi init, /melzi layout, /melzi live, /melzi polish, /melzi quieter, /melzi shape, /melzi study, /melzi teach, /melzi typeset. Map findings to the most appropriate command. End with `/melzi polish` as the final step if any fixes were recommended.
+**Rules**: Only recommend commands from: /impeccable adapt, /impeccable animate, /impeccable audit, /impeccable bolder, /impeccable clarify, /impeccable colorize, /impeccable critique, /impeccable delight, /impeccable distill, /impeccable document, /impeccable harden, /impeccable layout, /impeccable onboard, /impeccable optimize, /impeccable overdrive, /impeccable polish, /impeccable quieter, /impeccable shape, /impeccable typeset. Map findings to the most appropriate command. End with `/impeccable polish` as the final step if any fixes were recommended.
 
 After presenting the summary, tell the user:
 
 > You can ask me to run these one at a time, all at once, or in any order you prefer.
 >
-> Re-run `/melzi audit` after fixes to see your score improve.
+> Re-run `/impeccable audit` after fixes to see your score improve.
 
 Keep P3s few: a long tail of minor issues buries the ones that matter.
 
@@ -140,65 +145,6 @@ Keep P3s few: a long tail of minor issues buries the ones that matter.
 - Forget to prioritize (everything can't be P0)
 - Report false positives without verification
 
-## Optimize mode: measure, fix, measure again
+## Save the Report
 
-A typed `optimize` command enters here. Ordinary `audit` remains report-only. Optimize mode takes the Performance findings, fixes the largest measured bottleneck, and repeats the same measurement. Do not optimize what is not slow.
-
-### Establish the baseline
-
-Capture Core Web Vitals (LCP, INP, CLS), First Contentful Paint, Total Blocking Time, load and interactive timing, JavaScript and CSS bundle sizes, image bytes, request count and waterfall, frame rate, memory, and CPU where they apply. Name whether the bottleneck is initial load, interaction, animation, rendering, or network, how users experience it, and which devices or connections carry it.
-
-Use Chrome DevTools, Lighthouse, WebPageTest, bundle analyzers, and existing real-user monitoring such as Sentry, Datadog, or New Relic. Measure representative mobile hardware and a throttled connection. Desktop Chrome on a fast development machine is not a baseline.
-
-### Loading performance
-
-- Serve correctly sized WebP or AVIF images, use `srcset` and `picture` for resolution and art direction, compress to the quality the asset tolerates, and lazy-load only below the fold.
-- Split routes and genuinely heavy components, remove unused dependencies and code, use dynamic import where the wait is acceptable, and verify tree shaking rather than assuming it.
-- Remove unused CSS, keep critical CSS available for first render, and use containment for independent regions.
-- Use `font-display: swap` or `optional`, load only required weights and glyphs, preload the one critical face, and use a system face where the design permits it.
-- Prioritize critical resources, defer noncritical scripts, prefetch only likely next work, and use service workers, caching, compression, CDN delivery, HTTP/2, or HTTP/3 where the deployment controls them.
-
-Keep the implementation methods from the former optimize playbook reachable: lazy-load a genuinely heavy component with dynamic import; subset a custom face with `unicode-range`; combine tiny files only when request overhead dominates; use SVG sprites or inline only small critical assets; and remove unused third-party scripts before squeezing local code.
-
-Never lazy-load the largest above-fold image or hide a font delay behind layout shift. Set image and video dimensions or `aspect-ratio` so late bytes do not move the page.
-
-### Rendering and interaction performance
-
-Batch layout reads before writes. Avoid loops that read `offsetHeight` and immediately change layout on each element. Use `contain` and `content-visibility: auto` for independent or long regions, flatten unnecessary DOM depth, and virtualize genuinely large lists.
-
-```javascript
-const heights = elements.map((element) => element.offsetHeight);
-elements.forEach((element, index) => {
-  element.style.height = `${heights[index] * 2}px`;
-});
-```
-
-Use transforms and opacity for reliable movement, while allowing bounded blur, filters, masks, clip paths, shadows, and colour when the authored effect earns their cost. Avoid casual animation of `width`, `height`, `top`, `left`, and margins. Apply `will-change` only around a known operation and remove it afterward.
-
-Target a 16ms frame budget at 60fps. Prefer CSS animation when it expresses the behavior; use `requestAnimationFrame` for JavaScript animation, throttle or replace scroll handlers with `IntersectionObserver`, and keep long tasks away from the interaction path. Break up main-thread work to keep INP below 200ms.
-
-### Framework and data work
-
-Profile before adding memoization. In React, use `memo`, `useMemo`, and `useCallback` only around measured expensive work; avoid needless per-render function churn where profiling proves it matters; virtualize long collections; inspect the React DevTools Profiler; and split routes. In any framework, reduce unnecessary renders, memoize expensive computation, debounce repeated input work, and lazy-load routes or components where the interaction can carry it.
-
-Paginate large API results, request only needed fields through REST or GraphQL, compress responses with gzip or Brotli, set correct cache headers, and move static assets to a CDN where appropriate. Use `navigator.connection` only as an adaptive-loading hint, preserve core content through progressive enhancement, prioritize requests deliberately, and keep optimistic UI honest about failure.
-
-### Core Web Vitals targets
-
-- **LCP below 2.5s:** prioritize and size the hero or main content asset, inline or preload critical resources, and use server rendering where it materially shortens the path.
-- **INP below 200ms:** break long tasks, defer noncritical JavaScript, move heavy computation to a Worker, and reduce execution time.
-- **CLS below 0.1:** reserve media and embed space with dimensions or `aspect-ratio`, avoid inserting content above the current viewport, and animate with transforms rather than layout movement.
-
-### Verify the optimization
-
-Repeat the same measurement on the same device, viewport, data, and network. Report before and after numbers, run the complete user path to catch functional regressions, and keep accessibility intact. Check a low-end Android device, a throttled 3G path, Chrome UX Report or equivalent field data where available, and real-user monitoring. The optimization is complete only when the user-facing number or perceived delay moves.
-
-Never optimize without a baseline, trade accessibility or functionality for a score, spread `will-change` across the page, chase micro-optimizations while a large asset or long task dominates, or declare a desktop result representative of mobile.
-
-## Adaptation evidence on the web
-
-A typed web `adapt` command starts with this audit section, then uses [polish.md](polish.md) to implement the change. Record the source context and its assumptions, the target device or medium, input method, screen and orientation, connection, usage posture, and platform expectations. Name what no longer fits, what depends on unavailable input such as hover, and which source-platform convention becomes inappropriate.
-
-Audit the real feature at content-driven breakpoints, 320px, intermediate tablet widths, wide desktop, landscape, 200% text scaling, coarse and fine pointers, touch and keyboard, safe areas, slow connections, and each supported browser. Include print or email clients when those are the target. Device emulation is layout evidence only; at least one real iPhone, one real Android, and a tablet where relevant provide interaction, keyboard, font-rendering, and performance evidence.
-
-Core functionality, information architecture, and task outcome must remain available in every context. A responsive screenshot that hides the difficult feature is a failure.
+After the report is delivered, save a copy so the findings outlive this conversation: write it, from the score table through Recommended Actions, to a temp file, then run `.pi/skills/impeccable/scripts/impeccable audit-storage write "<resolved target, or . for the whole project>" <temp-file>` and delete the temp file. The helper prints the path it wrote, which you mention in one line; `REPORTS OFF:` means the project opted out, and you mention nothing. Saving never replaces delivering: the user reads the report in chat first.

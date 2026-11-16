@@ -210,6 +210,42 @@ static ZERO_LENGTH_RE: Lazy<Regex> =
 static BORDER_SIDE_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^border-(top|right|bottom|left)$").expect("BORDER_SIDE_RE"));
 
+/// One `background` layer with every gradient and `url()` call cut out to
+/// its closing paren, so a color written flush against one
+/// (`rgb(0,0,0)linear-gradient(...)`) survives. A paren inside a quoted
+/// URL is part of the URL.
+fn without_images(layer: &str) -> String {
+    let mut out = String::new();
+    let mut rest = layer;
+    while let Some(m) = BG_IMAGE_SPLIT_RE.find(rest) {
+        out.push_str(&rest[..m.start()]);
+        out.push(' ');
+        let mut depth = 1;
+        let mut quote: Option<u8> = None;
+        let mut escaped = false;
+        let mut end = rest.len();
+        for (i, b) in rest.bytes().enumerate().skip(m.end()) {
+            match (quote, b) {
+                _ if escaped => escaped = false,
+                (_, b'\\') => escaped = true,
+                (Some(q), _) if b == q => quote = None,
+                (Some(_), _) => {}
+                (None, b'"' | b'\'') => quote = Some(b),
+                (None, b'(') => depth += 1,
+                (None, b')') => depth -= 1,
+                _ => {}
+            }
+            if depth == 0 {
+                end = i + 1;
+                break;
+            }
+        }
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
 fn box4(names: [&str; 4], vals: [String; 4]) -> Vec<Expanded> {
     let [a, b, c, d] = vals;
     vec![
@@ -218,6 +254,56 @@ fn box4(names: [&str; 4], vals: [String; 4]) -> Vec<Expanded> {
         (names[2].to_string(), c),
         (names[3].to_string(), d),
     ]
+}
+
+/// The color a `background` shorthand names. It lives in the final
+/// comma-separated layer, so that layer with its images taken out is all
+/// that can name it.
+fn background_shorthand_color(v: &str, has_image: bool) -> String {
+    let color_text = if has_image {
+        let layers = split_css_list(v);
+        without_images(layers.last().map(String::as_str).unwrap_or(v))
+    } else {
+        v.to_string()
+    };
+    extract_static_color(&color_text)
+}
+
+/// `currentColor` as a token of the shorthand's final layer, images cut out.
+/// `extract_static_color` (recorded) does not know the keyword, so without
+/// this `background: url(x) currentColor` would read as naming no color.
+fn background_shorthand_names_current_color(v: &str) -> bool {
+    let layers = split_css_list(v);
+    let last = without_images(layers.last().map(String::as_str).unwrap_or(v));
+    split_css_tokens(&last)
+        .iter()
+        .any(|t| t.eq_ignore_ascii_case("currentcolor"))
+}
+
+/// The `background-color` a `background` shorthand implies beside the
+/// recorded `expandStaticDeclaration`, as `(prop, value, shorthand_reset)`
+/// (issue #964). The shorthand resets every longhand it does not name, so
+/// `background: url(photo.jpg)` after `background-color: #111` paints over
+/// transparent, not over #111: that reset is returned flagged, so the hover
+/// pass can tell it from an explicit `background-color: transparent`. A
+/// shorthand whose color is `currentColor` sets exactly that, which the
+/// background reader resolves against the element's `color`. var() values
+/// stay untouched: they may resolve to a color later in the pipeline.
+pub fn expand_background_color_reset(prop: &str, value: &str) -> Vec<(String, String, bool)> {
+    if js::to_lower_case(prop) != "background" {
+        return Vec::new();
+    }
+    let v = js::trim(value);
+    if v.is_empty() || VAR_ANYWHERE_RE.is_match(v) {
+        return Vec::new();
+    }
+    if background_shorthand_names_current_color(v) {
+        return vec![("backgroundColor".into(), "currentColor".into(), false)];
+    }
+    if !BG_IMAGE_RE.is_match(v) || !background_shorthand_color(v, true).is_empty() {
+        return Vec::new();
+    }
+    vec![("backgroundColor".into(), "rgba(0, 0, 0, 0)".into(), true)]
 }
 
 /// JS: css-cascade.mjs#expandStaticDeclaration(prop, value)
@@ -236,15 +322,7 @@ pub fn expand_static_declaration(prop: &str, value: &str) -> Vec<Expanded> {
         if has_image {
             out.push(("backgroundImage".into(), v.to_string()));
         }
-        let before_image: &str = if has_image {
-            match BG_IMAGE_SPLIT_RE.find(v) {
-                Some(m) => &v[..m.start()],
-                None => v,
-            }
-        } else {
-            v
-        };
-        let color = extract_static_color(if has_image { before_image } else { v });
+        let color = background_shorthand_color(v, has_image);
         if !color.is_empty() {
             out.push(("backgroundColor".into(), color.clone()));
         }

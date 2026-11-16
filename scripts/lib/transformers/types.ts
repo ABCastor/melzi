@@ -18,6 +18,7 @@ export interface SkillAgent {
   effort?: string;
   nicknameCandidates?: string[];
   tools?: string;
+  disallowedTools?: string;
   model?: string;
   maxTurns?: number;
   providers?: string[];
@@ -26,6 +27,7 @@ export interface SkillAgent {
 export interface Skill {
   name: string;
   description: string;
+  claudeCodeDescription?: string;
   body: string;
   userInvocable?: boolean;
   argumentHint?: string;
@@ -36,6 +38,7 @@ export interface Skill {
   scripts?: SkillFile[];
   references?: SkillFile[];
   agents?: SkillAgent[];
+  payloads?: Record<string, SkillFile[]>;
 }
 
 export interface ProviderConfig {
@@ -52,6 +55,8 @@ export interface ProviderConfig {
   includeVersion?: boolean;
   versionInMetadata?: boolean;
   bodyTransform?: (body: string, skill: Skill) => string;
+  descriptionKey?: string;
+  pluginPayload?: { source: string; dest: string };
 }
 
 export interface TransformOptions {

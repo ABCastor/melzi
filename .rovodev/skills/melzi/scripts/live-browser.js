@@ -1,5 +1,5 @@
 /**
- * Melzi Live Variant Mode - Browser Script
+ * Impeccable Live Variant Mode - Browser Script
  *
  * Injected into the user's page via <script src="http://localhost:PORT/live.js">.
  * The server prepends window.__IMPECCABLE_TOKEN__ and window.__IMPECCABLE_PORT__
@@ -62,6 +62,10 @@
   const Z = { highlight: 100001, bar: 100005, picker: 100007, toast: 100010 };
   const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'; // ease-out-quint
   const PREFIX = 'impeccable-live';
+  // A removed element stays in the DOM, hidden by this attribute, so a
+  // framework that owns the node never reconciles against a missing child;
+  // Undo and Discard restore it by dropping the attribute.
+  const REMOVED_ATTR = 'data-impeccable-removed';
   const IMPECCABLE_COMMAND = (window.__IMPECCABLE_COMMAND_PREFIX__ || '/') + 'impeccable';
   const PICK_CURSOR_STYLE_ID = PREFIX + '-pick-cursor-style';
   const MANUAL_APPLY_STATE_TTL_MS = 15 * 60 * 1000;
@@ -76,12 +80,12 @@
       storage: liveStorage,
     });
   } catch (err) {
-    console.error('[melzi] Live mode could not create its session state.', err);
+    console.error('[impeccable] Live mode could not create its session state.', err);
     window.__IMPECCABLE_LIVE_INIT__ = false; // let a later injection retry
     return;
   }
   if (!sessionState) {
-    console.error('[melzi] live-browser-session.js was not loaded. Live mode cannot start safely.');
+    console.error('[impeccable] live-browser-session.js was not loaded. Live mode cannot start safely.');
     window.__IMPECCABLE_LIVE_INIT__ = false;
     return;
   }
@@ -99,7 +103,7 @@
   ]);
 
   // Command vocabulary (values + labels + icons) comes from the canonical source,
-  // skill/scripts/live/vocabulary.mjs, which live-server.mjs serializes into
+  // crates/live/src/vocabulary.rs, which the engine's live server serializes into
   // window.__IMPECCABLE_VOCAB__ when it serves /live.js (same injection path as
   // the token/port above, so it is always present here). The icons stack above
   // each chip label and recolor to C.brand when selected (strokes use
@@ -112,13 +116,12 @@
   });
 
   // The Live chrome inventory (which surfaces exist, and the element ids each
-  // one owns) comes from the canonical source, skill/scripts/live/ui-surfaces.mjs,
-  // which the /live.js assembler serializes into these globals alongside the
-  // token/port/vocabulary. This file is served raw and injected as a classic
-  // script, so it cannot import that module; the private impeccable-site repo
-  // imports it directly to check its Live UI lab holds a snapshot for every
-  // surface, which only works while the list has exactly one definition.
-  // Add a surface in ui-surfaces.mjs, not here.
+  // one owns) comes from the canonical source, SURFACES in
+  // crates/live/src/vocabulary.rs, which the /live.js assembler
+  // (crates/live/src/browser_assets.rs) serializes into these globals alongside
+  // the token/port/vocabulary. This file is served raw and injected as a classic
+  // script, so it cannot import that list, which must keep exactly one
+  // definition. Add a surface in vocabulary.rs, not here.
   const LIVE_CHROME_MOUNT_CONTRACT = Array.isArray(window.__IMPECCABLE_LIVE_MOUNT_CONTRACT__)
     ? window.__IMPECCABLE_LIVE_MOUNT_CONTRACT__
     : ['root', 'transport', 'state', 'actions'];
@@ -149,9 +152,9 @@
   // behind checkpoint), and without this the bar jumps backward mid-generation.
   // Unranked phases always pass so we never block a phase we do not model.
   //
-  // Every `agent_phase` name here is emitted by recordAgentPhase() in
-  // live-server.mjs and listed in AGENT_PHASES in live/vocabulary.mjs, which the
-  // event validator enforces. This file is served raw and injected as an IIFE,
+  // Every `agent_phase` name here is recorded by record_agent_phase() in
+  // crates/live/src/server_state.rs and listed in AGENT_PHASES in
+  // crates/live/src/vocabulary.rs, which the event validator enforces. This file is served raw and injected as an IIFE,
   // so it cannot import that list; adding a phase means adding it in both.
   // `queued`, `generating`, `variants_progress`, and `variants_ready` are set
   // locally by this file and never arrive over the wire.
@@ -208,7 +211,7 @@
   // Survives cleanupAcceptedSession on purpose: the id of an accept whose
   // POST was acknowledged (intent durable, epoch fenced) but whose actual
   // source promotion hasn't reported back yet. Accept is optimistic, so the
-  // teardown nulls pendingAcceptedSession long before live-accept.mjs runs;
+  // teardown nulls pendingAcceptedSession long before `impeccable live-accept` runs;
   // this marker is what lets the SSE 'error' branch still recognize a late
   // accept failure and say the variant was not saved (issue #384). Released
   // when the real accept result arrives or a new session starts.
@@ -291,7 +294,7 @@
     document,
   });
   if (!domHelpers) {
-    console.error('[melzi] live-browser-dom.js was not loaded. Live mode cannot start safely.');
+    console.error('[impeccable] live-browser-dom.js was not loaded. Live mode cannot start safely.');
     window.__IMPECCABLE_LIVE_INIT__ = false;
     return;
   }
@@ -974,6 +977,10 @@
 
   function stripManualEditRuntimeState(root) {
     if (!root || root.nodeType !== 1) return;
+    // A removed element is gone as far as the agent is concerned: drop it from
+    // the clone rather than describing a hidden child it might regenerate.
+    for (const removed of root.querySelectorAll('[' + REMOVED_ATTR + ']')) removed.remove();
+    root.removeAttribute(REMOVED_ATTR);
     unwrapMixedContentTextNodes(root);
     const nodes = [root, ...root.querySelectorAll('[data-impeccable-editable], [data-impeccable-original-text], [data-impeccable-text-wrap]')];
     for (const node of nodes) {
@@ -1720,7 +1727,7 @@
     return btn;
   }
 
-  // Insert mode helpers (mirrors skill/scripts/live/insert-ui.mjs)
+  // Insert mode helpers (the engine's insert checks are in crates/live/src/event_validation.rs)
 
   function detectInsertAxisFromStyle(style) {
     const display = style?.display || 'block';
@@ -3091,7 +3098,7 @@
     if (recoveringEmptyCycling) return;
     recoveringEmptyCycling = true;
     try {
-      console.warn('[melzi] Refusing to render empty variant cycling state:', reason);
+      console.warn('[impeccable] Refusing to render empty variant cycling state:', reason);
       const message = 'No variants were mounted. Please try again.';
       if (svelteComponentSession?.sessionId === currentSessionId) {
         resetSvelteComponentSession(currentSessionId, message);
@@ -3130,11 +3137,12 @@
   let paramsPanelBody = null;   // grid holding the knob cells
   let paramsCurrentValues = {}; // {paramId: value} - mirror of the visible variant's live values
   let tuneOpen = false;         // whether the Tune popover is open right now
-  // Tune values a saved session carried across a reload: {sessionId, variant,
-  // values}. Cycling refreshes of that session and variant restore them (a
-  // resume refreshes more than once); a refresh for any other variant, or a
-  // knob edit, drops them.
-  let restoredParamValues = null;
+  // Tune values to keep for one session and variant: {sessionId, variant,
+  // values}. A reload restores them from the saved session and every knob
+  // edit replaces them. Cycling refreshes of that session and variant keep
+  // them (a resume, or the last progressive variant landing, refreshes more
+  // than once); a refresh for any other variant drops them.
+  let keptParamValues = null;
 
   // Theme-aware Tune popover. Appears as a drawer that slides out from the
   // contextual bar's bar-facing edge (below if the bar sits below the
@@ -3233,7 +3241,7 @@
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : [];
     } catch (err) {
-      console.warn('[melzi] Invalid data-impeccable-params JSON:', err.message);
+      console.warn('[impeccable] Invalid data-impeccable-params JSON:', err.message);
       return [];
     }
   }
@@ -3276,21 +3284,21 @@
     if (!values || typeof values !== 'object' || Array.isArray(values)) return;
     if (Object.keys(values).length === 0) return;
     const variant = Number(saved.visible != null ? saved.visible : saved.visibleVariant) || 0;
-    restoredParamValues = { sessionId: saved.id || null, variant, values: { ...values } };
+    keptParamValues = { sessionId: saved.id || null, variant, values: { ...values } };
   }
 
-  function restoredParamValuesForVisibleVariant() {
-    const restored = restoredParamValues;
-    if (!restored) return null;
-    if (restored.sessionId === currentSessionId && restored.variant === visibleVariant) return restored.values;
-    restoredParamValues = null;
+  function keptParamValuesForVisibleVariant() {
+    const kept = keptParamValues;
+    if (!kept) return null;
+    if (kept.sessionId === currentSessionId && kept.variant === visibleVariant) return kept.values;
+    keptParamValues = null;
     return null;
   }
 
   // The local save is what a reload resumes from, so an edit is saved there
   // as well as checkpointed to the server.
   function noteParamEdited() {
-    restoredParamValues = null;
+    keptParamValues = { sessionId: currentSessionId, variant: visibleVariant, values: { ...paramsCurrentValues } };
     saveSession();
     queueCheckpoint('param_changed');
   }
@@ -3855,6 +3863,156 @@
     return out;
   }
 
+  function ensureRemovedElementStyle() {
+    if (document.getElementById(PREFIX + '-removed-style')) return;
+    const style = document.createElement('style');
+    style.id = PREFIX + '-removed-style';
+    style.textContent = '[' + REMOVED_ATTR + '] { display: none !important; }';
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  // The text the applier and the verifier look for in source: a text leaf
+  // (preferring one free of characters source tends to entity-encode, so the
+  // literal search finds it), else the attribute that names the element, else
+  // its id.
+  function removalOriginalText(el) {
+    const leaves = collectEditableTextRows(el, { isOwn: own })
+      .map((row) => normalizeManualContextText(row.text))
+      .filter(Boolean);
+    const plain = leaves.find((text) => !/[&<>"]/.test(text));
+    if (plain || leaves.length) return (plain || leaves[0]).slice(0, 200);
+    for (const attr of ['alt', 'aria-label', 'title']) {
+      const value = normalizeManualContextText(el.getAttribute?.(attr));
+      if (value) return value.slice(0, 200);
+    }
+    for (const attr of ['src', 'href']) {
+      const value = String(el.getAttribute?.(attr) || '').split(/[?#]/)[0];
+      const base = value.split('/').filter(Boolean).pop();
+      if (base) return base.slice(0, 200);
+    }
+    if (el.id) return el.id;
+    const cls = [...(el.classList || [])].find((c) => c.indexOf('impeccable-') !== 0);
+    if (cls) return cls;
+    return normalizeManualContextText(el.textContent).slice(0, 200);
+  }
+
+  function removalDisallowedReason(el) {
+    if (!el || !el.isConnected || own(el)) return 'no_selection';
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'html' || tag === 'body') return 'root';
+    if (el.hasAttribute('data-impeccable-insert-placeholder')) return 'placeholder';
+    if (el.closest('[data-impeccable-variants], [data-impeccable-carbonize]')) return 'variant';
+    return null;
+  }
+
+  // Remove badge: stage one removal op through the same buffer copy edits
+  // use, hide the element, and offer Undo. The source edit happens when the
+  // user clicks Apply, like every other staged edit.
+  async function removeSelectedElement() {
+    if (pendingApplyInFlight) { showManualApplyBusyToast(); return; }
+    const target = selectedElement;
+    const refused = removalDisallowedReason(target);
+    if (refused) {
+      if (refused !== 'no_selection') showToast('This element cannot be removed from here.', 3500);
+      return;
+    }
+    const parent = target.parentElement;
+    const ref = documentRefForElement(target);
+    const originalText = removalOriginalText(target);
+    if (!originalText) {
+      // Nothing to find it by in source, so the applier could neither locate
+      // nor verify the removal. Better to say so than to stage a dead op.
+      showToast('Nothing identifies this element in source; give it an id or class, or remove it in the editor.', 5000);
+      return;
+    }
+    const op = {
+      ref,
+      tag: target.tagName.toLowerCase(),
+      elementId: target.id || null,
+      classes: [...target.classList].filter((cls) => cls.indexOf('impeccable-') !== 0),
+      originalText,
+      deleted: true,
+      removeElement: true,
+      leaf: copyEditLeafContext(target, originalText, ''),
+    };
+    const contextRef = documentRefForElement(parent);
+    if (contextRef) op.contextRef = contextRef;
+    const container = copyEditContainerContext(parent);
+    if (container) op.container = container;
+    const sourceHint = sourceHintForElement(target);
+    if (sourceHint) op.sourceHint = sourceHint;
+    hideConfigureBarTooltip();
+    let stashResult;
+    try {
+      const res = await fetch('http://localhost:' + PORT + '/manual-edit-stash?token=' + encodeURIComponent(TOKEN), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: TOKEN,
+          id: id8(),
+          pageUrl: location.pathname,
+          element: extractContext(parent || target),
+          ops: [op],
+        }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || ('HTTP ' + res.status));
+      }
+      stashResult = await res.json();
+    } catch (err) {
+      console.error('[impeccable] element removal stash failed:', err);
+      showToast('Remove failed - retry or cancel', 4000);
+      return;
+    }
+    ensureRemovedElementStyle();
+    target.setAttribute(REMOVED_ATTR, ref || op.tag);
+    selectedElement = null;
+    exitConfigureToPicking('remove-element', { clearHover: true });
+    updatePendingCounter(stashResult.pendingCount || 0);
+    showToast('Removed ' + desc(target), 6000, {
+      action: { label: 'Undo', onClick: () => undoElementRemoval(target, ref) },
+    });
+  }
+
+  async function undoElementRemoval(target, ref) {
+    if (pendingApplyInFlight) { showManualApplyBusyToast(); return; }
+    dismissToast();
+    try {
+      const res = await fetch(
+        'http://localhost:' + PORT + '/manual-edit-discard?token=' + encodeURIComponent(TOKEN)
+          + '&pageUrl=' + encodeURIComponent(location.pathname)
+          + '&ref=' + encodeURIComponent(ref || ''),
+        { method: 'POST' },
+      );
+      if (res.status === 409) {
+        // An Apply owns this page's edits (started from another tab, or
+        // before our dock caught up); the removal stays staged and hidden.
+        showToast('Apply is running; undo once it finishes', 4000);
+        fetchPendingCount();
+        return;
+      }
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const result = await res.json().catch(() => ({}));
+      target.removeAttribute(REMOVED_ATTR);
+      const remaining = remainingManualEditCount(result);
+      if (remaining === null) fetchPendingCount();
+      else updatePendingCounter(remaining);
+      showToast('Restored ' + desc(target), 2500);
+    } catch (err) {
+      console.error('[impeccable] undo removal failed:', err);
+      showToast('Undo failed - see console', 4000);
+    }
+  }
+
+  function restoreRemovedElement(op) {
+    const ref = typeof op?.ref === 'string' ? op.ref : '';
+    if (!ref) return;
+    for (const el of document.querySelectorAll('[' + REMOVED_ATTR + ']')) {
+      if (el.getAttribute(REMOVED_ATTR) === ref) el.removeAttribute(REMOVED_ATTR);
+    }
+  }
+
   async function applyEditing() {
     if (pendingApplyInFlight) { showManualApplyBusyToast(); return; }
     const ops = [];
@@ -3922,7 +4080,7 @@
       showAnnotOverlay(selectedElement);
       renderEditBadge('idle');
     } catch (err) {
-      console.error('[melzi] manual edit stash failed:', err);
+      console.error('[impeccable] manual edit stash failed:', err);
       const detail = String(err?.message || '');
       if (detail.includes('newText cannot contain') || detail.includes('newText cannot be empty')) {
         showToast('Save rejected: ' + detail.replace(/^manual_edits:\s*/, ''), 5500);
@@ -3983,7 +4141,7 @@
   }
 
   function pendingApplyLabel(count) {
-    return count === 1 ? 'Apply copy edit' : 'Apply copy edits';
+    return count === 1 ? 'Apply edit' : 'Apply edits';
   }
 
   function showManualApplyBusyToast() {
@@ -4058,13 +4216,13 @@
       const max = Number(stored.repairMaxAttempts) || 3;
       return 'Fixing apply issue, attempt ' + attempt + '/' + max;
     }
-    if (stored?.phase === 'verifying') return 'Verifying copy edits';
+    if (stored?.phase === 'verifying') return 'Verifying edits';
     const remaining = Number.isFinite(Number(stored?.remainingCount))
       ? Number(stored.remainingCount)
       : Number(fallbackCount) || 0;
     return remaining > 0
-      ? 'Applying ' + remaining + ' copy edit' + (remaining === 1 ? '' : 's')
-      : 'Verifying copy edits';
+      ? 'Applying ' + remaining + ' edit' + (remaining === 1 ? '' : 's')
+      : 'Verifying edits';
   }
 
   function resetManualApplyProgress(count) {
@@ -4120,7 +4278,7 @@
     }
     if (editBadgeEl && editBadgeEl.style.display !== 'none') {
       if (pendingApplyInFlight) renderEditBadge('idle-disabled');
-      else if (state === 'CONFIGURING' && selectedElement && hasTextRows(selectedElement)) renderEditBadge('idle');
+      else if (state === 'CONFIGURING' && selectedElement) renderEditBadge('idle');
     }
     updateGlobalBarState();
   }
@@ -4130,32 +4288,46 @@
     retryDeclinedAgentTargets();
     clearStoredManualApplyState();
     if (pendingIntroAnimation) { pendingIntroAnimation.cancel(); pendingIntroAnimation = null; }
+    renderPendingDockControls('normal', 0);
     if (pendingDockEl) pendingDockEl.style.display = 'none';
     if (pendingPillEl) {
       pendingPillEl.dataset.count = '0';
       pendingPillEl.style.display = 'none';
-      pendingPillEl.disabled = false;
-      pendingPillEl.setAttribute('aria-busy', 'false');
-      pendingPillEl.setAttribute('aria-label', 'Apply copy edits to source');
-      pendingPillEl.style.cursor = 'pointer';
-      pendingPillEl.style.filter = 'none';
+      pendingPillEl.setAttribute('aria-label', 'Apply edits to source');
+    }
+    if (pendingPillCountEl) pendingPillCountEl.textContent = '0';
+    if (pendingTrashBtn) pendingTrashBtn.style.display = 'none';
+    refreshLiveControlsForManualApply();
+  }
+
+  // Sets every control the dock's modes differ in, so leaving a mode can never
+  // leave its controls behind. 'normal': Apply and Discard enabled.
+  // 'applying': a spinner, both disabled. 'decision': Keep fixing and Rollback.
+  function renderPendingDockControls(mode, count) {
+    const applying = mode === 'applying';
+    const decision = mode === 'decision';
+    const normal = !applying && !decision;
+    if (pendingPillSpinnerEl) pendingPillSpinnerEl.style.display = applying ? 'inline-block' : 'none';
+    if (pendingPillLabelEl) {
+      pendingPillLabelEl.textContent = decision ? 'Apply needs attention'
+        : applying ? manualApplyLoadingText(count) : pendingApplyLabel(count);
+    }
+    if (pendingPillCountEl) pendingPillCountEl.style.display = normal ? 'inline-flex' : 'none';
+    if (pendingPillEl) {
+      pendingPillEl.disabled = !normal;
+      pendingPillEl.setAttribute('aria-busy', applying ? 'true' : 'false');
+      pendingPillEl.style.cursor = applying ? 'wait' : decision ? 'default' : 'pointer';
+      pendingPillEl.style.filter = applying ? 'brightness(0.98)' : 'none';
       pendingPillEl.style.transform = 'scale(1)';
     }
-    if (pendingPillSpinnerEl) pendingPillSpinnerEl.style.display = 'none';
-    if (pendingPillLabelEl) pendingPillLabelEl.textContent = pendingApplyLabel(0);
-    if (pendingPillCountEl) {
-      pendingPillCountEl.textContent = '0';
-      pendingPillCountEl.style.display = 'inline-flex';
-    }
     if (pendingTrashBtn) {
-      pendingTrashBtn.style.display = 'none';
-      pendingTrashBtn.disabled = false;
-      pendingTrashBtn.style.cursor = 'pointer';
-      pendingTrashBtn.style.opacity = '1';
+      pendingTrashBtn.style.display = decision ? 'none' : 'inline-flex';
+      pendingTrashBtn.disabled = !normal;
+      pendingTrashBtn.style.cursor = normal ? 'pointer' : 'not-allowed';
+      pendingTrashBtn.style.opacity = normal ? '1' : '0.58';
     }
-    if (pendingKeepFixingBtn) pendingKeepFixingBtn.style.display = 'none';
-    if (pendingRollbackBtn) pendingRollbackBtn.style.display = 'none';
-    refreshLiveControlsForManualApply();
+    if (pendingKeepFixingBtn) pendingKeepFixingBtn.style.display = decision ? 'inline-flex' : 'none';
+    if (pendingRollbackBtn) pendingRollbackBtn.style.display = decision ? 'inline-flex' : 'none';
   }
 
   function setPendingApplyLoading(loading, count) {
@@ -4165,24 +4337,7 @@
     const currentCount = count || parseInt(pendingPillEl.dataset.count || '0', 10) || 0;
     if (pendingApplyInFlight) storeManualApplyState(currentCount);
     else clearStoredManualApplyState();
-    if (pendingPillSpinnerEl) pendingPillSpinnerEl.style.display = pendingApplyInFlight ? 'inline-block' : 'none';
-    pendingPillLabelEl.textContent = pendingApplyInFlight
-      ? manualApplyLoadingText(currentCount)
-      : pendingApplyLabel(currentCount);
-    pendingPillCountEl.style.display = pendingApplyInFlight ? 'none' : 'inline-flex';
-    pendingPillEl.disabled = pendingApplyInFlight;
-    pendingPillEl.setAttribute('aria-busy', pendingApplyInFlight ? 'true' : 'false');
-    pendingPillEl.style.cursor = pendingApplyInFlight ? 'wait' : 'pointer';
-    pendingPillEl.style.filter = pendingApplyInFlight ? 'brightness(0.98)' : 'none';
-    pendingPillEl.style.transform = 'scale(1)';
-    pendingTrashBtn.disabled = pendingApplyInFlight;
-    pendingTrashBtn.style.cursor = pendingApplyInFlight ? 'not-allowed' : 'pointer';
-    pendingTrashBtn.style.opacity = pendingApplyInFlight ? '0.58' : '1';
-    if (pendingApplyInFlight) {
-      if (pendingKeepFixingBtn) pendingKeepFixingBtn.style.display = 'none';
-      if (pendingRollbackBtn) pendingRollbackBtn.style.display = 'none';
-      pendingTrashBtn.style.display = 'inline-flex';
-    }
+    renderPendingDockControls(pendingApplyInFlight ? 'applying' : 'normal', currentCount);
     schedulePendingDockPosition();
     refreshLiveControlsForManualApply();
   }
@@ -4196,12 +4351,13 @@
     }
     pendingPillLabelEl.textContent = pendingApplyLabel(currentPageCount);
     pendingPillCountEl.textContent = String(currentPageCount);
-    pendingPillEl.setAttribute('aria-label', 'Apply ' + currentPageCount + ' copy edit' + (currentPageCount === 1 ? '' : 's') + ' to source');
+    pendingPillEl.setAttribute('aria-label', 'Apply ' + currentPageCount + ' edit' + (currentPageCount === 1 ? '' : 's') + ' to source');
     pendingPillEl.style.display = 'inline-flex';
     pendingTrashBtn.style.display = 'inline-flex';
     pendingDockEl.style.display = 'inline-flex';
     pendingPillEl.dataset.count = String(currentPageCount);
-    if (pendingApplyInFlight || shouldResumeManualApplyLoading(currentPageCount)) setPendingApplyLoading(true, currentPageCount);
+    if (readStoredManualApplyState()?.phase === 'repair-decision') showManualApplyDecision();
+    else if (pendingApplyInFlight || shouldResumeManualApplyLoading(currentPageCount)) setPendingApplyLoading(true, currentPageCount);
     schedulePendingDockPosition();
     if (previousCount <= 0) playPendingIntroAnimation();
   }
@@ -4209,7 +4365,7 @@
   function maybeShowFirstSaveToast() {
     if (!firstSaveOfSession) return;
     firstSaveOfSession = false;
-    showToast('Saved. Click "Apply copy edits" to write changes.', 4500);
+    showToast('Saved. Click "Apply edits" to write changes.', 4500);
   }
 
   async function fetchPendingCount() {
@@ -4221,14 +4377,14 @@
       const data = await res.json();
       updatePendingCounter(data.count || 0);
     } catch (err) {
-      console.warn('[melzi] failed to fetch pending count:', err);
+      console.warn('[impeccable] failed to fetch pending count:', err);
     }
   }
 
   async function onPendingPillClick() {
     const count = parseInt(pendingPillEl?.dataset.count || '0', 10);
     if (count <= 0 || pendingApplyInFlight) return;
-    const ok = confirm('Apply ' + count + ' copy edit' + (count === 1 ? '' : 's') + ' to source?');
+    const ok = confirm('Apply ' + count + ' edit' + (count === 1 ? '' : 's') + ' to source?');
     if (!ok) return;
     let waitForSseCompletion = false;
     resetManualApplyProgress(count);
@@ -4250,19 +4406,19 @@
       const remaining = remainingManualEditCount(result);
       updatePendingCounter(remaining);
       if (result.failed && result.failed.length > 0) {
-        console.warn('[melzi] some copy edits failed:', result.failed);
+        console.warn('[impeccable] some copy edits failed:', result.failed);
         showToast('Applied ' + (result.applied?.length || 0) + ', ' + result.failed.length + ' failed - see console', 5000);
       } else {
         const n = Array.isArray(result.applied) ? result.applied.length : (result.cleared || 0);
         if (n > 0) {
           showToast('Applied ' + n + ' edit' + (n === 1 ? '' : 's'), 2500);
         } else {
-          console.warn('[melzi] apply returned no verified edits:', result);
+          console.warn('[impeccable] apply returned no verified edits:', result);
           showToast('No edits applied - see console', 4000);
         }
       }
     } catch (err) {
-      console.error('[melzi] commit failed:', err);
+      console.error('[impeccable] commit failed:', err);
       showToast('Apply failed - see console', 4000);
     } finally {
       if (waitForSseCompletion) return;
@@ -4275,7 +4431,7 @@
   async function onPendingTrashClick() {
     const count = parseInt(pendingPillEl?.dataset.count || '0', 10);
     if (count <= 0 || pendingApplyInFlight) return;
-    const ok = confirm('Discard ' + count + ' copy edit' + (count === 1 ? '' : 's') + ' on this page?');
+    const ok = confirm('Discard ' + count + ' edit' + (count === 1 ? '' : 's') + ' on this page?');
     if (!ok) return;
     try {
       const res = await fetch(
@@ -4287,12 +4443,12 @@
       const restoreFailures = restoreDiscardedManualEdits(result.entries || []);
       updatePendingCounter(0);
       if (restoreFailures > 0) {
-        showToast('Discarded ' + count + ' copy edit' + (count === 1 ? '' : 's') + ' - refresh to reset ' + restoreFailures, 4000);
+        showToast('Discarded ' + count + ' edit' + (count === 1 ? '' : 's') + ' - refresh to reset ' + restoreFailures, 4000);
       } else {
-        showToast('Discarded ' + count + ' copy edit' + (count === 1 ? '' : 's'), 2500);
+        showToast('Discarded ' + count + ' edit' + (count === 1 ? '' : 's'), 2500);
       }
     } catch (err) {
-      console.error('[melzi] discard failed:', err);
+      console.error('[impeccable] discard failed:', err);
       showToast('Discard failed - see console', 4000);
     }
   }
@@ -4305,18 +4461,8 @@
       repairAttempt: numberOrNull(msg?.repair?.attempts) || numberOrNull(msg?.repair?.attempt) || 3,
       repairMaxAttempts: numberOrNull(msg?.repair?.maxAttempts) || 3,
     });
-    if (pendingPillSpinnerEl) pendingPillSpinnerEl.style.display = 'none';
-    if (pendingPillLabelEl) pendingPillLabelEl.textContent = 'Apply needs attention';
-    if (pendingPillCountEl) pendingPillCountEl.style.display = 'none';
-    if (pendingPillEl) {
-      pendingPillEl.disabled = true;
-      pendingPillEl.setAttribute('aria-busy', 'false');
-      pendingPillEl.style.cursor = 'default';
-      pendingPillEl.style.display = 'inline-flex';
-    }
-    if (pendingTrashBtn) pendingTrashBtn.style.display = 'none';
-    if (pendingKeepFixingBtn) pendingKeepFixingBtn.style.display = 'inline-flex';
-    if (pendingRollbackBtn) pendingRollbackBtn.style.display = 'inline-flex';
+    renderPendingDockControls('decision', count);
+    if (pendingPillEl) pendingPillEl.style.display = 'inline-flex';
     if (pendingDockEl) pendingDockEl.style.display = 'inline-flex';
     schedulePendingDockPosition();
     refreshLiveControlsForManualApply();
@@ -4332,11 +4478,8 @@
         { method: 'POST', keepalive: true },
       );
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      if (pendingKeepFixingBtn) pendingKeepFixingBtn.style.display = 'none';
-      if (pendingRollbackBtn) pendingRollbackBtn.style.display = 'none';
-      if (pendingTrashBtn) pendingTrashBtn.style.display = 'inline-flex';
     } catch (err) {
-      console.error('[melzi] repair retry failed:', err);
+      console.error('[impeccable] repair retry failed:', err);
       showToast('Repair retry failed - see console', 4000);
       showManualApplyDecision({ remainingCount: count, repair: readStoredManualApplyState() });
     }
@@ -4356,11 +4499,11 @@
       );
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const result = await res.json().catch(() => ({}));
-      clearStoredManualApplyState();
+      setPendingApplyLoading(false);
       updatePendingCounter(numberOrNull(result.remainingCount) || 0);
-      showToast('Rolled back source; copy edits are still staged.', 3500);
+      showToast('Rolled back source; edits are still staged.', 3500);
     } catch (err) {
-      console.error('[melzi] manual Apply rollback failed:', err);
+      console.error('[impeccable] manual Apply rollback failed:', err);
       showToast('Rollback failed - see console', 4000);
     }
   }
@@ -4419,7 +4562,7 @@
     }
 
     if (msg.type === 'manual_edit_repair_rollback_done') {
-      clearStoredManualApplyState();
+      setPendingApplyLoading(false);
       fetchPendingCount();
       return;
     }
@@ -4463,7 +4606,11 @@
   function restoreDiscardedManualEdits(entries) {
     let failures = 0;
     for (const entry of entries || []) {
-      for (const op of entry.ops || []) {
+      // A removal that superseded a copy edit carries it; a discard that
+      // drops both must restore the text as well as the element.
+      const ops = (entry.ops || []).flatMap((op) => (op?.supersededOp ? [op, op.supersededOp] : [op]));
+      for (const op of ops) {
+        if (op?.removeElement === true) { restoreRemovedElement(op); continue; }
         if (restoreMixedTextNodeManualEdit(op)) continue;
         const el = findManualEditRestoreElement(op);
         if (!el || typeof op.originalText !== 'string' || !canRestoreManualEditElement(el, op)) {
@@ -4474,7 +4621,7 @@
       }
     }
     if (failures > 0) {
-      console.warn('[melzi] skipped unsafe copy edit DOM restore for', failures, 'edit(s). Refresh to reset the page DOM.');
+      console.warn('[impeccable] skipped unsafe copy edit DOM restore for', failures, 'edit(s). Refresh to reset the page DOM.');
     }
     return failures;
   }
@@ -4604,6 +4751,14 @@
     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
     '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>' +
     '</svg>';
+  const REMOVE_ELEMENT_LABEL = 'Remove element';
+  const REMOVE_ELEMENT_ICON =
+    '<svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M3 4h8"/><path d="M5 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1"/><path d="M4 4l.5 7a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1L10 4"/>' +
+    '</svg>';
+  // Coral chip, ink glyph: the pencil's own recipe in a destructive hue, so
+  // the two badges carry equal weight on light and dark pages.
+  const REMOVE_BADGE_FILL = 'oklch(66% 0.17 30)';
 
   function usesShadowChromeRoot() {
     const root = liveUiRoot();
@@ -4842,40 +4997,49 @@
     if (mode === 'idle' || mode === 'idle-disabled') {
       const disabled = mode === 'idle-disabled';
       editBadgeEl.innerHTML = '';
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.innerHTML = EDIT_COPY_ICON;
-      btn.setAttribute('aria-label', EDIT_COPY_LABEL);
-      Object.assign(btn.style, calloutStyle(
-        disabled ? MUTED : PRIMARY_TEXT,
-        disabled ? HAIRLINE : ACCENT,
-      ));
-      Object.assign(btn.style, {
-        padding: '4px',
-        minWidth: '22px',
-        width: '22px',
-        height: '22px',
-        minHeight: '22px',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        lineHeight: '0',
-        letterSpacing: '0',
-        background: disabled ? SURFACE : ACCENT,
-      });
-      if (disabled) {
-        btn.style.cursor = 'not-allowed';
-        btn.style.opacity = '0.55';
-        btn.disabled = true;
-        const disabledTip = EDIT_COPY_LABEL + ' is disabled while the current copy edit is applying';
-        btn.addEventListener('mouseenter', () => showConfigureBarTooltip(btn, disabledTip));
-        btn.addEventListener('mouseleave', hideConfigureBarTooltip);
-      } else {
-        btn.addEventListener('mouseenter', () => showConfigureBarTooltip(btn, EDIT_COPY_LABEL));
-        btn.addEventListener('mouseleave', hideConfigureBarTooltip);
-        btn.onclick = enterEditingMode;
+      editBadgeEl.style.gap = '4px';
+      const chip = (icon, label, fill, onClick) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.innerHTML = icon;
+        btn.setAttribute('aria-label', label);
+        Object.assign(btn.style, calloutStyle(
+          disabled ? MUTED : PRIMARY_TEXT,
+          disabled ? HAIRLINE : fill,
+        ));
+        Object.assign(btn.style, {
+          padding: '4px',
+          minWidth: '22px',
+          width: '22px',
+          height: '22px',
+          minHeight: '22px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          lineHeight: '0',
+          letterSpacing: '0',
+          background: disabled ? SURFACE : fill,
+        });
+        if (disabled) {
+          btn.style.cursor = 'not-allowed';
+          btn.style.opacity = '0.55';
+          btn.disabled = true;
+          const disabledTip = label + ' is disabled while the current edit is applying';
+          btn.addEventListener('mouseenter', () => showConfigureBarTooltip(btn, disabledTip));
+          btn.addEventListener('mouseleave', hideConfigureBarTooltip);
+        } else {
+          btn.addEventListener('mouseenter', () => showConfigureBarTooltip(btn, label));
+          btn.addEventListener('mouseleave', hideConfigureBarTooltip);
+          btn.onclick = onClick;
+        }
+        return btn;
+      };
+      // The pencil only shows when there is copy to edit; Remove is the last
+      // chip on every selection, the destructive action at the far end.
+      if (selectedElement && hasTextRows(selectedElement)) {
+        editBadgeEl.appendChild(chip(EDIT_COPY_ICON, EDIT_COPY_LABEL, ACCENT, enterEditingMode));
       }
-      editBadgeEl.appendChild(btn);
+      editBadgeEl.appendChild(chip(REMOVE_ELEMENT_ICON, REMOVE_ELEMENT_LABEL, REMOVE_BADGE_FILL, removeSelectedElement));
     } else {
       // 'editing' - show Cancel + Save separated
       editBadgeEl.innerHTML = '';
@@ -4979,7 +5143,7 @@
   }
 
   // Build/rebuild the panel's contents for the current variant AND apply
-  // its defaults to the variant wrapper (so scoped CSS responds even before
+  // its values to the variant wrapper (so scoped CSS responds even before
   // the user opens the popover). Visibility is governed by tuneOpen.
   function refreshParamsPanel() {
     if (state !== 'CYCLING') {
@@ -4990,9 +5154,9 @@
     }
     const variantEl = getVisibleVariantEl();
     const params = parseVariantParams(variantEl);
-    // Values saved before a reload come back for the variant they were saved
-    // on; a switch to any other variant starts from its defaults.
-    const restored = restoredParamValuesForVisibleVariant();
+    // Values kept for this session and variant (restored by a reload, or the
+    // last knob edit) come back; any other variant starts from its defaults.
+    const kept = keptParamValuesForVisibleVariant();
     if (!variantEl || params.length === 0) {
       paramsCurrentValues = {};
       tuneOpen = false;
@@ -5001,7 +5165,7 @@
       return;
     }
     applyParamDefaults(variantEl, params);
-    if (restored) applySavedParamValues(variantEl, params, restored);
+    if (kept) applySavedParamValues(variantEl, params, kept);
     buildParamsPanel(variantEl, params);
     if (tuneOpen) {
       // If already visible (variant cycled while open), refresh in place
@@ -5400,7 +5564,7 @@
   }
 
   function loadSvelteRuntime(runtimeModule, manifest) {
-    const modulePath = runtimeModule || '/src/lib/melzi/__runtime.js';
+    const modulePath = runtimeModule || '/src/lib/impeccable/__runtime.js';
     if (!svelteRuntimePromise) {
       const candidates = componentModuleCandidates(manifest, modulePath, manifest?.runtimeModuleAbs);
       svelteRuntimePromise = importFirstReachable(candidates, false).then((r) => r.mod);
@@ -5806,7 +5970,7 @@
       if (svelteComponentSession?.sessionId === sessionId) {
         svelteComponentSession.swapAnchor = null;
       }
-      console.error('[melzi] Failed to mount component variant ' + variantNum + ' for ' + sessionId + ':', err);
+      console.error('[impeccable] Failed to mount component variant ' + variantNum + ' for ' + sessionId + ':', err);
       reportVariantMountFailed(sessionId, variantNum, moduleUrl, err);
       // Every mount failure gets the card, so the variant-switch path (which
       // used to revert with no feedback whatsoever) says what broke too.
@@ -5949,7 +6113,7 @@
 
       const liveEl = findLiveElementForSvelteManifest(manifest);
       if (!liveEl?.parentElement) {
-        console.warn('[melzi] Could not find original element in live DOM.');
+        console.warn('[impeccable] Could not find original element in live DOM.');
         arrivedVariants = availableVariants;
         expectedVariants = Number(manifest.count) || expectedVariants || arrivedVariants;
         const saved = loadSession();
@@ -6032,9 +6196,9 @@
       positionBar();
       saveSession();
       completeParameterGenerationIfReady();
-      console.log('[melzi] Mounted ' + arrivedVariants + ' ' + manifest.framework + ' component variants.');
+      console.log('[impeccable] Mounted ' + arrivedVariants + ' ' + manifest.framework + ' component variants.');
     } catch (err) {
-      console.error('[melzi] Failed to mount component-preview variants:', err);
+      console.error('[impeccable] Failed to mount component-preview variants:', err);
       // Report the manifest PATH, never the fetch URL: that URL carries the
       // live helper token and this string is journaled.
       reportVariantMountFailed(sessionId, visibleVariant || 1, manifestPath, err);
@@ -6072,7 +6236,7 @@
   // carry that answer back, so the journal, `live-status`, and `live-resume`
   // can tell "the user is comparing variants" from "nothing ever rendered".
 
-  // Mirror of the caps in live/event-validation.mjs. Trimming here keeps a
+  // Mirror of the caps in crates/live/src/event_validation.rs. Trimming here keeps a
   // stack-trace-sized error from being rejected outright and lost.
   const MOUNT_URL_MAX = 2000;
   const MOUNT_ERROR_MAX = 1000;
@@ -6253,7 +6417,7 @@
         if (orphan) orphan.remove();
       }
     } catch (err) {
-      console.warn('[melzi] Svelte component abort cleanup failed:', err);
+      console.warn('[impeccable] Svelte component abort cleanup failed:', err);
     }
     hideShaderOverlay();
     if (pendingSvelteComponentRetryObserver) { pendingSvelteComponentRetryObserver.disconnect(); pendingSvelteComponentRetryObserver = null; }
@@ -6287,7 +6451,7 @@
         if (orphan) orphan.remove();
       }
     } catch (err) {
-      console.warn('[melzi] Svelte component reset cleanup failed:', err);
+      console.warn('[impeccable] Svelte component reset cleanup failed:', err);
     }
     hideShaderOverlay();
     if (variantObserver) { variantObserver.disconnect(); variantObserver = null; }
@@ -6297,7 +6461,7 @@
     removeVariantStateStylesheet();
     clearMountErrorCard();
     clearSession();
-    clearHandled();
+    clearHandled(sessionId);
     resetSessionFileMeta();
     currentSessionId = null;
     parameterGenerationState = 'idle';
@@ -6319,32 +6483,24 @@
   const COMPLETED_SOURCE_FALLBACK_RETRIES = 3;
   const COMPLETED_SOURCE_FALLBACK_RETRY_MS = 1200;
 
-  // Source absence can be observed while another browser accepts the session.
-  // The helper must acknowledge a conditional discard before local teardown.
-  async function discardOrphanedSession(reason, authority, recoveryRevision = liveInteractionRevision) {
+  /**
+   * Terminal recovery for a session whose source-side scaffolding no longer
+   * exists. The discard event is best-effort: with no agent polling it parks
+   * the durable session in discard_requested, which no resume path adopts;
+   * with an agent attached it triggers the normal discard finalization.
+   */
+  function discardOrphanedSession(reason) {
     const sessionId = currentSessionId;
-    const stillActive = () => sessionId && sessionId === currentSessionId
-      && (state === 'GENERATING' || state === 'CYCLING')
-      && !isSessionHandled(sessionId)
-      && !deferredRecoverySuperseded(sessionId, recoveryRevision);
-    if (!stillActive()) return;
-    console.warn('[melzi] Checking orphaned session ' + sessionId + ': ' + reason);
-    try {
-      const acknowledged = await sendEvent({ type: 'discard', id: sessionId, orphaned: true, ...authority }, { throwOnError: true });
-      if (!acknowledged?.ok) throw new Error('orphan discard was not acknowledged');
-      if (!stillActive()) return;
-      markSessionHandled();
-      cleanup({ instantChrome: true });
-      showToast('The previous live session no longer matches the source file, so it was discarded. Pick an element to start fresh.', 6000);
-    } catch (err) {
-      if (!stillActive()) return;
-      console.warn('[melzi] Keeping the session after orphan discard was refused or unavailable:', err);
-      showToast('This session changed on the live server or could not be checked. It stays open until its status is refreshed.', 6000);
-    }
+    if (!sessionId) return;
+    console.warn('[impeccable] Discarding orphaned session ' + sessionId + ': ' + reason);
+    sendEvent({ type: 'discard', id: sessionId, orphaned: true }).catch(() => {});
+    markSessionHandled();
+    cleanup({ instantChrome: true });
+    showToast('The previous live session no longer matches the source file, so it was discarded. Pick an element to start fresh.', 6000);
   }
 
-  function isJsxSourceFile(filePath) {
-    return /\.[cm]?[jt]sx$/i.test(String(filePath || ''));
+  function isCompiledTemplateSourceFile(filePath) {
+    return /\.([cm]?[jt]sx|vue|svelte)$/i.test(String(filePath || ''));
   }
 
   function sourceHasSessionWrapper(text, sessionId) {
@@ -6368,21 +6524,13 @@
    * surface back to the picker.
    */
   function probeJsxWrapperForOrphan(filePath, sessionId, opts) {
-    if (!opts.generationCompleted) return;
     const attempt = opts._orphanAttempt || 0;
-    const recoveryRevision = opts.recoveryRevision ?? liveInteractionRevision;
     const url = 'http://localhost:' + PORT + '/source?token=' + TOKEN + '&path=' + encodeURIComponent(filePath);
-    const stillActive = () => sessionId === currentSessionId
-      && (state === 'GENERATING' || state === 'CYCLING')
-      && !isSessionHandled(sessionId)
-      && !deferredRecoverySuperseded(sessionId, recoveryRevision);
-    if (!stillActive()) return;
+    const stillActive = () => sessionId === currentSessionId && (state === 'GENERATING' || state === 'CYCLING');
     const retryLater = () => {
       setTimeout(() => {
         if (!stillActive()) return;
-        // A stale framework module can mount variants between reads. Keep
-        // checking source instead of taking the mounted-wrapper shortcut.
-        probeJsxWrapperForOrphan(filePath, sessionId, { ...opts, recoveryRevision, _orphanAttempt: attempt + 1 });
+        injectVariantsFromSource(filePath, sessionId, { ...opts, _orphanAttempt: attempt + 1 });
       }, COMPLETED_SOURCE_FALLBACK_RETRY_MS);
     };
     // Discarding is durable (the session moves to the discarded phase and the
@@ -6395,12 +6543,12 @@
     const onNoWrapper = (reason) => {
       if (!stillActive()) return;
       if (attempt < COMPLETED_SOURCE_FALLBACK_RETRIES) { retryLater(); return; }
-      discardOrphanedSession(reason, opts.authority, recoveryRevision);
+      discardOrphanedSession(reason);
     };
     const onUnreadable = (detail) => {
       if (!stillActive()) return;
       if (attempt < COMPLETED_SOURCE_FALLBACK_RETRIES) { retryLater(); return; }
-      console.warn('[melzi] Could not read source to check the variant wrapper; keeping the session: ' + detail);
+      console.warn('[impeccable] Could not read source to check the variant wrapper; keeping the session: ' + detail);
       showToast('Could not read the source file to check this session; it stays open and is checked again on the next event.', 5500);
     };
     fetch(url)
@@ -6439,7 +6587,7 @@
         // in-flight generation; stay in GENERATING — the variant observer
         // is armed and the server re-delivers a missed `done`.
         if (!opts.generationCompleted) {
-          console.log('[melzi] Source has scaffold but no variants yet; still generating.');
+          console.log('[impeccable] Source has scaffold but no variants yet; still generating.');
           return;
         }
         // Generation finished, yet the read shows only the scaffold: the
@@ -6448,7 +6596,7 @@
         // here would strand the tab in GENERATING forever.
         const attempt = opts.attempt || 0;
         if (attempt < COMPLETED_SOURCE_FALLBACK_RETRIES) {
-          console.log('[melzi] Generation is done but source shows no variants yet; retrying read ('
+          console.log('[impeccable] Generation is done but source shows no variants yet; retrying read ('
             + (attempt + 1) + '/' + COMPLETED_SOURCE_FALLBACK_RETRIES + ').');
           setTimeout(() => {
             if (state !== 'GENERATING' || currentSessionId !== sessionId) return;
@@ -6479,7 +6627,7 @@
     positionBar();
     saveSession();
     completeParameterGenerationIfReady();
-    console.log('[melzi] Injected ' + arrivedVariants + ' variants from source file.');
+    console.log('[impeccable] Injected ' + arrivedVariants + ' variants from source file.');
   }
 
   /**
@@ -6499,15 +6647,15 @@
       return;
     }
     rememberSessionFileMeta({ file: filePath });
-    if (isJsxSourceFile(filePath)) {
+    if (isCompiledTemplateSourceFile(filePath)) {
       const liveWrapper = findVariantsWrapper(sessionId);
       if (liveWrapper && liveWrapper.querySelector('[data-impeccable-variant]:not([data-impeccable-variant="original"])')) {
         completeSourceInjection(liveWrapper, sessionId, { ...opts, filePath });
         return;
       }
-      // #454: never fetch/parse JSX. Missing wrap waits for mount (closed
-      // modal / other route). Insert scaffolds stay for late HMR. A replace
-      // scaffold with no variants after retries is a failed generation.
+      // #454, #1279, #1282: never fetch/parse JSX, Vue or Svelte. Missing wrap waits for
+      // mount (closed modal / other route). Insert scaffolds stay for late HMR.
+      // A replace scaffold with no variants after retries is a failed generation.
       if (opts.generationCompleted && sessionId === currentSessionId) {
         const attempt = opts.attempt || 0;
         if (attempt < COMPLETED_SOURCE_FALLBACK_RETRIES) {
@@ -6529,6 +6677,9 @@
         }
         return;
       }
+      if (opts.orphanDiscard && !liveWrapper && sessionId === currentSessionId) {
+        probeJsxWrapperForOrphan(filePath, sessionId, opts);
+      }
       return;
     }
     const url = 'http://localhost:' + PORT + '/source?token=' + TOKEN + '&path=' + encodeURIComponent(filePath);
@@ -6546,7 +6697,7 @@
         const doc = parser.parseFromString(block, 'text/html');
         const srcWrapper = doc.querySelector('[data-impeccable-variants="' + sessionId + '"]');
         if (!srcWrapper) {
-          console.warn('[melzi] Variant wrapper not found in source file.');
+          console.warn('[impeccable] Variant wrapper not found in source file.');
           // A resumed cycling session whose wrapper is gone from source is an
           // ORPHAN: the file was edited or regenerated out from under it, so
           // no reload, HMR push, or server restart can ever complete it, and
@@ -6583,7 +6734,7 @@
 
         const liveEl = resolveLiveInjectionAnchor(origContent.outerHTML);
         if (!liveEl) {
-          console.warn('[melzi] Could not find original element in live DOM.');
+          console.warn('[impeccable] Could not find original element in live DOM.');
           enterRecoveryWaitingForAnchor({
             filePath,
             sessionId,
@@ -6598,7 +6749,7 @@
         completeSourceInjection(wrapper, sessionId, { ...opts, filePath });
       })
       .catch(err => {
-        console.error('[melzi] Failed to fetch source:', err);
+        console.error('[impeccable] Failed to fetch source:', err);
         showToast('Could not load variants. Try refreshing the page.', 5000);
       });
   }
@@ -7361,8 +7512,25 @@
   let liveBarHiddenByHelper = false;
 
   function applyLiveBarPreference(hidden) {
+    const wasHidden = liveBarHiddenByHelper;
     liveBarHiddenByHelper = hidden === true;
     setLiveBarHidden(liveBarHiddenByHelper);
+    // A hidden bar has no Pick or Insert control, so a choice remembered
+    // from a visible session stops capturing the page's clicks until the
+    // bar is back. The stored prefs stay as they are.
+    if (liveBarHiddenByHelper && !wasHidden && state === 'PICKING') {
+      clearInsertPicking();
+      hideHighlight();
+      setLiveState('IDLE');
+      syncPageInteractionCursor();
+    } else if (!liveBarHiddenByHelper && wasHidden) {
+      enterPickingIfArmed();
+      syncPageInteractionCursor();
+    }
+  }
+
+  function enterPickingIfArmed() {
+    if (state === 'IDLE' && (pickActive || insertActive) && !liveBarHiddenByHelper) setLiveState('PICKING');
   }
 
   // A plain live session must never notice this code: hiding remembers the
@@ -7667,13 +7835,21 @@
           hasProjectContext = !!msg.hasProjectContext;
           // The generate lane runs without PRODUCT.md by design and never
           // sends the user to init, so its quiet chrome skips this notice.
-          if (!hasProjectContext && !liveBarHiddenByHelper) showToast(`No PRODUCT.md found. Variants will be brand-agnostic. Run ${IMPECCABLE_COMMAND} init to generate one.`, 7000);
-          console.log('[melzi] Live mode connected.');
+          // A first session gets the first move instead: what to click
+          // matters more than a missing file, and it shows once.
+          if (liveFirstRun && !liveBarHiddenByHelper) {
+            liveFirstRun = false;
+            if (!insertActive) pickActive = true;
+            saveInteractionPrefs();
+            updateGlobalBarState();
+            showToast('Click anything on the page to restyle it.', 8000);
+          } else if (!hasProjectContext && !liveBarHiddenByHelper) showToast(`No PRODUCT.md found. Variants will be brand-agnostic. Run ${IMPECCABLE_COMMAND} init to generate one.`, 7000);
+          console.log('[impeccable] Live mode connected.');
           syncAgentPollingUi(!!msg.agentPolling);
           startAgentStatusPoll();
           restoreFromActiveSessions(msg.activeSessions, 'sse_connected');
           recoverMissedGenerationCompletion(msg.activeSessions);
-          if (state === 'IDLE' && (pickActive || insertActive)) setLiveState('PICKING');
+          enterPickingIfArmed();
           syncPageInteractionCursor();
           syncPageChatFocus('sse-connected');
           break;
@@ -7820,7 +7996,7 @@
           // no hint their variant was never written (issue #384).
           if (awaitingAcceptResult?.id && msg.id === awaitingAcceptResult.id) {
             awaitingAcceptResult = null;
-            console.error('[melzi] Accept failed after teardown:', msg.message);
+            console.error('[impeccable] Accept failed after teardown:', msg.message);
             // Hedged on purpose: a carbonize-phase failure raises this same
             // error after the source WAS promoted, so "was not saved" would
             // overclaim. Normalize the server message's terminal punctuation
@@ -7830,7 +8006,7 @@
             break;
           }
           if (maybeCompleteSteer(msg)) break;
-          console.error('[melzi] Error:', msg.message);
+          console.error('[impeccable] Error:', msg.message);
           showToast('Error: ' + msg.message, 5000);
           // An agent error reply is terminal for the session it names: tear
           // it down exactly like 'discarded' (cleanup includes clearSession),
@@ -7855,11 +8031,11 @@
     evtSource.onerror = () => {
       sseRetries++;
       if (sseRetries <= SSE_MAX_RETRIES) {
-        console.log('[melzi] SSE connection lost. Retry ' + sseRetries + '/' + SSE_MAX_RETRIES + '...');
+        console.log('[impeccable] SSE connection lost. Retry ' + sseRetries + '/' + SSE_MAX_RETRIES + '...');
         return; // EventSource auto-reconnects
       }
       // Server is gone. Clean up gracefully.
-      console.log('[melzi] Live server unreachable. Cleaning up UI.');
+      console.log('[impeccable] Live server unreachable. Cleaning up UI.');
       evtSource.close();
       evtSource = null;
       handleServerLost();
@@ -7870,7 +8046,7 @@
   function handleServerLost() {
     const recoveryState = currentSessionId ? state : 'IDLE';
     if (state === 'GENERATING' || state === 'CYCLING' || state === 'SAVING') {
-      showToast('Live server connection lost. Your session is saved; reopen this page or restart live-poll.mjs to continue.', 6000);
+      showToast('Live server connection lost. Your session is saved; reopen this page or restart `impeccable live-poll` to continue.', 6000);
     }
     hideBar();
     hideHighlight();
@@ -7900,10 +8076,10 @@
     msg.token = TOKEN;
     function handleFailure(err) {
       if (opts && opts.throwOnError) {
-        console.error('[melzi] Failed to send event:', err);
+        console.error('[impeccable] Failed to send event:', err);
         throw err;
       }
-      console.debug('[melzi] Dropped optional live event:', err);
+      console.debug('[impeccable] Dropped optional live event:', err);
       return null;
     }
     // Token in the query string as well as the body: the URL token is what
@@ -7948,7 +8124,7 @@
 
   function abandonSupersededGo(sessionId) {
     if (sessionId !== currentSessionId) return;
-    console.warn('[melzi] The helper already answered this agent target; clearing session ' + sessionId + '.');
+    console.warn('[impeccable] The helper already answered this agent target; clearing session ' + sessionId + '.');
     markSessionHandled();
     cleanup({ instantChrome: true });
     showToast('The helper already answered this request, so this session was cleared. Pick an element to start fresh.', 6000);
@@ -7958,7 +8134,7 @@
   function abandonForeignSession(sessionId) {
     if (abandonedForeignSessionId === sessionId || sessionId !== currentSessionId) return;
     abandonedForeignSessionId = sessionId;
-    console.warn('[melzi] The live server has no record of session ' + sessionId + '; clearing stale local state.');
+    console.warn('[impeccable] The live server has no record of session ' + sessionId + '; clearing stale local state.');
     markSessionHandled();
     cleanup({ instantChrome: true });
     showToast('A saved live session belonged to a different project, so it was cleared. Pick an element to start fresh.', 6000);
@@ -8048,8 +8224,11 @@
       return;
     }
     if (state !== 'PICKING' || !pickActive) return;
-    const target = document.elementFromPoint(e.clientX, e.clientY);
-    if (!target || !pickable(target) || target === hoveredElement) return;
+    let target = document.elementFromPoint(e.clientX, e.clientY);
+    if (own(target)) return;
+    // Too small to pick (a bare <label>, an icon): take the nearest ancestor that is (#1297).
+    while (target && !pickable(target)) target = target.parentElement;
+    if (!target || target === hoveredElement) return;
     hoveredElement = target;
     showHighlight(target);
   }
@@ -8123,7 +8302,7 @@
     clearAnnotations();
     showAnnotOverlay(selectedElement);
     showBar('configure');
-    renderEditBadge(hasTextRows(selectedElement) ? 'idle' : 'hidden');
+    renderEditBadge('idle');
     startScrollTracking();
     maybePrefetchPage();
     maybeWarnConditionalAncestor(selectedElement);
@@ -8203,9 +8382,17 @@
     sendEvent({ type: 'prefetch', pageUrl: path });
   }
 
+  // Delete or Backspace with no modifier, the keyboard's way to the Remove
+  // badge. It only acts on an empty prompt, so clearing typed text never
+  // takes the element with it.
+  function isRemoveKey(e) {
+    return (e.key === 'Delete' || e.key === 'Backspace')
+      && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !isImeKeydown(e);
+  }
+
   function shouldPassthroughElementNav(deepActive, e) {
     if (!deepActive || !own(deepActive)) return false;
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return false;
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && !isRemoveKey(e)) return false;
     if (!/^(INPUT|TEXTAREA)$/.test(deepActive.tagName || '')) return false;
     if (deepActive.value) return false;
     if (deepActive.id === PREFIX + '-input' && state === 'CONFIGURING') return true;
@@ -8276,6 +8463,13 @@
       }
     }
 
+    if (isRemoveKey(e) && state === 'CONFIGURING' && selectedElement && configureKind !== 'insert') {
+      e.preventDefault();
+      e.stopPropagation();
+      removeSelectedElement();
+      return;
+    }
+
     // Arrow/Enter nav works in PICKING (hover) and CONFIGURING (selected, input empty)
     var navEl = (state === 'PICKING') ? hoveredElement : (state === 'CONFIGURING') ? selectedElement : null;
     if (navEl && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || (e.key === 'Enter' && state === 'PICKING'))) {
@@ -8300,7 +8494,7 @@
         clearAnnotations();
         showAnnotOverlay(selectedElement);
         showBar('configure');
-        renderEditBadge(hasTextRows(selectedElement) ? 'idle' : 'hidden');
+        renderEditBadge('idle');
         startScrollTracking();
         return;
       }
@@ -8315,7 +8509,7 @@
           showAnnotOverlay(next);
           showBar('configure');
           disableInlineEdit();
-          renderEditBadge(hasTextRows(selectedElement) ? 'idle' : 'hidden');
+          renderEditBadge('idle');
           startScrollTracking();
         }
         showHighlight(next);
@@ -8544,21 +8738,25 @@
     }
     return btoa(binary);
   }
+  // CSSOM keeps url() as written, and a relative source can't load inside the rasterized SVG.
+  function absolutizeUrls(cssText, base) {
+    return cssText.replace(/url\((?:(['"])([^'"]*)\1|([^'")\s]+))\)/g, (orig, q = '', quoted, bare) => {
+      try { return 'url(' + q + new URL(quoted ?? bare, base).href + q + ')'; } catch { return orig; }
+    });
+  }
   async function inlineFontUrls(cssText) {
     const urlRe = /url\((['"]?)(https?:\/\/[^'")\s]+)\1\)/g;
     const urls = new Set();
     let m;
-    while ((m = urlRe.exec(cssText))) {
-      if (FONT_EXT_RE.test(m[2])) urls.add(m[2]);
-    }
+    while ((m = urlRe.exec(cssText))) urls.add(m[2]);
     const map = new Map();
     await Promise.all([...urls].map(async (url) => {
       try {
         const res = await fetch(url);
         if (!res.ok) return;
         const buf = await res.arrayBuffer();
-        const ext = url.toLowerCase().match(FONT_EXT_RE)?.[1] || 'woff2';
-        const mime = FONT_MIME[ext] || 'application/octet-stream';
+        const ext = url.toLowerCase().match(FONT_EXT_RE)?.[1];
+        const mime = FONT_MIME[ext] || res.headers.get('content-type')?.split(';')[0].trim() || 'application/octet-stream';
         map.set(url, 'data:' + mime + ';base64,' + bufferToBase64(buf));
       } catch { /* skip; fall through to URL */ }
     }));
@@ -8567,27 +8765,42 @@
       return data ? 'url(' + q + data + q + ')' : orig;
     });
   }
+  // Walks a stylesheet or grouping rule in cascade order. The result is embedded
+  // without its conditional wrappers, so faces behind a false @media or @supports stay out.
+  async function collectFontFaces(source, base, chunks) {
+    let rules;
+    try {
+      rules = source.cssRules;
+    } catch {
+      if (!source.href) return;
+      try {
+        const res = await fetch(source.href);
+        if (!res.ok) return;
+        const parsed = new CSSStyleSheet();
+        parsed.replaceSync(await res.text());
+        // res.url is the base the browser used if the sheet redirected.
+        await collectFontFaces(parsed, res.url || source.href, chunks);
+      } catch { /* ignore; capture is best-effort */ }
+      return;
+    }
+    for (const rule of rules) {
+      if (rule.constructor.name === 'CSSFontFaceRule' || rule.cssText?.startsWith('@font-face')) {
+        chunks.push(absolutizeUrls(rule.cssText, base));
+      } else if (rule.media && !window.matchMedia(rule.media.mediaText).matches) {
+        continue;
+      } else if (rule.constructor.name === 'CSSSupportsRule' && !CSS.supports(rule.conditionText)) {
+        continue;
+      } else if (rule.styleSheet) {
+        await collectFontFaces(rule.styleSheet, rule.styleSheet.href, chunks);
+      } else if (rule.cssRules) {
+        await collectFontFaces(rule, base, chunks);
+      }
+    }
+  }
   async function collectFontCssText() {
     const chunks = [];
-    const fontFaceRe = /@font-face\s*\{[^}]*\}/g;
     for (const sheet of document.styleSheets) {
-      try {
-        const rules = sheet.cssRules;
-        for (const rule of rules) {
-          if (rule.constructor.name === 'CSSFontFaceRule' || rule.cssText?.startsWith('@font-face')) {
-            chunks.push(rule.cssText);
-          }
-        }
-      } catch {
-        if (!sheet.href) continue;
-        try {
-          const res = await fetch(sheet.href);
-          if (!res.ok) continue;
-          const text = await res.text();
-          let m2;
-          while ((m2 = fontFaceRe.exec(text))) chunks.push(m2[0]);
-        } catch { /* ignore; capture is best-effort */ }
-      }
+      await collectFontFaces(sheet, sheet.href || document.baseURI, chunks);
     }
     if (chunks.length === 0) return '';
     return inlineFontUrls(chunks.join('\n'));
@@ -8765,7 +8978,7 @@
         try {
           return await hideCaptureChromeForShaderProxy(() => captureElementFromRenderedAncestor(ms, el, opts));
         } catch (err) {
-          console.warn('[melzi] Svelte ancestor crop capture failed, falling back to element capture:', err);
+          console.warn('[impeccable] Svelte ancestor crop capture failed, falling back to element capture:', err);
         }
       }
       const bg = resolveCanvasBackground(el);
@@ -8829,7 +9042,7 @@
     try {
       ({ blob, paper } = await captureElementToBlob(el, snapshot, rect));
     } catch (err) {
-      console.warn('[melzi] capture failed, proceeding without screenshot:', err);
+      console.warn('[impeccable] capture failed, proceeding without screenshot:', err);
     }
     // Light up the shader overlay the moment capture is ready - no reason to
     // wait for the upload to complete before the user sees something alive.
@@ -8851,10 +9064,10 @@
           const { path: p } = await uploadRes.json();
           screenshotPath = p;
         } else {
-          console.warn('[melzi] annotation upload failed:', uploadRes.status);
+          console.warn('[impeccable] annotation upload failed:', uploadRes.status);
         }
       } catch (err) {
-        console.warn('[melzi] annotation upload failed:', err);
+        console.warn('[impeccable] annotation upload failed:', err);
       }
     }
     // Annotated requests must wait for capture + upload because the screenshot
@@ -9219,7 +9432,7 @@ void main() {
       gl.enableVertexAttribArray(uvLoc);
       gl.vertexAttribPointer(uvLoc, 2, gl.FLOAT, false, 16, 8);
     } catch (err) {
-      console.warn('[melzi] shader setup failed:', err);
+      console.warn('[impeccable] shader setup failed:', err);
       canvas.remove();
       return;
     }
@@ -9230,7 +9443,7 @@ void main() {
     try {
       bitmap = await createImageBitmap(blob);
     } catch (err) {
-      console.warn('[melzi] shader bitmap decode failed:', err);
+      console.warn('[impeccable] shader bitmap decode failed:', err);
       if (abandoned(canvas, gl)) return;
       const lose = gl.getExtension?.('WEBGL_lose_context');
       try { lose?.loseContext(); } catch {}
@@ -9304,8 +9517,8 @@ void main() {
     // (all other variants are display:none). HMR from the source rewrite will
     // replace the wrapper imminently. Don't eagerly replaceChild here - React
     // reconciliation races with our mutation and throws NotFoundError in Next
-    // 16 / Turbopack. Schedule a fallback that runs the manual swap only if
-    // HMR hasn't cleaned up by then (keeps static-server flows working).
+    // 16 / Turbopack. A page without HMR commits in scheduleAcceptCleanup;
+    // framework pages get a deferred fallback in case HMR misses the update.
     const acceptedSessionId = currentSessionId;
     const acceptedVariant = visibleVariant;
     const acceptedIsSvelteComponent = svelteComponentSession?.sessionId === acceptedSessionId
@@ -9318,6 +9531,7 @@ void main() {
       id: acceptedSessionId,
       variant: String(acceptedVariant),
       isSvelteComponent: acceptedIsSvelteComponent,
+      paramValues: { ...paramsCurrentValues },
       ...acceptedSnapshot,
       finalizing: false,
     };
@@ -9374,6 +9588,12 @@ void main() {
       // Pick → Go loop while carbonize finishes in the background.
       if (accepted?.isSvelteComponent) {
         commitAcceptedSvelteComponentToDom(accepted.id);
+      } else {
+        // A page with no HMR never swaps the wrapper, and the variant-state
+        // stylesheet goes away below, so commit now or the original and the
+        // other variants show.
+        const wrapper = findVariantsWrapper(accepted.id);
+        if (wrapper && !hasFrameworkHmrOwnership(wrapper)) commitAcceptedVariantToDom(wrapper, accepted);
       }
       cleanupAcceptedSession();
     });
@@ -9424,7 +9644,6 @@ void main() {
     if (deferredRecoverySuperseded(pending?.id, recoveryRevision)) return;
     if (acceptedDomAlreadyClean(pending)) return;
     const sessionId = pending?.id;
-    const variantId = pending?.variant;
     const wrappers = findAcceptedRuntimeWrappers(sessionId);
     if (hasFrameworkHmrOwnership(wrappers[0] || pending?.parentElement)) {
       // Vite can coalesce rapid scaffold/carbonize writes and leave the last
@@ -9442,18 +9661,7 @@ void main() {
       return;
     }
     for (const wrapper of wrappers) {
-      if (!wrapper?.isConnected) continue;
-      const accepted = wrapper.querySelector?.('[data-impeccable-variant="' + variantId + '"]');
-      if (!accepted) {
-        wrapper.remove();
-        continue;
-      }
-      const parent = wrapper.parentElement;
-      if (!parent) continue;
-      while (accepted.firstChild) {
-        parent.insertBefore(accepted.firstChild, wrapper);
-      }
-      wrapper.remove();
+      if (wrapper?.isConnected) commitAcceptedVariantToDom(wrapper, pending);
     }
     if (!acceptedDomAlreadyClean(pending)) restoreAcceptedDomFromSnapshot(pending, recoveryRevision);
   }
@@ -9519,26 +9727,33 @@ void main() {
     setLiveState('PICKING');
   }
 
-  function commitAcceptedVariantToDom(sessionId, variantId) {
-    const wrapper = findVariantsWrapper(sessionId);
-    if (!wrapper) return false;
-    const accepted = wrapper.querySelector('[data-impeccable-variant="' + variantId + '"]');
-    if (!accepted || !accepted.firstElementChild) return false;
+  function scopeAcceptedCss(css, pending) {
+    return css.replace(/\[\s*data-impeccable-variant\s*=\s*(["']?)([^"'\]\s]+)\1\s*(?:[is]\s*)?\]/gi, (_, __, variant) => (
+      '[data-impeccable-accepted="' + pending.id + (variant === pending.variant ? '' : ':' + variant) + '"]'
+    ));
+  }
+
+  // Keeps the accepted look until reload: the style, then a display: contents
+  // shell carrying the tuned --p-* values. Variant numbers repeat across
+  // sessions, so the shell and its rules move to a per-session attribute that
+  // a later session's variants and CSS cannot match.
+  function commitAcceptedVariantToDom(wrapper, pending) {
     const parent = wrapper.parentElement;
-    if (!parent) return false;
-
-    const style = wrapper.querySelector('style[data-impeccable-css]');
-    if (style && !document.querySelector('style[data-impeccable-accepted-css="' + sessionId + '"]')) {
-      const promotedStyle = style.cloneNode(true);
-      promotedStyle.setAttribute('data-impeccable-accepted-css', sessionId);
-      parent.insertBefore(promotedStyle, wrapper);
+    if (!parent) return;
+    const accepted = wrapper.querySelector('[data-impeccable-variant="' + pending.variant + '"]');
+    if (accepted) {
+      const style = wrapper.querySelector('style[data-impeccable-css]');
+      if (style) {
+        style.textContent = scopeAcceptedCss(style.textContent, pending);
+        parent.insertBefore(style, wrapper);
+      }
+      accepted.removeAttribute('data-impeccable-variant');
+      accepted.setAttribute('data-impeccable-accepted', pending.id);
+      accepted.style.display = 'contents';
+      accepted.style.cssText += variantParamDecls(pending.paramValues);
+      parent.insertBefore(accepted, wrapper);
     }
-
-    const committed = accepted.cloneNode(true);
-    committed.removeAttribute('hidden');
-    committed.style.display = 'contents';
-    parent.replaceChild(committed, wrapper);
-    return true;
+    wrapper.remove();
   }
 
   function handleDiscard() {
@@ -9740,11 +9955,13 @@ void main() {
       ? currentPreviewFile
       : (currentSourceFile || currentPreviewFile);
     if (restoreFile) {
-      // Mounted variants and a cached CYCLING state can precede the agent's
-      // final source write. The connected server summary authorizes the
-      // completed-source orphan check in recoverMissedGenerationCompletion.
+      // A restored CYCLING session promises variants already written into
+      // source; if they are not there (after retries), the session is an
+      // orphan and must self-discard instead of freezing the picker (#439).
+      // GENERATING restores make no such promise: deferred-wrapper flows
+      // legitimately have no wrapper in source until the agent's write lands.
       injectVariantsFromSource(restoreFile, currentSessionId, {
-        orphanDiscard: !isJsxSourceFile(restoreFile) && savedState === 'CYCLING' && !isFrameworkComponentPreviewMode(currentPreviewMode),
+        orphanDiscard: savedState === 'CYCLING' && !isFrameworkComponentPreviewMode(currentPreviewMode),
       });
       return true;
     }
@@ -9769,36 +9986,19 @@ void main() {
   // variants from source when behind. Mirrors the `done` handler's source
   // fallback, including its give-HMR-the-first-chance settle delay.
   function recoverMissedGenerationCompletion(activeSessions) {
-    if (!currentSessionId || (state !== 'GENERATING' && state !== 'CYCLING')) return;
-    if (isSessionHandled(currentSessionId)) return;
+    if (!currentSessionId || state !== 'GENERATING') return;
     if (!Array.isArray(activeSessions)) return;
-    const summary = activeSessions.find((session) => session?.id === currentSessionId && pageMatchesCurrent(session.pageUrl));
+    const summary = activeSessions.find((session) => session?.id === currentSessionId);
     if (!summary?.generationCompletedAt || summary.generationCanceled) return;
     if (isTerminalSessionSummary(summary)) return;
-    if (!ADOPTABLE_SESSION_PHASES.has(String(summary.phase || ''))) return;
+    if (arrivedVariants > 0 && arrivedVariants >= expectedVariants) return;
     rememberSessionFileMeta(summary);
     const sessionId = currentSessionId;
     const file = isFrameworkComponentPreviewMode(currentPreviewMode)
       ? currentPreviewFile
       : (summary.sourceFile || summary.previewFile || currentSourceFile || currentPreviewFile);
     if (!file) return;
-    if (summary.pageUrl && (summary.sourceFile || summary.previewFile)
-        && !isFrameworkComponentPreviewMode(currentPreviewMode) && isJsxSourceFile(file)) {
-      // Framework hydration may restore a cached wrapper after source was
-      // edited out. Completed source owns validity even when all DOM variants
-      // are present; it is never parsed or injected as JSX.
-      probeJsxWrapperForOrphan(file, sessionId, {
-        generationCompleted: true,
-        recoveryRevision: liveInteractionRevision,
-        authority: {
-          expectedGenerationCompletedAt: summary.generationCompletedAt,
-          expectedSourceFile: file,
-          expectedPageUrl: summary.pageUrl,
-        },
-      });
-    }
-    if (state !== 'GENERATING' || (arrivedVariants > 0 && arrivedVariants >= expectedVariants)) return;
-    console.log('[melzi] Reconnected after generation completed; recovering variants from source.');
+    console.log('[impeccable] Reconnected after generation completed; recovering variants from source.');
     setTimeout(() => {
       if (sessionId !== currentSessionId || state !== 'GENERATING') return;
       if (arrivedVariants > 0 && arrivedVariants >= expectedVariants) return;
@@ -9841,7 +10041,7 @@ void main() {
     // is that project's leftover, never a session this server can complete;
     // resuming it freezes the picker behind an unfinishable banner.
     if (saved?.appRoot && APP_ROOT && saved.appRoot !== APP_ROOT) {
-      console.warn('[melzi] Ignoring saved live session from another project (' + saved.appRoot + ').');
+      console.warn('[impeccable] Ignoring saved live session from another project (' + saved.appRoot + ').');
       sessionState.clearSession();
       return null;
     }
@@ -9969,8 +10169,9 @@ void main() {
     toastEl = null;
   }
 
-  function showToast(message, duration) {
+  function showToast(message, duration, opts) {
     dismissToast();
+    const action = opts && opts.action;
     // Stack the toast above the global bar (which sits at bottom:14px) so
     // the two never overlap. Read the bar's actual rect - its height varies
     // with hover-expanded labels - and fall back to a sensible default
@@ -9987,11 +10188,33 @@ void main() {
       padding: '8px 16px', borderRadius: '8px',
       zIndex: Z.toast, opacity: '0',
       transition: 'opacity 0.25s ' + EASE + ', transform 0.25s ' + EASE,
-      pointerEvents: 'none', maxWidth: '420px', textAlign: 'center',
+      pointerEvents: action ? 'auto' : 'none', maxWidth: '420px', textAlign: 'center',
     });
     toastEl = currentToast;
     currentToast.id = PREFIX + '-toast';
-    currentToast.textContent = message;
+    if (action) {
+      Object.assign(currentToast.style, {
+        display: 'inline-flex', alignItems: 'center', gap: '12px', padding: '6px 6px 6px 16px',
+      });
+      const label = el('span', { whiteSpace: 'nowrap' });
+      label.textContent = message;
+      const btn = el('button', {
+        fontFamily: FONT, fontSize: '12px', fontWeight: '600', lineHeight: '1',
+        color: C.ink, background: C.brand, border: 'none', borderRadius: '999px',
+        padding: '6px 11px', cursor: 'pointer', whiteSpace: 'nowrap',
+      });
+      btn.type = 'button';
+      btn.textContent = action.label;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (toastEl === currentToast) dismissToast();
+        action.onClick();
+      });
+      currentToast.append(label, btn);
+    } else {
+      currentToast.textContent = message;
+    }
     uiAppend(currentToast);
     requestAnimationFrame(() => {
       if (toastEl !== currentToast) return;
@@ -10293,7 +10516,7 @@ void main() {
               showShaderOverlay(shaderTarget, blob, rect, paper);
             }
           } catch (err) {
-            console.warn('[melzi] shader resume failed:', err);
+            console.warn('[impeccable] shader resume failed:', err);
           }
         })();
       }
@@ -10344,7 +10567,11 @@ void main() {
         return { pickActive: !!prefs.pickActive, insertActive: false };
       }
     } catch { /* ignore */ }
-    return { pickActive: false, insertActive: false };
+    // Nothing stored: this browser's first Live session here. Pick turns on
+    // when the helper connects with the bar visible (see `connected`), so the
+    // first click on the page already does something; the generate lane hides
+    // the bar, and a Pick nobody can see or turn off would eat app clicks.
+    return { pickActive: false, insertActive: false, firstRun: true };
   }
 
   function saveInteractionPrefs() {
@@ -10362,6 +10589,7 @@ void main() {
   }
 
   let pickActive = loadInteractionPrefs().pickActive;
+  let liveFirstRun = loadInteractionPrefs().firstRun === true;
   let insertActive = loadInteractionPrefs().insertActive;
   let configureKind = 'replace';
   let insertLineEl = null;
@@ -10415,7 +10643,7 @@ void main() {
   const STEER_AWAIT_TIMEOUT_MS = 120000;
   const AGENT_STATUS_POLL_MS = 5000;
   const AGENT_DISCONNECTED_MARK = 'oklch(62% 0 0 / 0.78)';
-  const AGENT_DISCONNECTED_TIP = 'Agent disconnected - run live-poll.mjs to connect';
+  const AGENT_DISCONNECTED_TIP = 'Agent disconnected - run impeccable live-poll to connect';
   // The indicator tracks whether a poll is parked, which is what decides if
   // steering can reach the agent right now. That goes quiet two ways, and they
   // need different copy: nobody is polling at all, or the agent took the work
@@ -10791,7 +11019,7 @@ void main() {
 
   function steerFocusLog(reason, extra) {
     if (!steerFocusDebugEnabled()) return;
-    console.log('[melzi.steer]', reason, {
+    console.log('[impeccable.steer]', reason, {
       state,
       pickActive,
       pageChatReady: !!pageChatInput,
@@ -11006,7 +11234,7 @@ void main() {
       return head + 'The agent is still busy with the current generation - your message was not lost, but it never got picked up. Send it again once the variants land.';
     }
     if (!agentPollingConnected) {
-      return head + 'No agent is polling right now. Run live-poll.mjs, then send it again.';
+      return head + 'No agent is polling right now. Run impeccable live-poll, then send it again.';
     }
     return head + 'The agent picked it up but never replied with steer_done. Check the agent session for a stalled or failed steer.';
   }
@@ -11247,7 +11475,7 @@ void main() {
 
     rec.onerror = (event) => {
       const code = event.error || 'unknown';
-      console.warn('[melzi.voice] recognition error:', code);
+      console.warn('[impeccable.voice] recognition error:', code);
       const message = steerVoiceErrorMessage(code);
       stopVoice({ suppressSubmit: true, message: message || undefined });
     };
@@ -11261,7 +11489,7 @@ void main() {
     try {
       rec.start();
     } catch (err) {
-      console.warn('[melzi.voice] start failed:', err);
+      console.warn('[impeccable.voice] start failed:', err);
       stopVoice({
         suppressSubmit: true,
         message: err?.message?.includes('already started')
@@ -11578,7 +11806,7 @@ void main() {
     steerFocusLog('page-chat-mounted', {});
   }
 
-  // Melzi mark - same paths as site/components/Header.astro + favicon.svg.
+  // Impeccable mark - same paths as site/components/Header.astro + favicon.svg.
   function brandMarkSvg(color = C.brand, size = 18) {
     return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" aria-hidden="true">
       <path d="M5 2.5 L13.5 2.5 L5.5 21.5 L5 21.5 Q2.5 21.5 2.5 19 L2.5 5 Q2.5 2.5 5 2.5 Z"/>
@@ -11615,8 +11843,8 @@ void main() {
     // The tooltip is mouse-only, so carry the same distinction in the label or
     // screen-reader users are left with the vaguer of the two readings.
     globalBarBrandEl.setAttribute('aria-label', agentStatusMessage
-      ? 'Melzi live mode - ' + (agentHasWorkInFlight() ? 'agent is working' : 'agent not polling')
-      : 'Melzi live mode');
+      ? 'Impeccable live mode - ' + (agentHasWorkInFlight() ? 'agent is working' : 'agent not polling')
+      : 'Impeccable live mode');
     globalBarBrandEl.removeAttribute('title');
     globalBarBrandEl.style.cursor = agentStatusMessage ? 'help' : 'default';
     const mark = globalBarBrandEl.querySelector('[data-brand-mark]');
@@ -11772,7 +12000,7 @@ void main() {
       globalBarEl.dataset.liveBarDisplay = 'flex';
     }
 
-    // Brand mark - kinpaku Melzi icon (site header / favicon paths).
+    // Brand mark - kinpaku Impeccable icon (site header / favicon paths).
     const brand = el('span', {
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       alignSelf: 'stretch', position: 'relative',
@@ -11784,7 +12012,7 @@ void main() {
     brand.id = PREFIX + '-global-bar-brand';
     brand.dataset.agentConnected = 'false';
     brand.setAttribute('role', 'img');
-    brand.setAttribute('aria-label', 'Melzi live mode - agent not polling');
+    brand.setAttribute('aria-label', 'Impeccable live mode - agent not polling');
 
     const brandMark = el('span', {
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -11951,7 +12179,7 @@ void main() {
       boxShadow: '0 4px 16px oklch(0% 0 0 / 0.16), 0 1px 3px oklch(0% 0 0 / 0.1)',
       transition: 'filter 0.12s ease, transform 0.1s ease, box-shadow 0.18s ease',
     });
-    pendingPillEl.title = 'Apply copy edits to source';
+    pendingPillEl.title = 'Apply edits to source';
     pendingPillSpinnerEl = el('span', {
       display: 'none',
       width: '12px',
@@ -11966,7 +12194,7 @@ void main() {
       boxSizing: 'border-box',
     });
     pendingPillLabelEl = el('span', { lineHeight: '1', whiteSpace: 'nowrap' });
-    pendingPillLabelEl.textContent = 'Apply copy edits';
+    pendingPillLabelEl.textContent = 'Apply edits';
     pendingPillCountEl = el('span', {
       display: 'inline-flex',
       alignItems: 'center',
@@ -12036,10 +12264,10 @@ void main() {
       textAlign: 'center',
       transition: 'opacity 0.16s ease, transform 0.18s ' + EASE,
     });
-    pendingTrashTooltipEl.textContent = 'Discard copy edits';
+    pendingTrashTooltipEl.textContent = 'Discard edits';
     pendingTrashTooltipEl.setAttribute('role', 'tooltip');
     pendingTrashBtn.appendChild(pendingTrashTooltipEl);
-    pendingTrashBtn.setAttribute('aria-label', 'Discard copy edits on this page');
+    pendingTrashBtn.setAttribute('aria-label', 'Discard edits on this page');
     const showTrashTooltip = () => {
       pendingTrashBtn.style.color = P.accent;
       pendingTrashBtn.style.boxShadow = '0 7px 22px oklch(0% 0 0 / 0.16), 0 2px 5px oklch(0% 0 0 / 0.1)';
@@ -12085,7 +12313,7 @@ void main() {
     pendingKeepFixingBtn.setAttribute('aria-label', 'Ask the agent to keep fixing Apply errors');
     pendingKeepFixingBtn.addEventListener('click', onPendingKeepFixingClick);
     pendingRollbackBtn = makePendingDecisionBtn('Rollback', false);
-    pendingRollbackBtn.setAttribute('aria-label', 'Rollback source and keep copy edits staged');
+    pendingRollbackBtn.setAttribute('aria-label', 'Rollback source and keep edits staged');
     pendingRollbackBtn.addEventListener('click', onPendingRollbackClick);
 
     pendingDockEl.appendChild(pendingPillEl);
@@ -12432,7 +12660,7 @@ void main() {
     document.getElementById(PICK_CURSOR_STYLE_ID)?.remove();
     removeVariantStateStylesheet();
     window.__IMPECCABLE_LIVE_INIT__ = false;
-    console.log('[melzi] Live mode exited.');
+    console.log('[impeccable] Live mode exited.');
   }
 
   //
@@ -12519,8 +12747,8 @@ void main() {
     }
   }
 
-  // Neutral panel palette - deliberately NOT Melzi-branded. The panel is
-  // a viewer of the project's design system, not an Melzi surface.
+  // Neutral panel palette - deliberately NOT Impeccable-branded. The panel is
+  // a viewer of the project's design system, not an Impeccable surface.
   const DP = {
     canvas:   'oklch(94% 0 0)',            // panel background
     tile:     'oklch(98.5% 0 0)',          // card-on-canvas
@@ -13638,9 +13866,9 @@ void main() {
     // Check for an active session to resume (variant wrapper already in DOM after HMR)
     const resumed = resumeSession();
     if (!resumed) {
-      console.log('[melzi] Live variant mode ready. Hover over elements to pick one.');
+      console.log('[impeccable] Live variant mode ready. Hover over elements to pick one.');
     } else {
-      console.log('[melzi] Resumed active variant session ' + currentSessionId + ' (' + arrivedVariants + '/' + expectedVariants + ' variants).');
+      console.log('[impeccable] Resumed active variant session ' + currentSessionId + ' (' + arrivedVariants + '/' + expectedVariants + ' variants).');
     }
 
     // SvelteKit, React, and other frameworks may restore a durable session
@@ -13654,13 +13882,13 @@ void main() {
         if (!wrapper) return;
         scout.disconnect();
         if (resumeSession(deferredResumeRevision, { reason: 'browser_resumed_deferred_wrapper' })) {
-          console.log('[melzi] Resumed deferred session ' + currentSessionId + ' (post-hydration).');
+          console.log('[impeccable] Resumed deferred session ' + currentSessionId + ' (post-hydration).');
         }
       });
       scout.observe(document.body, { childList: true, subtree: true });
     }
 
-    if (state === 'IDLE' && (pickActive || insertActive)) setLiveState('PICKING');
+    enterPickingIfArmed();
     syncPageInteractionCursor();
     syncPageChatFocus('init-complete');
   }

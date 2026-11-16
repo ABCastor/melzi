@@ -25,6 +25,7 @@ env:
   GENERATED_PATHS: >-
     .agent
     .agents
+    .devin
     .dsh
     .gemini
     .github/agents

@@ -1,12 +1,12 @@
 {
-  "name": "melzi",
-  "version": "4.7.1",
-  "description": "Design and refine interfaces with Melzi skills, specialist agents, and design checks.",
+  "name": "impeccable",
+  "version": "4.9.2",
+  "description": "Design and refine interfaces with Impeccable skills, specialist agents, and design checks.",
   "author": {
-    "name": "Anneo22"
+    "name": "Renaissance Geek, Inc."
   },
-  "homepage": "https://github.com/ABCastor/melzi",
-  "repository": "https://github.com/ABCastor/melzi",
+  "homepage": "https://impeccable.style",
+  "repository": "https://github.com/pbakaus/impeccable",
   "license": "Apache-2.0",
   "keywords": [
     "design",

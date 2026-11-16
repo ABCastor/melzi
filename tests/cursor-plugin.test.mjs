@@ -108,7 +108,13 @@ describe('Cursor native plugin', () => {
     assert.equal(manifest.name, 'melzi');
     assert.equal(manifest.author.name, 'Anneo22');
     assert.equal(manifest.repository, 'https://github.com/ABCastor/melzi');
-    assert.equal(fs.readdirSync(path.join(output, 'agents')).length, 4);
+    assert.deepEqual(fs.readdirSync(path.join(output, 'agents')).sort(), [
+      'impeccable-asset-producer.md',
+      'impeccable-documenter.md',
+      'impeccable-finish-reviewer.md',
+      'impeccable-manual-edit-applier.md',
+      'impeccable-motion-reviewer.md',
+    ]);
     let links = 0;
     for (const rel of fs.readdirSync(output, { recursive: true }).filter(file => file.endsWith('.md'))) {
       const filename = path.join(output, rel);
