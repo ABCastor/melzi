@@ -50,7 +50,7 @@ fn read(path: &str) -> String {
 fn create_fake_universal_bundle(root: &str, providers: &[&str]) -> String {
     let bundle_root = format!("{root}/universal-bundle");
     for provider in providers {
-        let skill_dir = format!("{bundle_root}/{provider}/skills/impeccable");
+        let skill_dir = format!("{bundle_root}/{provider}/skills/melzi");
         write(
             &format!("{skill_dir}/SKILL.md"),
             &format!("---\nname: impeccable\nversion: 9.9.9-local\n---\n\nLocal deterministic bundle for {provider}.\n"),
@@ -65,7 +65,7 @@ fn create_fake_universal_bundle(root: &str, providers: &[&str]) -> String {
             &format!("{bundle_root}/.claude/settings.json"),
             &json!({
                 "description": "fresh claude hook",
-                "hooks": { "PostToolUse": [{ "matcher": "Edit|Write", "hooks": [{ "type": "command", "command": "node \".claude/skills/impeccable/scripts/hook.mjs\"" }] }], "Stop": [{ "hooks": [{ "type": "command", "command": "node \".claude/skills/impeccable/scripts/hook.mjs\"" }] }] },
+                "hooks": { "PostToolUse": [{ "matcher": "Edit|Write", "hooks": [{ "type": "command", "command": "node \".claude/skills/melzi/scripts/hook.mjs\"" }] }], "Stop": [{ "hooks": [{ "type": "command", "command": "node \".claude/skills/melzi/scripts/hook.mjs\"" }] }] },
             })
             .to_string(),
         );
@@ -79,7 +79,7 @@ fn create_fake_universal_bundle(root: &str, providers: &[&str]) -> String {
             &format!("{bundle_root}/.cursor/hooks.json"),
             &json!({
                 "version": 1,
-                "hooks": { "preToolUse": [{ "command": "node \".cursor/skills/impeccable/scripts/hook-before-edit.mjs\"" }] },
+                "hooks": { "preToolUse": [{ "command": "node \".cursor/skills/melzi/scripts/hook-before-edit.mjs\"" }] },
             })
             .to_string(),
         );
@@ -92,7 +92,7 @@ fn create_fake_universal_bundle(root: &str, providers: &[&str]) -> String {
         write(
             &format!("{bundle_root}/.codex/hooks.json"),
             &json!({
-                "hooks": { "PostToolUse": [{ "matcher": "apply_patch", "hooks": [{ "type": "command", "command": "node \".codex/skills/impeccable/scripts/hook.mjs\"" }] }] },
+                "hooks": { "PostToolUse": [{ "matcher": "apply_patch", "hooks": [{ "type": "command", "command": "node \".codex/skills/melzi/scripts/hook.mjs\"" }] }] },
             })
             .to_string(),
         );
@@ -101,7 +101,7 @@ fn create_fake_universal_bundle(root: &str, providers: &[&str]) -> String {
         write(
             &format!("{bundle_root}/.grok/hooks/impeccable.json"),
             &json!({
-                "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "node \".grok/skills/impeccable/scripts/hook.mjs\"" }] }] },
+                "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "node \".grok/skills/melzi/scripts/hook.mjs\"" }] }] },
             })
             .to_string(),
         );
@@ -114,7 +114,7 @@ fn create_fake_universal_bundle(root: &str, providers: &[&str]) -> String {
                 "hooks": { "postToolUse": [{
                     "type": "command",
                     "matcher": "edit|create|apply_patch",
-                    "bash": "[ ! -f \"$(git rev-parse --show-toplevel)/.github/skills/impeccable/scripts/impeccable\" ] || \"$(git rev-parse --show-toplevel)/.github/skills/impeccable/scripts/impeccable\" hook",
+                    "bash": "[ ! -f \"$(git rev-parse --show-toplevel)/.github/skills/melzi/scripts/impeccable\" ] || \"$(git rev-parse --show-toplevel)/.github/skills/melzi/scripts/impeccable\" hook",
                     "timeoutSec": 5
                 }] },
             })
@@ -330,7 +330,7 @@ fn local_bundle_uses_mkdtemp_staging_under_tmpdir() {
         use std::os::unix::fs::PermissionsExt;
         assert_eq!(std::fs::metadata(&staging).unwrap().permissions().mode() & 0o777, 0o700);
     }
-    assert!(std::path::Path::new(&format!("{staging}/.claude/skills/impeccable/SKILL.md")).exists());
+    assert!(std::path::Path::new(&format!("{staging}/.claude/skills/melzi/SKILL.md")).exists());
     std::fs::remove_dir_all(&root).ok();
 }
 
@@ -427,10 +427,10 @@ fn dsh_install_and_update_use_relocated_home_without_touching_project_skills() {
     let bundle = create_fake_universal_bundle(&root, &[".dsh"]);
     let mut env = base_env(&home, &tmpdir, &bundle);
     env.insert("DSH_HOME".into(), dsh_home.clone());
-    let project_skill = jsp::join(&[&project, ".dsh", "skills", "impeccable", "SKILL.md"]);
+    let project_skill = jsp::join(&[&project, ".dsh", "skills", "melzi", "SKILL.md"]);
     write(&project_skill, "project skill must stay untouched");
-    let installed = jsp::join(&[&dsh_home, "skills", "impeccable", "SKILL.md"]);
-    let source = jsp::join(&[&bundle, ".dsh", "skills", "impeccable", "SKILL.md"]);
+    let installed = jsp::join(&[&dsh_home, "skills", "melzi", "SKILL.md"]);
+    let source = jsp::join(&[&bundle, ".dsh", "skills", "melzi", "SKILL.md"]);
 
     let r = run_cli(&["install", "-y", "--providers=deepseek-harness", "--scope=global"], &project, &env);
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
@@ -528,7 +528,7 @@ fn check_ignores_leftover_pi_project_layout_in_home_rooted_tree() {
         &env,
     );
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
-    assert!(std::path::Path::new(&format!("{home}/.pi/agent/skills/impeccable/SKILL.md")).exists());
+    assert!(std::path::Path::new(&format!("{home}/.pi/agent/skills/melzi/SKILL.md")).exists());
     write(
         &format!("{home}/.pi/skills/other/SKILL.md"),
         "---\nname: other\n---\nLeftover project-layout skill.\n",
@@ -561,8 +561,8 @@ fn check_sees_home_rooted_project_scope_pi_install() {
         &env,
     );
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
-    assert!(std::path::Path::new(&format!("{home}/.pi/skills/impeccable/SKILL.md")).exists());
-    assert!(!std::path::Path::new(&format!("{home}/.pi/agent/skills/impeccable/SKILL.md")).exists());
+    assert!(std::path::Path::new(&format!("{home}/.pi/skills/melzi/SKILL.md")).exists());
+    assert!(!std::path::Path::new(&format!("{home}/.pi/agent/skills/melzi/SKILL.md")).exists());
     write(
         &format!("{home}/.pi/agent/skills/other/SKILL.md"),
         "---\nname: other\n---\nLeftover user-layout skill.\n",
@@ -594,7 +594,7 @@ fn check_reports_stale_impeccable_in_home_rooted_tree() {
     );
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
     write(
-        &format!("{home}/.claude/skills/impeccable/SKILL.md"),
+        &format!("{home}/.claude/skills/melzi/SKILL.md"),
         "---\nname: impeccable\nversion: 0.0.0-stale\n---\n\nStale copy.\n",
     );
 
@@ -623,7 +623,7 @@ fn check_ignores_engine_binary_installed_beside_the_skill() {
     );
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
     // A real install fetches the engine here; the bundle never ships it.
-    write(&format!("{project}/.claude/skills/impeccable/scripts/bin/windows-x64/impeccable.exe"), "MZ");
+    write(&format!("{project}/.claude/skills/melzi/scripts/bin/windows-x64/impeccable.exe"), "MZ");
 
     let r = run_cli(&["check"], &project, &env);
     assert!(r.stdout.contains("Skills are up to date"), "{}\n{}", r.stdout, r.stderr);
@@ -683,7 +683,7 @@ fn manifest_names_launcher(manifest: &str, home: &str, provider: &str) -> bool {
             _ => false,
         }
     }
-    let p = jsp::join(&[home, provider, "skills", "impeccable", "scripts", "impeccable"]);
+    let p = jsp::join(&[home, provider, "skills", "melzi", "scripts", "impeccable"]);
     let escaped = p.replace('\\', "\\\\");
     let value: Value = serde_json::from_str(&read(manifest)).unwrap();
     any_string(&value, &|s: &str| s.contains(&p) || s.contains(&escaped))
@@ -714,8 +714,8 @@ fn global_install_rewrites_grok_project_hooks_to_the_global_skill_path() {
         r.stdout
     );
     for provider in [".claude", ".agents", ".cursor", ".grok"] {
-        assert!(std::path::Path::new(&format!("{home}/{provider}/skills/impeccable/SKILL.md")).exists());
-        assert!(!std::path::Path::new(&format!("{tmp}/{provider}/skills/impeccable/SKILL.md")).exists());
+        assert!(std::path::Path::new(&format!("{home}/{provider}/skills/melzi/SKILL.md")).exists());
+        assert!(!std::path::Path::new(&format!("{tmp}/{provider}/skills/melzi/SKILL.md")).exists());
     }
     // Launcher-era adaptation: the JS asserted the rewritten hook.mjs path;
     // the engine writes the launcher form pointing at the same global root.
@@ -747,7 +747,7 @@ fn global_install_rewrites_grok_project_hooks_to_the_global_skill_path() {
         "grok hook not rewritten to the global skill path: {grok_hooks}"
     );
     assert!(
-        !grok_hooks.contains("\\\".grok/skills/impeccable/scripts/hook.mjs\\\"") && !grok_hooks.contains("hook.mjs"),
+        !grok_hooks.contains("\\\".grok/skills/melzi/scripts/hook.mjs\\\"") && !grok_hooks.contains("hook.mjs"),
         "grok hook still points at the project-relative bundle command: {grok_hooks}"
     );
     std::fs::remove_dir_all(&root).ok();
@@ -777,7 +777,7 @@ fn global_install_moves_project_hooks_home_without_duplicates() {
         write(&format!("{bundle_root}/{rel}"), &(target.manifest)().to_string());
     }
     let env = base_env(&home, &tmpdir, &bundle_root);
-    let launcher = |p: &str| jsp::join(&[&home, p, "skills", "impeccable", "scripts", "impeccable"]);
+    let launcher = |p: &str| jsp::join(&[&home, p, "skills", "melzi", "scripts", "impeccable"]);
     let leftovers = |dir: &str| {
         let cursor = launcher(".cursor");
         write(&format!("{dir}/.cursor/hooks.json"), &json!({ "version": 1, "hooks": { "postToolUse": [
@@ -803,7 +803,7 @@ fn global_install_moves_project_hooks_home_without_duplicates() {
     // Copilot's hook stays in the repo, naming the .github skill (each OS
     // spells the launcher path its own way, so compare with one separator).
     let copilot = read(&format!("{project}/.github/hooks/impeccable.json")).replace("\\\\", "/").replace('\\', "/");
-    assert!(copilot.contains(".github/skills/impeccable/scripts/impeccable"), "{copilot}");
+    assert!(copilot.contains(".github/skills/melzi/scripts/impeccable"), "{copilot}");
 
     // Same project again: everything is in place, nothing is rewritten.
     let home_codex = read(&format!("{home}/.codex/hooks.json"));
@@ -849,7 +849,7 @@ fn repeat_global_install_rewrites_a_legacy_home_hook() {
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
 
     // An older install's home manifests: legacy `.mjs` commands only.
-    let legacy = |p: &str, script: &str| format!("node '{}'", jsp::join(&[&home, p, "skills", "impeccable", "scripts", script]));
+    let legacy = |p: &str, script: &str| format!("node '{}'", jsp::join(&[&home, p, "skills", "melzi", "scripts", script]));
     write(&format!("{home}/.codex/hooks.json"), &json!({ "hooks": {
         "PostToolUse": [{ "matcher": "apply_patch", "hooks": [{ "type": "command", "command": legacy(".agents", "hook.mjs") }] }],
         "SessionStart": [{ "hooks": [{ "type": "command", "command": "./hello.sh" }] }],
@@ -901,7 +901,7 @@ fn repeat_global_install_prunes_a_legacy_project_hook_it_repairs() {
 
     // A v3-era project manifest: a dead `node .../hook.mjs` naming the
     // project's own skill copy.
-    let legacy = format!("node '{}'", jsp::join(&[&project, ".agents", "skills", "impeccable", "scripts", "hook.mjs"]));
+    let legacy = format!("node '{}'", jsp::join(&[&project, ".agents", "skills", "melzi", "scripts", "hook.mjs"]));
     write(&format!("{project}/.codex/hooks.json"), &json!({ "hooks": {
         "PostToolUse": [{ "matcher": "Edit|Write|apply_patch", "hooks": [{ "type": "command", "command": legacy }] }],
     } }).to_string());
@@ -938,9 +938,9 @@ fn global_install_rewrites_github_project_hook_to_the_global_skill_path() {
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
     let manifest = read(&format!("{project}/.github/hooks/impeccable.json"));
     let expected = if cfg!(windows) {
-        format!("{}/.github/skills/impeccable/scripts/impeccable", home.replace('\\', "/"))
+        format!("{}/.github/skills/melzi/scripts/impeccable", home.replace('\\', "/"))
     } else {
-        "$HOME/.github/skills/impeccable/scripts/impeccable".to_string()
+        "$HOME/.github/skills/melzi/scripts/impeccable".to_string()
     };
     assert!(
         manifest.contains(&expected),
@@ -977,7 +977,7 @@ fn windows_global_github_hook_uses_userprofile_when_shell_home_differs() {
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
     let manifest = read(&format!("{project}/.github/hooks/impeccable.json"));
     let expected = format!(
-        "{}/.github/skills/impeccable/scripts/impeccable",
+        "{}/.github/skills/melzi/scripts/impeccable",
         home.replace('\\', "/")
     );
     assert!(manifest.contains(&expected), "global GitHub hook did not name USERPROFILE: {manifest}");
@@ -997,17 +997,17 @@ fn user_scope_update_writes_claude_user_settings() {
     }
     std::fs::create_dir_all(format!("{project}/.git")).unwrap();
     write(
-        &format!("{home}/.claude/skills/impeccable/SKILL.md"),
+        &format!("{home}/.claude/skills/melzi/SKILL.md"),
         "---\nname: impeccable\nversion: 1.0.0\n---\n",
     );
     write(&format!("{home}/.claude/settings.json"), r#"{"model":"claude-sonnet-5"}"#);
     write(
         &format!("{home}/.claude/settings.local.json"),
-        r#"{"hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"node \"~/.claude/skills/impeccable/scripts/hook.mjs\""}]}]}}"#,
+        r#"{"hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"node \"~/.claude/skills/melzi/scripts/hook.mjs\""}]}]}}"#,
     );
     write(
         &format!("{project}/.claude/settings.local.json"),
-        r#"{"hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\""}]}]}}"#,
+        r#"{"hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"node \"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/hook.mjs\""}]}]}}"#,
     );
     let bundle = create_fake_universal_bundle(&project, &[".claude"]);
     let env = base_env(&home, &tmpdir, &bundle);
@@ -1046,7 +1046,7 @@ fn slash_norm(s: &str) -> String {
     out
 }
 
-/// The Impeccable entries of a Cursor manifest, by event, separators
+/// The Melzi entries of a Cursor manifest, by event, separators
 /// normalized.
 fn cursor_impeccable_events(manifest: &str) -> Vec<(String, String)> {
     let value: Value = serde_json::from_str(&read(manifest)).unwrap();
@@ -1054,7 +1054,7 @@ fn cursor_impeccable_events(manifest: &str) -> Vec<(String, String)> {
     for (event, entries) in value["hooks"].as_object().unwrap() {
         for entry in entries.as_array().unwrap() {
             let command = slash_norm(entry["command"].as_str().unwrap_or_default());
-            if command.contains("skills/impeccable/scripts/") {
+            if command.contains("skills/melzi/scripts/") {
                 out.push((event.clone(), command));
             }
         }
@@ -1080,10 +1080,10 @@ fn user_scope_update_migrates_the_project_cursor_gate() {
         }
         std::fs::create_dir_all(format!("{project}/.git")).unwrap();
         write(
-            &format!("{home}/.cursor/skills/impeccable/SKILL.md"),
+            &format!("{home}/.cursor/skills/melzi/SKILL.md"),
             "---\nname: impeccable\nversion: 1.0.0\n---\n",
         );
-        let launcher = jsp::join(&[&home, ".cursor", "skills", "impeccable", "scripts", "impeccable"]);
+        let launcher = jsp::join(&[&home, ".cursor", "skills", "melzi", "scripts", "impeccable"]);
         let gate = format!("[ ! -f '{launcher}' ] || '{launcher}' hook-before-edit");
         let project_manifest = format!("{project}/.cursor/hooks.json");
         write(
@@ -1154,7 +1154,7 @@ fn user_scope_update_honors_the_projects_declined_hook_consent() {
     }
     std::fs::create_dir_all(format!("{project}/.git")).unwrap();
     write(
-        &format!("{home}/.cursor/skills/impeccable/SKILL.md"),
+        &format!("{home}/.cursor/skills/melzi/SKILL.md"),
         "---\nname: impeccable\nversion: 1.0.0\n---\n",
     );
     impeccable_skills::hook_manifest::set_hook_consent(&project, "declined").unwrap();
@@ -1182,7 +1182,7 @@ fn user_scope_update_writes_the_cursor_hook_under_home() {
     }
     std::fs::create_dir_all(format!("{project}/.git")).unwrap();
     write(
-        &format!("{home}/.cursor/skills/impeccable/SKILL.md"),
+        &format!("{home}/.cursor/skills/melzi/SKILL.md"),
         "---\nname: impeccable\nversion: 1.0.0\n---\n",
     );
     let bundle = create_fake_universal_bundle(&project, &[".cursor"]);
@@ -1192,7 +1192,7 @@ fn user_scope_update_writes_the_cursor_hook_under_home() {
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
 
     let home_manifest = format!("{home}/.cursor/hooks.json");
-    let launcher = slash_norm(&jsp::join(&[&home, ".cursor", "skills", "impeccable", "scripts", "impeccable"]));
+    let launcher = slash_norm(&jsp::join(&[&home, ".cursor", "skills", "melzi", "scripts", "impeccable"]));
     let ours = cursor_impeccable_events(&home_manifest);
     assert!(!ours.is_empty(), "{}", read(&home_manifest));
     for (event, command) in &ours {
@@ -1222,11 +1222,11 @@ fn existing_user_install_ignores_project_hook_when_user_hook_is_missing() {
     std::fs::remove_file(format!("{home}/.claude/settings.json")).unwrap();
     write(
         &format!("{home}/.claude/settings.local.json"),
-        r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"~/.claude/skills/impeccable/scripts/impeccable\" hook"}]}]}}"#,
+        r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"~/.claude/skills/melzi/scripts/impeccable\" hook"}]}]}}"#,
     );
     write(
         &format!("{project}/.claude/settings.local.json"),
-        r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook"}]}]}}"#,
+        r#"{"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" hook"}]}]}}"#,
     );
 
     let second = run_cli(&args, &project, &env);
@@ -1257,7 +1257,7 @@ fn repeat_user_install_prunes_duplicate_project_hook_when_user_hook_exists() {
     let project_local = format!("{project}/.claude/settings.local.json");
     write(
         &project_local,
-        r#"{"permissions":{"allow":["Bash(ls)"]},"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook"}]}]}}"#,
+        r#"{"permissions":{"allow":["Bash(ls)"]},"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" hook"}]}]}}"#,
     );
 
     let second = run_cli(&args, &project, &env);
@@ -1292,12 +1292,12 @@ fn repeat_user_install_replaces_legacy_user_hook_before_pruning_project_hook() {
     let user_settings = format!("{home}/.claude/settings.json");
     write(
         &user_settings,
-        r#"{"model":"claude-sonnet-5","hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"node \"~/.claude/skills/impeccable/scripts/hook.mjs\""}]}]}}"#,
+        r#"{"model":"claude-sonnet-5","hooks":{"PostToolUse":[{"matcher":"Edit","hooks":[{"type":"command","command":"node \"~/.claude/skills/melzi/scripts/hook.mjs\""}]}]}}"#,
     );
     let project_local = format!("{project}/.claude/settings.local.json");
     write(
         &project_local,
-        r#"{"permissions":{"allow":["Bash(ls)"]},"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook"}]}]}}"#,
+        r#"{"permissions":{"allow":["Bash(ls)"]},"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"\"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" hook"}]}]}}"#,
     );
 
     let second = run_cli(&args, &project, &env);
@@ -1325,14 +1325,14 @@ fn user_hook_with_missing_launcher_is_not_current() {
         &impeccable_context::hook_wiring::claude_manifest_for_command(&command).to_string(),
     );
     assert!(!impeccable_skills::hook_manifest::user_claude_hook_is_current_for(&home, false));
-    write(&format!("{home}/.claude/skills/impeccable/scripts/impeccable"), "#!/bin/sh\n");
+    write(&format!("{home}/.claude/skills/melzi/scripts/impeccable"), "#!/bin/sh\n");
     assert!(impeccable_skills::hook_manifest::user_claude_hook_is_current_for(&home, false));
     // A legacy entry beside the current one still needs a rewrite.
     write(
         &settings,
         &serde_json::json!({"hooks":{"PostToolUse":[
             {"hooks":[{"type":"command","command":command}]},
-            {"hooks":[{"type":"command","command":"node \"~/.claude/skills/impeccable/scripts/hook.mjs\""}]}
+            {"hooks":[{"type":"command","command":"node \"~/.claude/skills/melzi/scripts/hook.mjs\""}]}
         ]}})
         .to_string(),
     );
@@ -1344,7 +1344,7 @@ fn user_hook_with_missing_launcher_is_not_current() {
 
 #[test]
 fn merge_hook_manifests_replaces_legacy_windows_path_claude_hooks() {
-    let legacy_path = r"C:\Users\alice\.claude\skills\impeccable\scripts\hook.mjs";
+    let legacy_path = r"C:\Users\alice\.claude\skills\melzi\scripts\hook.mjs";
     let legacy_command = format!("[ ! -f \"{legacy_path}\" ] || node \"{legacy_path}\"");
     let fresh_command = format!("node -e \"guard\" \"{legacy_path}\"");
     let merged = merge_hook_manifests(
@@ -1388,17 +1388,17 @@ fn update_ends_with_the_doctor_report() {
         std::fs::create_dir_all(dir).unwrap();
     }
     std::fs::create_dir_all(format!("{project}/.git")).unwrap();
-    write(&format!("{project}/.claude/skills/impeccable/SKILL.md"), "---\nname: impeccable\nversion: 1.0.0\n---\n");
+    write(&format!("{project}/.claude/skills/melzi/SKILL.md"), "---\nname: impeccable\nversion: 1.0.0\n---\n");
     let product = "# Product\n\n## Register\n\nbrand\n";
     write(&format!("{project}/PRODUCT.md"), product);
     let bundle = create_fake_universal_bundle(&root, &[".claude"]);
     let env = base_env(&home, &tmpdir, &bundle);
 
-    let next_step = "\nNext step: run /impeccable doctor in your coding agent. It checks this project's setup against the version you just installed and offers the fixes.\n";
+    let next_step = "\nNext step: run /melzi doctor in your coding agent. It checks this project's setup against the version you just installed and offers the fixes.\n";
     for (last_line, installed) in [("Done!", true), ("Nothing else to do.", false)] {
         let r = run_cli(&["update", "-y"], &project, &env);
         assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
-        let (_, report) = r.stdout.split_once(&format!("{last_line}\n\nImpeccable doctor:")).unwrap_or_else(|| panic!("{}", r.stdout));
+        let (_, report) = r.stdout.split_once(&format!("{last_line}\n\nMelzi doctor:")).unwrap_or_else(|| panic!("{}", r.stdout));
         assert!(report.contains("product-deprecated-register"), "{}", r.stdout);
         assert_eq!(r.stdout.ends_with(next_step), installed, "{}", r.stdout);
     }
@@ -1419,14 +1419,14 @@ fn update_doctor_report_checks_the_updated_harness_in_the_project() {
         std::fs::create_dir_all(dir).unwrap();
     }
     std::fs::create_dir_all(format!("{project}/.git")).unwrap();
-    write(&format!("{home}/.claude/skills/impeccable/SKILL.md"), "---\nname: impeccable\nversion: 1.0.0\n---\n");
+    write(&format!("{home}/.claude/skills/melzi/SKILL.md"), "---\nname: impeccable\nversion: 1.0.0\n---\n");
     write(&format!("{project}/PRODUCT.md"), "# Product\n\n## Register\n\nbrand\n");
     let bundle = create_fake_universal_bundle(&root, &[".claude"]);
     let env = base_env(&home, &tmpdir, &bundle);
 
     let r = run_cli(&["update", "-y", "--user", "--no-hooks"], &project, &env);
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
-    let (_, report) = r.stdout.split_once("Impeccable doctor:").unwrap_or_else(|| panic!("{}", r.stdout));
+    let (_, report) = r.stdout.split_once("Melzi doctor:").unwrap_or_else(|| panic!("{}", r.stdout));
     assert!(report.contains("hook-not-installed"), "{}", r.stdout);
     assert!(report.contains("product-deprecated-register"), "{}", r.stdout);
     std::fs::remove_dir_all(&root).ok();
@@ -1445,7 +1445,7 @@ fn update_doctor_report_merges_the_updated_harnesses() {
     }
     std::fs::create_dir_all(format!("{project}/.git")).unwrap();
     for provider in [".claude", ".cursor"] {
-        write(&format!("{project}/{provider}/skills/impeccable/SKILL.md"), "---\nname: impeccable\nversion: 1.0.0\n---\n");
+        write(&format!("{project}/{provider}/skills/melzi/SKILL.md"), "---\nname: impeccable\nversion: 1.0.0\n---\n");
     }
     write(&format!("{project}/PRODUCT.md"), "# Product\n\n## Register\n\nbrand\n");
     let bundle = create_fake_universal_bundle(&root, &[".claude", ".cursor"]);
@@ -1456,7 +1456,7 @@ fn update_doctor_report_merges_the_updated_harnesses() {
 
     let r = run_cli(&["update", "-y", "--no-hooks"], &project, &env);
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
-    let (_, report) = r.stdout.split_once("Impeccable doctor:").unwrap_or_else(|| panic!("{}", r.stdout));
+    let (_, report) = r.stdout.split_once("Melzi doctor:").unwrap_or_else(|| panic!("{}", r.stdout));
     assert!(report.contains("hook-not-installed  [.claude/settings.local.json]"), "{}", r.stdout);
     assert!(report.contains("hook-not-installed  [.cursor/hooks.json]"), "{}", r.stdout);
     assert_eq!(report.matches("product-deprecated-register").count(), 1, "{}", r.stdout);
@@ -1475,9 +1475,9 @@ fn codex_dir_project(name: &str, with_agents: bool, copy_under_home: bool) -> (S
     }
     std::fs::create_dir_all(format!("{project}/.git")).unwrap();
     let copy_root = if copy_under_home { &home } else { &project };
-    write(&format!("{copy_root}/.codex/skills/impeccable/SKILL.md"), "---\nname: impeccable\nversion: 3.9.1\n---\n");
+    write(&format!("{copy_root}/.codex/skills/melzi/SKILL.md"), "---\nname: impeccable\nversion: 3.9.1\n---\n");
     if with_agents {
-        write(&format!("{project}/.agents/skills/impeccable/SKILL.md"), "---\nname: impeccable\nversion: 1.0.0\n---\n");
+        write(&format!("{project}/.agents/skills/melzi/SKILL.md"), "---\nname: impeccable\nversion: 1.0.0\n---\n");
     }
     let bundle = create_fake_universal_bundle(&root, &[".agents", ".claude"]);
     let env = base_env(&home, &tmpdir, &bundle);
@@ -1490,10 +1490,10 @@ fn update_names_a_codex_skills_copy_it_cannot_find() {
     let r = run_cli(&["update", "-y"], &project, &env);
     assert_eq!(r.code, 1, "{}\n{}", r.stdout, r.stderr);
     let expected = "No impeccable skill folders found in this project or at the user level.\n\
-        Found an Impeccable skill at .codex/skills/impeccable, which update does not manage: Codex reads repository skills from .agents/skills, so that copy is never loaded. Run `npx impeccable install --providers=codex` to install it there, then delete .codex/skills/impeccable.\n\
-        Run `npx impeccable install` to install first.\n";
+        Found an Melzi skill at .codex/skills/melzi, which update does not manage: Codex reads repository skills from .agents/skills, so that copy is never loaded. Run `npx melzi install --providers=codex` to install it there, then delete .codex/skills/impeccable.\n\
+        Run `npx melzi install` to install first.\n";
     assert_eq!(r.stdout, expected);
-    assert!(read(&format!("{project}/.codex/skills/impeccable/SKILL.md")).contains("version: 3.9.1"));
+    assert!(read(&format!("{project}/.codex/skills/melzi/SKILL.md")).contains("version: 3.9.1"));
     std::fs::remove_dir_all(&root).ok();
 }
 
@@ -1502,11 +1502,11 @@ fn update_names_a_codex_skills_copy_beside_the_agents_install() {
     let (root, project, env) = codex_dir_project("update-codex-dir-beside", true, false);
     let r = run_cli(&["update", "-y", "--no-hooks"], &project, &env);
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
-    let note = "Found an Impeccable skill at .codex/skills/impeccable, which update does not manage: Codex reads repository skills from .agents/skills, so that copy is never loaded. Delete .codex/skills/impeccable.\nDone!\n";
+    let note = "Found an Melzi skill at .codex/skills/melzi, which update does not manage: Codex reads repository skills from .agents/skills, so that copy is never loaded. Delete .codex/skills/impeccable.\nDone!\n";
     assert!(r.stdout.contains(note), "{}", r.stdout);
     assert!(r.stdout.contains("Updated 1 skill(s)"), "{}", r.stdout);
-    assert!(read(&format!("{project}/.codex/skills/impeccable/SKILL.md")).contains("version: 3.9.1"));
-    assert!(read(&format!("{project}/.agents/skills/impeccable/SKILL.md")).contains("9.9.9-local"));
+    assert!(read(&format!("{project}/.codex/skills/melzi/SKILL.md")).contains("version: 3.9.1"));
+    assert!(read(&format!("{project}/.agents/skills/melzi/SKILL.md")).contains("9.9.9-local"));
     // The up-to-date path says it too, before its closing line.
     let r = run_cli(&["update", "-y", "--no-hooks"], &project, &env);
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
@@ -1528,22 +1528,22 @@ fn update_is_silent_about_a_codex_skills_link_onto_the_agents_install() {
     // A linked entry does not hide a real copy beside it.
     std::fs::remove_file(format!("{project}/.codex/skills")).unwrap();
     std::fs::create_dir_all(format!("{project}/.codex/skills")).unwrap();
-    std::os::unix::fs::symlink("../../.agents/skills/impeccable", format!("{project}/.codex/skills/impeccable")).unwrap();
+    std::os::unix::fs::symlink("../../.agents/skills/melzi", format!("{project}/.codex/skills/melzi")).unwrap();
     write(&format!("{project}/.codex/skills/teach-impeccable/SKILL.md"), "---\nname: teach-impeccable\nversion: 3.9.1\n---\n");
     let r = run_cli(&["update", "-y", "--no-hooks"], &project, &env);
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
-    assert!(r.stdout.contains("Found an Impeccable skill at .codex/skills/teach-impeccable, which update does not manage"), "{}", r.stdout);
+    assert!(r.stdout.contains("Found an Melzi skill at .codex/skills/teach-impeccable, which update does not manage"), "{}", r.stdout);
     // `.agents` and `.codex` both linked onto one checkout (`impeccable link`)
     // while a copied `.claude` install keeps the update going: the `.codex`
     // link is the same install as the `.agents` one, not a copy.
-    let checkout = format!("{root}/checkout/impeccable");
+    let checkout = format!("{root}/checkout/melzi");
     write(&format!("{checkout}/SKILL.md"), "---\nname: impeccable\nversion: 1.0.0\n---\n");
-    std::fs::remove_dir_all(format!("{project}/.agents/skills/impeccable")).unwrap();
-    std::os::unix::fs::symlink(&checkout, format!("{project}/.agents/skills/impeccable")).unwrap();
+    std::fs::remove_dir_all(format!("{project}/.agents/skills/melzi")).unwrap();
+    std::os::unix::fs::symlink(&checkout, format!("{project}/.agents/skills/melzi")).unwrap();
     std::fs::remove_dir_all(format!("{project}/.codex/skills")).unwrap();
     std::fs::create_dir_all(format!("{project}/.codex/skills")).unwrap();
-    std::os::unix::fs::symlink(&checkout, format!("{project}/.codex/skills/impeccable")).unwrap();
-    write(&format!("{project}/.claude/skills/impeccable/SKILL.md"), "---\nname: impeccable\nversion: 1.0.0\n---\n");
+    std::os::unix::fs::symlink(&checkout, format!("{project}/.codex/skills/melzi")).unwrap();
+    write(&format!("{project}/.claude/skills/melzi/SKILL.md"), "---\nname: impeccable\nversion: 1.0.0\n---\n");
     let r = run_cli(&["update", "-y", "--no-hooks"], &project, &env);
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
     assert!(r.stdout.contains("Continuing with copied installs in: .claude"), "{}", r.stdout);
@@ -1555,19 +1555,19 @@ fn update_is_silent_about_a_codex_skills_link_onto_the_agents_install() {
 fn update_falling_back_to_the_user_install_names_the_project_codex_copy() {
     let (root, project, env) = codex_dir_project("update-codex-dir-fallback", false, false);
     let home = format!("{root}/home");
-    write(&format!("{home}/.agents/skills/impeccable/SKILL.md"), "---\nname: impeccable\nversion: 1.0.0\n---\n");
+    write(&format!("{home}/.agents/skills/melzi/SKILL.md"), "---\nname: impeccable\nversion: 1.0.0\n---\n");
     let r = run_cli(&["update", "-y", "--no-hooks"], &project, &env);
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
     assert!(r.stdout.contains("Updating the user level install"), "{}", r.stdout);
-    let note = "Found an Impeccable skill at .codex/skills/impeccable, which update does not manage: Codex reads repository skills from .agents/skills, so that copy is never loaded. Run `npx impeccable install --providers=codex` to install it there, then delete .codex/skills/impeccable.\nDone!\n";
+    let note = "Found an Melzi skill at .codex/skills/melzi, which update does not manage: Codex reads repository skills from .agents/skills, so that copy is never loaded. Run `npx melzi install --providers=codex` to install it there, then delete .codex/skills/impeccable.\nDone!\n";
     assert!(r.stdout.contains(note), "{}", r.stdout);
-    assert!(read(&format!("{project}/.codex/skills/impeccable/SKILL.md")).contains("version: 3.9.1"));
-    assert!(read(&format!("{home}/.agents/skills/impeccable/SKILL.md")).contains("9.9.9-local"));
+    assert!(read(&format!("{project}/.codex/skills/melzi/SKILL.md")).contains("version: 3.9.1"));
+    assert!(read(&format!("{home}/.agents/skills/melzi/SKILL.md")).contains("9.9.9-local"));
     // A project entry linked onto the user install just updated is that install.
     #[cfg(unix)]
     {
-        std::fs::remove_dir_all(format!("{project}/.codex/skills/impeccable")).unwrap();
-        std::os::unix::fs::symlink(format!("{home}/.agents/skills/impeccable"), format!("{project}/.codex/skills/impeccable")).unwrap();
+        std::fs::remove_dir_all(format!("{project}/.codex/skills/melzi")).unwrap();
+        std::os::unix::fs::symlink(format!("{home}/.agents/skills/melzi"), format!("{project}/.codex/skills/melzi")).unwrap();
         let r = run_cli(&["update", "-y", "--no-hooks"], &project, &env);
         assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
         assert!(!r.stdout.contains("which update does not manage"), "{}", r.stdout);
@@ -1581,7 +1581,7 @@ fn update_user_names_a_codex_skills_copy_under_home() {
     let r = run_cli(&["update", "-y", "--user"], &project, &env);
     assert_eq!(r.code, 1, "{}\n{}", r.stdout, r.stderr);
     assert!(
-        r.stdout.contains("Found an Impeccable skill at ~/.codex/skills/impeccable, which update does not manage: the user-level install Impeccable maintains is ~/.agents/skills/impeccable. Run `npx impeccable install --providers=codex --scope=global` to install it there, then delete ~/.codex/skills/impeccable so Codex loads one copy.\n"),
+        r.stdout.contains("Found an Melzi skill at ~/.codex/skills/melzi, which update does not manage: the user-level install Melzi maintains is ~/.agents/skills/impeccable. Run `npx melzi install --providers=codex --scope=global` to install it there, then delete ~/.codex/skills/melzi so Codex loads one copy.\n"),
         "{}",
         r.stdout
     );

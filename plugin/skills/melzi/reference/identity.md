@@ -17,7 +17,7 @@ Put these four routes on one rendered page. Ask only: **Where should we start?**
 1. **Start fresh.** Use the existing [genesis.md](genesis.md) route. Deal worlds with `melzi/world-pool.mjs`, build real screens, and present them through `impeccable serve-question`. The chosen real screen is the evidence from which you read the provisional invariant colours and type roles. Do not build a new colour extractor or screenshot reader.
 2. **Start from this project.** Inspect the project with the existing `detect` CLI, then use [document.md](document.md) to record the incumbent system. Render the extracted system on real project content before any choice. A detected value is evidence, not a design decision.
 3. **Start from a brand I admire.** Route the URL or image to [study.md](study.md). It extracts design DNA and can append a world to `melzi/world-pool.mjs`; then return through the existing genesis route. Never reproduce the source.
-4. **Start from what I have liked before.** Route to [taste.md](taste.md). The existing pairwise system, `taste-store.mjs`, `taste-model.mjs`, and `serve-compare.mjs` carry this path. Use candidates already in the ledger or build fair rendered candidates first.
+4. **Start from what I have liked before.** Read what is already on file: `node "<skill-base-dir>/scripts/melzi/taste-store.mjs" --profile` and `~/.impeccable/signature.json`. Build from that evidence and render it on real content. Do not open a new comparison session on this route; when the profile exits 3 or is too thin to carry a decision, say so in one line and continue on route 1 or 2. The pairwise calibration in [taste.md](taste.md) runs only when he asks for it by name.
 
 Do not write a colour extractor, a font extractor, or a screenshot reader. The four routes above already own those jobs. If a route cannot provide enough evidence, say which route failed and why. Do not fill the gap by guessing an identity.
 
@@ -67,6 +67,8 @@ Read the defect report. A legal accessibility floor, such as a failing `coralTex
 The type output stores actual sizes, not a modular ratio. Spacing starts from the computed body line height. State the line-height evidence in `DESIGN.md` exactly as supplied: it is a field fit over ten sites, R² 0.41, with roughly ±0.08 tolerance, not a validated law. Do not use CSS `ex` to derive it for Source Serif 4. Its Google Fonts variable build has no MVAR table, so its declared x-height is frozen while the drawn x-height moves across the optical-size axis.
 
 ## 5. Hand genuine uncertainty to a pairwise click
+
+These two clicks belong to the identity command alone, which runs only when he asks for it by name; no other flow opens them, and they are a choice between two finished renderings, never a score. If he says he does not want to choose, stop before section 6, say that the two traits are unresolved, and leave the signature as it is: do not pick for him, because `identity.mjs` records each selection as his own click.
 
 These are not defaults. Build both sides as real renderings of identical content and route each through the existing `serve-compare.mjs` flow. Record the selected result in `traits` as a dated learned trait. Never choose it silently.
 
@@ -256,9 +258,9 @@ Keep roles independent and label every result synthetic:
 
 Send an external model only the evidence it needs. An anonymous proof is often enough. Keep private project context local. Run bounded rounds: generate widely, reject mechanical failures, prosecute visually, revise failing hypotheses once, and package the declared field.
 
-### 8.11 Learn taste only after recognition survives
+### 8.11 Learn taste only after recognition survives, and only on request
 
-Use [taste.md](taste.md), `taste-store.mjs`, and `serve-compare.mjs` for fair pairwise comparisons. Keep context, size, subject, background, and wordmark identical. Ask which better fits the intended character and allow annotations. Do not ask for scores, compare unequal levels of finish, or train on accidental confounds. Mark confounded attributes instead of deleting a real preference.
+This step is opt-in: skip it unless he asks for a comparison session by name, and decide between surviving marks yourself with the evidence from 8.1 to 8.10 and the tests in [taste-bar.md](taste-bar.md). When he does ask, use [taste.md](taste.md), `taste-store.mjs`, and `serve-compare.mjs` for fair pairwise comparisons. Keep context, size, subject, background, and wordmark identical. Ask which better fits the intended character and allow annotations. Do not ask for scores, compare unequal levels of finish, or train on accidental confounds. Mark confounded attributes instead of deleting a real preference.
 
 Pairwise taste does not prove recognition. It begins only after a mark is legible enough to be meaningfully preferred.
 

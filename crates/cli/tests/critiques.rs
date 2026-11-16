@@ -632,7 +632,7 @@ fn the_service_accepts_optional_labels_only_with_repo_keys() {
 fn critique_notice_is_once_after_success_and_again_after_sign_in() {
     let (fake, env) = setup("critique-notice");
     let root = Path::new(&env["IMPECCABLE_HOME"]);
-    let notice = "Uploaded this critique report to your Impeccable account. Each report you save uploads too. To stop: impeccable critiques off\n";
+    let notice = "Uploaded this critique report to your Melzi account. Each report you save uploads too. To stop: impeccable critiques off\n";
     let hook = impeccable(&env, root, &["hook-before-edit"])
         .output()
         .unwrap();
@@ -665,7 +665,7 @@ fn critique_notice_is_once_after_success_and_again_after_sign_in() {
     assert!(String::from_utf8_lossy(&write(&env, root).stdout).ends_with(notice));
 }
 
-const STALE_NOTICE: &str = "Saving to your Impeccable account needs a fresh sign-in. Run impeccable login to turn it on.\n";
+const STALE_NOTICE: &str = "Saving to your Melzi account needs a fresh sign-in. Run impeccable login to turn it on.\n";
 
 #[test]
 fn stale_sign_in_notice_is_shared_and_status_checks_current_offerings() {

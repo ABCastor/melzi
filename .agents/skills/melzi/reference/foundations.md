@@ -1,4 +1,4 @@
-# /impeccable foundations
+# $melzi foundations
 
 Walk the user through the product foundations every shipped project needs, and fix one at a time. This is a roadmap, not a design task: do not redesign anything on the way.
 
@@ -7,7 +7,7 @@ Walk the user through the product foundations every shipped project needs, and f
 Run:
 
 ```
-.grok/skills/impeccable/scripts/impeccable foundations
+.agents/skills/melzi/scripts/impeccable foundations
 ```
 
 It checks the project's own files (and runs the design detector) offline and prints a count, the **Next up** item with why it matters, and every other item: `✓` in place, `✗` to fix, `·` not checked (it needs the network, or the project gives no evidence either way). Pass a path for one app in a monorepo.
@@ -16,7 +16,7 @@ Relay the count and the Next up item in two or three sentences, then offer to fi
 
 ## With an id: fix that one item
 
-`/impeccable foundations <id>` fixes one item. Read what "done" means for that id below, look at the project to find the smallest change that gets there, make it in the project's own stack and conventions, then re-run `.grok/skills/impeccable/scripts/impeccable foundations --json` and confirm `items["<id>"]` is `"checked"`. If it is, say so in one short line and name the new Next up. If it is still `"failing"`, say what the check still misses and fix that; do not game the check with an empty file or a stub that does nothing. If the id is absent from `items` (the CLI can't judge it here: `real-packages`, `current-dependencies`, or contrast in an app whose components only the regex engine reads), verify the definition below yourself, say what you checked, and don't claim the CLI confirmed it.
+`$melzi foundations <id>` fixes one item. Read what "done" means for that id below, look at the project to find the smallest change that gets there, make it in the project's own stack and conventions, then re-run `.agents/skills/melzi/scripts/impeccable foundations --json` and confirm `items["<id>"]` is `"checked"`. If it is, say so in one short line and name the new Next up. If it is still `"failing"`, say what the check still misses and fix that; do not game the check with an empty file or a stub that does nothing. If the id is absent from `items` (the CLI can't judge it here: `real-packages`, `current-dependencies`, or contrast in an app whose components only the regex engine reads), verify the definition below yourself, say what you checked, and don't claim the CLI confirmed it.
 
 Ask before anything that needs the user: an account (Sentry, a host), a key, legal wording, or a product decision. Write placeholders they must fill in only when they agree, and say exactly which lines.
 
@@ -25,8 +25,8 @@ Ask before anything that needs the user: an account (Sentry, a host), a key, leg
 Web items (`app-icons`, `not-found-page`, `social-previews`, `legal-pages`, `error-tracking`) need a web UI. Server frameworks need markup templates or served markup pages; an API-only server sends none of them. Rails with `config.api_only = true` is never web.
 
 - **secrets-out-of-repo**: no tracked file holds a private key or a key in a known format. Public Firebase client config does not count as a Google-key leak; other key formats in that file still count. Tracked env files fail on real values under `_`-separated secret name segments (KEY, SECRET, TOKEN, PASSWORD, PASSWD, PWD, CREDENTIAL, PRIVATE), or URLs with passwords. Public-prefixed names, variable references and obvious placeholders do not count. A DSN or URL without a password is not secret evidence. Example/sample/template env files do not count as tracked env leaks. Move real secrets to an untracked env file or the host's secret store. Rotate any exposed credential; deleting it does not remove it from history. Never repeat its value.
-- **readable-contrast**: the detector finds no low-contrast text in the full scan. Run `.grok/skills/impeccable/scripts/impeccable detect --json .`, fix each `low-contrast` finding at its token or style, and prefer darkening a shared token over one-off overrides. A pass is sent only when every page's styles are in the files scanned: a page that runs a script, or takes a stylesheet from another host (linked or `@import`ed), sends nothing, and so does a project too large to walk in full.
-- **no-generic-ai-patterns**: the detector finds none of its generic-AI pattern rules. Fix the findings from `.grok/skills/impeccable/scripts/impeccable detect --json .` in the project's own design language; PRODUCT.md and DESIGN.md say what that is.
+- **readable-contrast**: the detector finds no low-contrast text in the full scan. Run `.agents/skills/melzi/scripts/impeccable detect --json .`, fix each `low-contrast` finding at its token or style, and prefer darkening a shared token over one-off overrides. A pass is sent only when every page's styles are in the files scanned: a page that runs a script, or takes a stylesheet from another host (linked or `@import`ed), sends nothing, and so does a project too large to walk in full.
+- **no-generic-ai-patterns**: the detector finds none of its generic-AI pattern rules. Fix the findings from `.agents/skills/melzi/scripts/impeccable detect --json .` in the project's own design language; PRODUCT.md and DESIGN.md say what that is.
 - **not-found-page**: the framework's own not-found page exists: Next `app/not-found.tsx` (or `pages/404`), SvelteKit `src/routes/+error.svelte`, Nuxt `error.vue`, Astro or Gatsby `src/pages/404`, Remix or React Router an `ErrorBoundary` in `app/root` or a `$.tsx` splat route, a client-routed SPA a catch-all `path="*"` route, a static or Hugo or Jekyll site a `404.html`. It says what happened and links home, in the product's voice.
 - **app-icons**: a favicon and a large app icon, as image files in the public folders (including `public/icons/`, `static/icons/`, `public/images/`), or local images linked by `rel="icon"`, `rel="apple-touch-icon"` or a web manifest. Source components do not count. Ask for the logo if there is none; never invent a brand mark.
 - **social-previews**: a share image in `og:image`, `twitter:image`, framework metadata (including Nuxt `ogImage` and Next `generateMetadata` with `openGraph.images`), or an `opengraph-image` file. `twitter:card` alone and comments do not count. Aim for 1200×630.

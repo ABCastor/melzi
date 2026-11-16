@@ -1,5 +1,5 @@
 //! `impeccable loop connect` and `loop disconnect` against fake `claude` and `codex` CLIs
-//! in a scratch home: the Impeccable MCP server and Loop's hooks are added through the
+//! in a scratch home: the Melzi MCP server and Loop's hooks are added through the
 //! agents engine's journal, and disconnect removes exactly what connect wrote.
 #![cfg(target_os = "macos")]
 use std::collections::HashMap;
@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
 const URL: &str = "https://api.impeccable.style/mcp";
-const INSTRUCTION: &str = "When you need a person's decision or input, use needs_you.post (Impeccable) instead of asking in chat or a built-in question tool. If needs_you says Loop isn't connected, ask normally.";
+const INSTRUCTION: &str = "When you need a person's decision or input, use needs_you.post (Melzi) instead of asking in chat or a built-in question tool. If needs_you says Loop isn't connected, ask normally.";
 
 struct Box {
     root: PathBuf,
@@ -72,7 +72,7 @@ exit 0
     fn install_loop(&self) {
         let macos = self
             .home()
-            .join("Applications/Impeccable Loop.app/Contents/MacOS");
+            .join("Applications/Melzi Loop.app/Contents/MacOS");
         fs::create_dir_all(&macos).unwrap();
         script(&macos.join("loop-hook"), "#!/bin/sh\nexit 0\n");
     }
@@ -80,7 +80,7 @@ exit 0
     fn install_loop_version(&self, version: &str) {
         self.install_loop();
         fs::write(
-            self.home().join("Applications/Impeccable Loop.app/Contents/Info.plist"),
+            self.home().join("Applications/Melzi Loop.app/Contents/Info.plist"),
             format!(
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\"><dict><key>CFBundleShortVersionString</key><string>{version}</string></dict></plist>\n"
             ),
@@ -98,7 +98,7 @@ exit 0
     }
     fn support(&self) -> PathBuf {
         self.home()
-            .join("Library/Application Support/Impeccable Reviews/Loop")
+            .join("Library/Application Support/Melzi Reviews/Loop")
     }
 }
 
@@ -221,7 +221,7 @@ fn connect_adds_the_mcp_server_and_hooks_and_disconnect_removes_exactly_them() {
             .unwrap();
     let helper = b
         .home()
-        .join("Applications/Impeccable Loop.app/Contents/MacOS/loop-hook");
+        .join("Applications/Melzi Loop.app/Contents/MacOS/loop-hook");
     let quoted = format!("'{}'", helper.display());
     let command = |event: &str, i: usize| settings["hooks"][event][i]["hooks"][0].clone();
     assert_eq!(
@@ -445,7 +445,7 @@ fn a_symlinked_support_folder_is_refused_before_anything_is_written() {
     fs::create_dir_all(&elsewhere).unwrap();
     fs::create_dir_all(
         b.home()
-            .join("Library/Application Support/Impeccable Reviews"),
+            .join("Library/Application Support/Melzi Reviews"),
     )
     .unwrap();
     std::os::unix::fs::symlink(&elsewhere, b.support()).unwrap();
@@ -685,13 +685,13 @@ fn connect_says_when_the_hooks_point_at_a_loop_that_moved() {
     let b = Box::new("loop-moved");
     b.install_loop();
     assert!(b.run(&["loop", "connect"]).status.success());
-    fs::remove_dir_all(b.home().join("Applications/Impeccable Loop.app")).unwrap();
+    fs::remove_dir_all(b.home().join("Applications/Melzi Loop.app")).unwrap();
     let out = b.run(&["loop", "connect"]);
     let said = text(&out);
     assert!(!out.status.success(), "{said}");
     assert!(
         said.contains("Loop's hooks point at a Loop that isn't there")
-            && said.contains("Impeccable Loop.app/Contents/MacOS/loop-hook")
+            && said.contains("Melzi Loop.app/Contents/MacOS/loop-hook")
             && said.contains("~/Applications"),
         "{said}"
     );
@@ -1002,7 +1002,7 @@ fn login_help_never_offers_to_connect_loop() {
 }
 
 const TASTE_START: &str = "<!-- impeccable:taste -->";
-const TASTE_END: &str = "<!-- /impeccable:taste -->";
+const TASTE_END: &str = "<!-- /melzi:taste -->";
 
 fn read(p: &Path) -> String {
     fs::read_to_string(p).unwrap_or_default()
@@ -1284,13 +1284,13 @@ fn a_person_at_a_terminal_is_asked_once_naming_each_file() {
     let claude_md = b.home().join(".claude/CLAUDE.md");
     let out = connect_at_a_terminal(&b, "n\n");
     assert!(
-        out.contains("Let your agents use your Impeccable taste? This adds 3 lines to ~/.claude/CLAUDE.md and ~/.codex/AGENTS.md. [Y/n]"),
+        out.contains("Let your agents use your Melzi taste? This adds 3 lines to ~/.claude/CLAUDE.md and ~/.codex/AGENTS.md. [Y/n]"),
         "{out}"
     );
     assert_eq!(taste_blocks(&claude_md), 0);
     // Declined: the next connect at a terminal doesn't ask again.
     let out = connect_at_a_terminal(&b, "y\n");
-    assert!(!out.contains("Impeccable taste?"), "{out}");
+    assert!(!out.contains("Melzi taste?"), "{out}");
     assert_eq!(taste_blocks(&claude_md), 0);
     // After a disconnect the answers are forgotten, and Enter means yes.
     assert!(b.run(&["loop", "disconnect"]).status.success());

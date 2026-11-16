@@ -74,6 +74,10 @@ Each curve family has a character; pick it from the thesis, not from habit:
 | `steps()` | mechanical, discrete | typewriter text, counters, pixel worlds |
 | linear | machine-constant | continuous loops, progress, rotation |
 
+## Hover
+
+Hover motion never moves a neighbor or takes its pointer target. Keep the hovered element still and let a child carry the motion (`.card:hover .card-surface { transform: translateY(-2px) }`). An element that moves itself slides out from under a pointer near its edge and flickers. Optional previews wait for the pointer to settle: for a CSS reveal, set `transition-delay` on the hover state only, so leaving is not delayed.
+
 ## Implement to the runtime
 
 - Use CSS transitions and keyframes for declarative state and bounded sequences.
@@ -156,6 +160,10 @@ The `overdrive` alias loads this catalogue after [bolder.md](bolder.md) settles 
 - **OffscreenCanvas:** keep custom rendering off the main thread when the browser supports it.
 - **WASM:** use near-native computation for work such as image processing, physics, or codecs only when profiling shows JavaScript is the bottleneck.
 
+### Direct manipulation
+
+- **Model-driven dragging:** when a surface needs a bespoke drag (reorder a structure, move a piece between slots, pull the parts of a diagram or an explorable), declare for each draggable element which next states of the model a drag may lead to, and let the engine render those states speculatively, interpolate between them mid-drag and settle on the nearest legal one on drop. The element can only land where the product's rules allow, and the drag feels continuous because every frame is a blend of real states. For React and SVG, Dragology implements it, with composable modifiers for floating, snapping and transitions; in any other runtime, keep the same contract by hand: legal states first, geometry derived from them, never free pixel dragging validated afterwards. Every drag also gets a keyboard and click path to the same states, and passes harden's interrupted-gesture checks.
+
 ### Device interaction
 
 - **Web Audio API:** audio-reactive work or sonic feedback, started only by a user gesture and with explicit consent.
@@ -174,7 +182,7 @@ Every technique degrades to a complete experience:
 ```
 
 ```javascript
-if ('gpu' in navigator) { /* WebGPU */ }
+if ('gpu' in navigator && await navigator.gpu.requestAdapter()) { /* WebGPU */ }
 else if (canvas.getContext('webgl2')) { /* WebGL2 fallback */ }
 /* The CSS-only result remains complete. */
 ```
@@ -182,6 +190,19 @@ else if (canvas.getContext('webgl2')) { /* WebGL2 fallback */ }
 Target 60fps and simplify when the experience drops below 50fps on representative hardware. Lazy-initialize WebGL, WASM, and other heavy resources near the viewport. Pause offscreen rendering. Test on real mid-range devices rather than treating a development machine as the audience.
 
 ## Verify
+
+On the web, capture implemented motion before calling it smooth. Use the skill-internal measuring verb (not a separate user command), once normally and once with reduced motion, with the same URL, interaction, and region:
+
+```sh
+.vibe/skills/melzi/scripts/impeccable motion-capture <url> --click '<selector>' --region '<region-selector>' --out-dir .impeccable/review/motion/normal
+.vibe/skills/melzi/scripts/impeccable motion-capture <url> --click '<selector>' --region '<region-selector>' --reduced-motion --out-dir .impeccable/review/motion/reduced
+```
+
+For keyboard or multi-step interactions pass `--steps <json-file>` instead of `--click`, such as `[{"click":"#toggle"},{"press":"Enter"}]`; steps are click, hover, press (navigation keys), and wait (milliseconds). Capture each entrance and exit separately: for an exit, `--setup <json-file>` runs the same kind of steps and lets them settle before the first frame, such as opening the panel whose close is under review. The fixed capture points are before, first animated, evenly spaced middle, last animated, and settled frames. Inspect each directory's frame PNGs, `filmstrip.png`, and `report.json` before sending it: blank, wrong-region, stale, or missing evidence requires recapture. The report's limitations are unmeasured checks, not a clean result. Never judge motion by a single element or a single screenshot.
+
+Spawn the shipped `impeccable-motion-reviewer` fresh (`impeccable_motion_reviewer` in Codex; `/impeccable-motion-reviewer` in Cursor; on GitHub Copilot say "Use the impeccable-motion-reviewer agent"), with no forked conversation history. Pass the original request, the motion thesis above, both capture directories (plus entrance and exit captures where applicable), DESIGN.md's motion rules if any, and the craft-floor reference path. The reviewer has no browser and reviews only the provided evidence. Never read its agent definition before spawning; the harness loads it. Wait with one long timeout; verify a disposition-first return with `continuity`, `craft`, `reduced_motion`, `material_fixes`, and `keep`. Respawn an empty or incomplete return once with the same packet. Only when the harness has no subagent capability, run a separate fresh pass from [degraded/motion-reviewer.md](degraded/motion-reviewer.md), and disclose the substitution at finish.
+
+Act on the disposition. **recapture:** repair the named evidence and request a full review; invalid evidence binds no verdict. **fix:** apply the ordered material fixes in one batch, recapture normal and reduced motion over the same files, and continue the same reviewer for a verdict pass scoring each fix resolved, partial, or unresolved. Without continuation, pass the prior findings and new captures to a fresh reviewer. **ship:** report that word at the scope the reviewer actually checked. Two rounds maximum (initial review, then post-fix verdict); stop if a round resolves nothing. Report remaining fixes or missing evidence honestly at the ceiling; never turn a partial or unresolved verdict into a claim of smoothness.
 
 - The focal motion is specific to the selected world and surface.
 - Every supporting animation explains feedback, state, or relationship.

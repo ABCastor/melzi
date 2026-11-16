@@ -12,7 +12,7 @@ use url::Url;
 
 const PINS: &str = include_str!("../loop-checksums.txt");
 const BASE: &str = "https://github.com/pbakaus/impeccable/releases/download";
-const APP: &str = "Impeccable Loop.app";
+const APP: &str = "Melzi Loop.app";
 const USAGE: &str = "Usage: impeccable loop install [--version X.Y.Z] [--no-open] [--connect|--no-connect] [--taste|--no-taste]\n       impeccable loop update [--no-open]\n       impeccable loop connect [--agent claude|codex] [--taste|--no-taste] [--json]\n       impeccable loop connect --mcp-only [--agent claude|codex] [--json]\n       impeccable loop status [--json]\n       impeccable loop disconnect\n";
 
 type Result<T> = std::result::Result<T, String>;
@@ -21,7 +21,7 @@ fn check_platform(os: &str) -> Result<()> {
     if os == "macos" {
         Ok(())
     } else {
-        Err("Impeccable Loop is only available on macOS.".into())
+        Err("Melzi Loop is only available on macOS.".into())
     }
 }
 
@@ -185,7 +185,7 @@ fn executable(app: &Path) -> Result<PathBuf> {
 }
 
 const RUNNING: &str =
-    "Impeccable Loop didn't quit. Quit it yourself, then run impeccable loop update again.";
+    "Melzi Loop didn't quit. Quit it yourself, then run impeccable loop update again.";
 /// How long `loop update` waits for a running Loop to quit.
 const QUIT_WAIT: Duration = Duration::from_secs(10);
 
@@ -522,7 +522,7 @@ fn run_json(
         .collect();
     let (value, ok) = match (args.first().map(String::as_str), rest.as_slice()) {
         _ if check_platform(os).is_err() => (
-            serde_json::json!({ "ok": false, "error": "Impeccable Loop is only available on macOS." }),
+            serde_json::json!({ "ok": false, "error": "Melzi Loop is only available on macOS." }),
             false,
         ),
         (Some("status"), []) => match crate::loop_connect::status(io) {
@@ -671,7 +671,7 @@ fn run_inner(args: &[String], io: &Io, manifest: &str, os: &str) -> Result<Strin
         .as_ref()
         .or_else(|| pins.last_key_value().map(|(v, _)| v))
         .ok_or(
-            "No Loop release is pinned in this engine. Update the Impeccable CLI and try again.",
+            "No Loop release is pinned in this engine. Update the Melzi CLI and try again.",
         )?;
     let digest = pins.get(version).ok_or_else(|| {
         format!("No checksum pinned for Loop {version}; refusing the unverified download.")

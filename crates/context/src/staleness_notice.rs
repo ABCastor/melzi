@@ -134,8 +134,8 @@ pub fn filter_fresh_findings(env: &Env, findings: Vec<Finding>, project_root: &s
 
 /// JS: buildStalenessDirective(findings)
 ///
-/// `command` is the skill command the user types (`/impeccable`, or
-/// `$impeccable` on Codex): the fixed sentence names `<command> doctor`.
+/// `command` is the skill command the user types (`/melzi`, or
+/// `$melzi` on Codex): the fixed sentence names `<command> doctor`.
 pub fn build_staleness_directive(findings: &[Finding], command: &str) -> Option<String> {
     if findings.is_empty() {
         return None;
@@ -149,12 +149,12 @@ pub fn build_staleness_directive(findings: &[Finding], command: &str) -> Option<
         // a side effect of the design task. It leads the block because a
         // model that skims takes the first imperative it meets.
         lines.push(format!(
-            "End your final reply to the user with this exact sentence as its last line: \"Impeccable found setup issues in your project. Run `{} doctor` to see them. Fixing them lets Impeccable catch design problems as you build.\" Say it once, do not list the findings, do not run doctor or any repair unless the user asks, and do not raise this again.",
+            "End your final reply to the user with this exact sentence as its last line: \"Melzi found setup issues in your project. Run `{} doctor` to see them. Fixing them lets Melzi catch design problems as you build.\" Say it once, do not list the findings, do not run doctor or any repair unless the user asks, and do not raise this again.",
             command
         ));
     }
     lines.extend([
-        "Impeccable's own project files have drifted from what this version reads. Do not stop, reorder, or expand the requested task for any of these findings.".to_string(),
+        "Melzi's own project files have drifted from what this version reads. Do not stop, reorder, or expand the requested task for any of these findings.".to_string(),
         "By severity: `auto` is a migration the next write to that file performs anyway, so apply it then and do not raise it with the user. `mention` and `route` reach the user only through that fixed sentence; doctor owns their details and fixes.".to_string(),
         "A finding that reports a deprecated field is binding: treat that field as absent for every decision in this session, whatever value it holds.".to_string(),
     ]);

@@ -28,7 +28,7 @@ Analyze what makes the design feel too intense:
    - What's working? (Don't throw away good ideas)
    - What's the core message? (Preserve what matters)
 
-If any of these are unclear from the codebase, do not guess. Ask the user directly to clarify what you cannot infer.
+If any of these are unclear from the codebase, do not guess. Ask with the AskUserQuestion tool and wait for the answer before continuing.
 
 "Quieter" means refined and easier on the eyes, not generic. Generic quiet looks like gray text on white, one sans at a uniform weight, and a grid of identical cards; restraint still needs a point of view.
 
@@ -54,7 +54,7 @@ Systematically reduce intensity across these dimensions:
 - **Neutral dominance**: Let neutrals do more work, use color as accent (10% rule)
 - **Gentler contrasts**: High contrast only where it matters most
 - **Tinted grays**: Use warm or cool tinted grays instead of pure gray. Adds depth without loudness
-- **Never gray on color**: If you have gray text on a colored background, use a darker shade of that color or transparency instead
+- **Never gray on color**: If you have gray text on a colored background, use a darker shade of that color instead; transparency ties contrast to whatever sits behind the text
 
 ### Visual Weight Reduction
 - **Typography**: Reduce font weights (900 → 600, 700 → 500), decrease sizes where appropriate

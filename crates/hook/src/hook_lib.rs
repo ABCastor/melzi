@@ -41,11 +41,11 @@ pub const ALLOWED_EXTS: &[&str] = &[
 ];
 
 /// Plain scripts: mostly not UI (a server, a CLI, a config file), so the hook
-/// scans them only in a project that uses Impeccable (#1237). Markup, style
+/// scans them only in a project that uses Melzi (#1237). Markup, style
 /// and component files are UI wherever they are.
 pub const PLAIN_SCRIPT_EXTS: &[&str] = &[".ts", ".js"];
 
-/// Whether `root` uses Impeccable: a PRODUCT.md or DESIGN.md where context
+/// Whether `root` uses Melzi: a PRODUCT.md or DESIGN.md where context
 /// resolution looks (the root, `.agents/context`, `docs`), or an `.impeccable`
 /// folder. A few stats, paid only for a plain script.
 pub fn uses_impeccable(root: &str) -> bool {
@@ -59,7 +59,7 @@ pub fn uses_impeccable(root: &str) -> bool {
 }
 
 /// False for a plain script (not claimed by a configured extension) in a
-/// project that does not use Impeccable.
+/// project that does not use Melzi.
 pub fn plain_script_out_of_scope(ext: &str, configured: bool, root: &str) -> bool {
     !configured && PLAIN_SCRIPT_EXTS.contains(&ext) && !uses_impeccable(root)
 }

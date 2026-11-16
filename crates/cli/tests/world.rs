@@ -238,7 +238,7 @@ fn seeds_design_md_and_a_marked_sidecar_then_names_the_next_step() {
     assert!(out.status.success(), "{}", text(&out.stderr));
     assert_eq!(
         text(&out.stdout),
-        "Kinpaku is now this project's design system.\nWrote DESIGN.md and .impeccable/design.json.\nNext: ask your agent for your next page, like /impeccable craft a pricing page. It builds in Kinpaku.\n"
+        "Kinpaku is now this project's design system.\nWrote DESIGN.md and .impeccable/design.json.\nNext: ask your agent for your next page, like /melzi craft a pricing page. It builds in Kinpaku.\n"
     );
     // The world line every later boot and roll settles on, added when the seed has none.
     assert_eq!(
@@ -309,10 +309,10 @@ fn service_answers_map_to_one_actionable_line_each() {
     let cases = [
         (403, r#"{"error":"insufficient_scope"}"#, "Using a world needs a fresh sign-in. Run impeccable login, then try again.\n"),
         (403, r#"{"error":"forbidden","reason":"pro_required"}"#, "The world kinpaku needs Pro. See impeccable.style/pricing\n"),
-        (404, r#"{"error":"not_found"}"#, "No world has the id kinpaku. Copy the id from the world in the Impeccable worlds catalog.\n"),
-        (200, "<html>maintenance</html>", "Your Impeccable account sent a world this CLI can't read. Update the Impeccable CLI and try again.\n"),
-        (200, r##"{"id":"other","name":"X","design_md":"# X","sidecar":{}}"##, "Your Impeccable account sent a world this CLI can't read. Update the Impeccable CLI and try again.\n"),
-        (200, r##"{"id":"kinpaku","name":"K","design_md":"---\nworld: swiss\n---\n# K\n","sidecar":{}}"##, "The DESIGN.md your Impeccable account sent for kinpaku can't record which world it came from, so nothing was written. Update the Impeccable CLI and try again.\n"),
+        (404, r#"{"error":"not_found"}"#, "No world has the id kinpaku. Copy the id from the world in the Melzi worlds catalog.\n"),
+        (200, "<html>maintenance</html>", "Your Melzi account sent a world this CLI can't read. Update the Melzi CLI and try again.\n"),
+        (200, r##"{"id":"other","name":"X","design_md":"# X","sidecar":{}}"##, "Your Melzi account sent a world this CLI can't read. Update the Melzi CLI and try again.\n"),
+        (200, r##"{"id":"kinpaku","name":"K","design_md":"---\nworld: swiss\n---\n# K\n","sidecar":{}}"##, "The DESIGN.md your Melzi account sent for kinpaku can't record which world it came from, so nothing was written. Update the Melzi CLI and try again.\n"),
     ];
     for (status, body, line) in cases {
         f.route("GET", SEED, status, vec![], body);
@@ -332,12 +332,12 @@ fn signed_out_and_bad_ids_never_reach_the_service() {
     let out = run(&env, &dir, &["world", "kinpaku"]);
     assert_eq!(
         text(&out.stderr),
-        "Using a world needs your Impeccable account. Run impeccable login, then try again.\n"
+        "Using a world needs your Melzi account. Run impeccable login, then try again.\n"
     );
     let out = run(&env, &dir, &["world", "../etc"]);
     assert_eq!(
         text(&out.stderr),
-        "\"../etc\" isn't a world id. Copy the id from the world in the Impeccable worlds catalog.\n"
+        "\"../etc\" isn't a world id. Copy the id from the world in the Melzi worlds catalog.\n"
     );
     assert_eq!(f.hits(SEED), 0);
 }

@@ -264,7 +264,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
     }
     if choice != "forget" {
         io.out(if choice == "on" {
-            "Critique sync: on. Each critique report you save uploads to your Impeccable account. To stop: impeccable critiques off\n"
+            "Critique sync: on. Each critique report you save uploads to your Melzi account. To stop: impeccable critiques off\n"
         } else {
             "Critique sync: off.\n"
         });

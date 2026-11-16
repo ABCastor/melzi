@@ -13,8 +13,8 @@ pub(crate) fn emit(io: &mut Io, account: &Account, login: u64, kind: Kind, quiet
         return;
     }
     let (key, text) = match kind {
-        Kind::Design => ("design", "Uploaded your DESIGN.md to your Impeccable account. It uploads again whenever it changes. To stop: impeccable health design off\n"),
-        Kind::Critique => ("critique", "Uploaded this critique report to your Impeccable account. Each report you save uploads too. To stop: impeccable critiques off\n"),
+        Kind::Design => ("design", "Uploaded your DESIGN.md to your Melzi account. It uploads again whenever it changes. To stop: impeccable health design off\n"),
+        Kind::Critique => ("critique", "Uploaded this critique report to your Melzi account. Each report you save uploads too. To stop: impeccable critiques off\n"),
     };
     // The caller holds this upload kind's admission lock through this step.
     // Login is stable across token refreshes and changes on a new sign-in.

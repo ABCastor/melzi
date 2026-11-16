@@ -30,7 +30,7 @@ pub fn hook_manifests_for(provider_id: &str) -> &'static [&'static str] {
     }
 }
 
-/// The project skill folder `impeccable hooks on` needs before it writes this
+/// The project skill folder `/melzi hooks on` needs before it writes this
 /// provider's manifest. `None`: that verb has no target for the provider.
 fn hooks_on_skill_folder(provider_id: &str) -> Option<&'static str> {
     let dir = match provider_id {
@@ -327,7 +327,7 @@ fn append_detector_fallback(parts: &mut Parts, ctx: &Ctx, cwd: &str, env: &Env, 
         format!(" Check missing or stale {} wiring with impeccable hooks status; repair with impeccable hooks on.", manifests.join(" or "))
     };
     parts.push([
-        format!("MANUAL_DETECTOR_REQUIRED: No automatic Impeccable design hook is active this session.{wiring}"),
+        format!("MANUAL_DETECTOR_REQUIRED: No automatic Melzi design hook is active this session.{wiring}"),
         format!("Once the changed web UI is finished, run the mechanical detector over it: {} (without git, pass the changed files instead of `--changed`).", changed_detect_command(ctx, cwd, provider)),
         "Run it once, and not earlier during concept selection.".to_string(),
     ].join(" "));
@@ -425,7 +425,7 @@ fn hook_consent_declined_at(root: &str) -> bool {
 /// The `hook-not-installed` finding: this harness has a hook surface, the
 /// project is web, nothing has turned the hook off or declined it, and no
 /// manifest in reach (the project walk or the user-level file) carries an
-/// Impeccable hook of any era. A manifest of any era counts as installed so a
+/// Melzi hook of any era. A manifest of any era counts as installed so a
 /// stale one stays with `hook-script-missing` and Cursor's retired gate with
 /// `cursor-hook-pre-edit-gate`, each with its own fix. Shared by the boot
 /// directive and doctor so both report the same state.
@@ -461,11 +461,11 @@ pub fn check_hook_not_installed(ctx: &Ctx, cwd: &str, env: &Env, provider: &Prov
     let skill_root = hooks_on_skill_folder(&provider.id)
         .and_then(|rel| roots.iter().find(|root| exists(&jsp::join(&[root, rel]))));
     let user_launcher = provider.id == "claude-code"
-        && exists(&jsp::join(&[&claude_config_dir(cwd, env), "skills", "impeccable", "scripts", "impeccable"]));
+        && exists(&jsp::join(&[&claude_config_dir(cwd, env), "skills", "melzi", "scripts", "impeccable"]));
     let install = match skill_root {
-        Some(root) if *root == abs_cwd => "`impeccable hooks on` to install it".to_string(),
-        Some(root) => format!("`impeccable hooks on` from `{}`, where the skill is installed, to install it", jsp::relative(&abs_cwd, &abs_cwd, root)),
-        None if user_launcher => "`impeccable hooks on` to install it".to_string(),
+        Some(root) if *root == abs_cwd => "`/melzi hooks on` to install it".to_string(),
+        Some(root) => format!("`/melzi hooks on` from `{}`, where the skill is installed, to install it", jsp::relative(&abs_cwd, &abs_cwd, root)),
+        None if user_launcher => "`/melzi hooks on` to install it".to_string(),
         None => "`impeccable update` to reinstall it".to_string(),
     };
     vec![finding(
@@ -473,8 +473,8 @@ pub fn check_hook_not_installed(ctx: &Ctx, cwd: &str, env: &Env, provider: &Prov
         "hook manifest",
         Some(manifests[0].to_string()),
         "route",
-        "No Impeccable design hook is installed for this project, so UI edits are not reviewed as they land.".to_string(),
-        format!("Run {install}, or `impeccable hooks off` to keep it off and stop this finding."),
+        "No Melzi design hook is installed for this project, so UI edits are not reviewed as they land.".to_string(),
+        format!("Run {install}, or `/melzi hooks off` to keep it off and stop this finding."),
     )]
 }
 
@@ -925,7 +925,7 @@ pub fn run_with_hook_repair(
         for root in hook_manifest_search_roots(&ctx, &cwd, &env) {
             match repair(&root) {
                 Ok(Some(message)) => notices.push(message),
-                Err(error) => notices.push(format!("Impeccable hook wiring repair failed: {error}; run impeccable hooks on.")),
+                Err(error) => notices.push(format!("Melzi hook wiring repair failed: {error}; run impeccable hooks on.")),
                 _ => {}
             }
         }
@@ -1368,7 +1368,7 @@ mod user_scope_hook_tests {
     fn cursor_and_grok_user_hooks_supply_automatic_hook_coverage() {
         // #1190: a global install writes these, so `context` must see them.
         let fixture = UserHookFixture::new("cursor");
-        fixture.put("home/.cursor/hooks.json", r#"{"version":1,"hooks":{"postToolUse":[{"command":"\"/skills/impeccable/scripts/impeccable\" hook","matcher":"^Write$"}]}}"#);
+        fixture.put("home/.cursor/hooks.json", r#"{"version":1,"hooks":{"postToolUse":[{"command":"\"/skills/melzi/scripts/impeccable\" hook","matcher":"^Write$"}]}}"#);
         assert_eq!(fixture.mode(), "per-edit");
         let fixture = UserHookFixture::new("grok");
         fixture.put("home/.grok/hooks/impeccable.json", CODEX_HOOK);
@@ -1613,9 +1613,9 @@ mod hook_not_installed_tests {
     use crate::util::Env;
     use std::path::PathBuf;
 
-    const LAUNCHER_HOOK: &str = r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"\"/skills/impeccable/scripts/impeccable\" hook"}]}]}}"#;
-    const LEGACY_HOOK: &str = r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"node \"/skills/impeccable/scripts/hook.mjs\""}]}]}}"#;
-    const CURSOR_GATE: &str = r#"{"hooks":{"preToolUse":[{"command":"\"/skills/impeccable/scripts/impeccable\" hook-before-edit"}]}}"#;
+    const LAUNCHER_HOOK: &str = r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"\"/skills/melzi/scripts/impeccable\" hook"}]}]}}"#;
+    const LEGACY_HOOK: &str = r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"node \"/skills/melzi/scripts/hook.mjs\""}]}]}}"#;
+    const CURSOR_GATE: &str = r#"{"hooks":{"preToolUse":[{"command":"\"/skills/melzi/scripts/impeccable\" hook-before-edit"}]}}"#;
 
     struct Fixture {
         root: PathBuf,
@@ -1679,17 +1679,17 @@ mod hook_not_installed_tests {
     #[test]
     fn names_hooks_on_only_where_that_verb_installs() {
         for (provider, skill, hooks_on) in [
-            ("claude-code", "project/.claude/skills/impeccable/SKILL.md", true),
-            ("codex", "project/.agents/skills/impeccable/SKILL.md", true),
-            ("grok", "project/.grok/skills/impeccable/SKILL.md", true),
-            ("claude-code", "home/.claude/skills/impeccable/scripts/impeccable", true),
-            ("claude-code", "home/.claude/skills/impeccable/SKILL.md", false),
-            ("codex", "home/.agents/skills/impeccable/scripts/impeccable", false),
+            ("claude-code", "project/.claude/skills/melzi/SKILL.md", true),
+            ("codex", "project/.agents/skills/melzi/SKILL.md", true),
+            ("grok", "project/.grok/skills/melzi/SKILL.md", true),
+            ("claude-code", "home/.claude/skills/melzi/scripts/impeccable", true),
+            ("claude-code", "home/.claude/skills/melzi/SKILL.md", false),
+            ("codex", "home/.agents/skills/melzi/scripts/impeccable", false),
         ] {
             let fixture = Fixture::new(provider);
             fixture.put(skill, "");
             let fix = fixture.findings().remove(0).fix;
-            assert_eq!(fix.contains("`impeccable hooks on`"), hooks_on, "{provider} {skill}: {fix}");
+            assert_eq!(fix.contains("`/melzi hooks on`"), hooks_on, "{provider} {skill}: {fix}");
             assert_eq!(fix.contains("`impeccable update`"), !hooks_on, "{provider} {skill}: {fix}");
         }
     }
@@ -1697,20 +1697,20 @@ mod hook_not_installed_tests {
     #[test]
     fn names_the_folder_to_run_hooks_on_from_when_the_skill_sits_above_cwd() {
         let fixture = Fixture::new("claude-code");
-        fixture.put("project/.claude/skills/impeccable/SKILL.md", "");
+        fixture.put("project/.claude/skills/melzi/SKILL.md", "");
         let nested = fixture.root.join("project").join("web");
         std::fs::create_dir_all(&nested).unwrap();
         let cwd = nested.to_string_lossy().into_owned();
         let ctx = load_context(&cwd, &TargetOptions::default(), &fixture.env);
         let provider = crate::provider::detect(&fixture.env, &cwd);
         let fix = check_hook_not_installed(&ctx, &cwd, &fixture.env, &provider).remove(0).fix;
-        assert!(fix.contains("`impeccable hooks on` from `..`, where the skill is installed"), "{fix}");
+        assert!(fix.contains("`/melzi hooks on` from `..`, where the skill is installed"), "{fix}");
     }
 
     #[test]
     fn a_skill_beside_the_caller_is_not_offered_for_another_target() {
         let fixture = Fixture::new("claude-code");
-        fixture.put("project/.claude/skills/impeccable/SKILL.md", "");
+        fixture.put("project/.claude/skills/melzi/SKILL.md", "");
         fixture.put("other/.git/HEAD", "");
         let options = TargetOptions { target_path: Some(fixture.root.join("other").to_string_lossy().into_owned()), ..Default::default() };
         let fix = || {
@@ -1719,9 +1719,9 @@ mod hook_not_installed_tests {
             check_hook_not_installed(&ctx, &fixture.project, &fixture.env, &provider).remove(0).fix
         };
         assert!(fix().contains("`impeccable update`"), "{}", fix());
-        fixture.put("other/.claude/skills/impeccable/SKILL.md", "");
+        fixture.put("other/.claude/skills/melzi/SKILL.md", "");
         // The folder is spelled with the platform's separator.
-        let from = format!("`impeccable hooks on` from `..{}other`, where the skill is installed", std::path::MAIN_SEPARATOR);
+        let from = format!("`/melzi hooks on` from `..{}other`, where the skill is installed", std::path::MAIN_SEPARATOR);
         assert!(fix().contains(&from), "{}", fix());
     }
 
@@ -1805,20 +1805,20 @@ mod wiring_fallback_tests {
     #[test]
     fn a_relative_launcher_is_spelled_absolute_when_run_from_another_dir() {
         let env = crate::util::Env::from([
-            ("IMPECCABLE_SELF".to_string(), ".claude/skills/impeccable/scripts/impeccable".to_string()),
+            ("IMPECCABLE_SELF".to_string(), ".claude/skills/melzi/scripts/impeccable".to_string()),
         ]);
         let provider = crate::provider::detect(&env, "/repo/apps/b");
         let mut ctx = crate::context::load_context("/repo/apps/b", &crate::target_args::TargetOptions::default(), &env);
         ctx.project_root = "/repo/apps/a".to_string();
         assert_eq!(
             super::changed_detect_command(&ctx, "/repo/apps/b", &provider),
-            "`/repo/apps/b/.claude/skills/impeccable/scripts/impeccable detect --json --changed` from `/repo/apps/a`"
+            "`/repo/apps/b/.claude/skills/melzi/scripts/impeccable detect --json --changed` from `/repo/apps/a`"
         );
         // Run from cwd itself, the command is printed as given.
         ctx.project_root = "/repo/apps/b".to_string();
         assert_eq!(
             super::changed_detect_command(&ctx, "/repo/apps/b", &provider),
-            "`.claude/skills/impeccable/scripts/impeccable detect --json --changed`"
+            "`.claude/skills/melzi/scripts/impeccable detect --json --changed`"
         );
         // A bare name resolves on PATH from anywhere.
         let bare = crate::provider::detect(&crate::util::Env::from([("IMPECCABLE_SELF".to_string(), "impeccable".to_string())]), "/repo/apps/b");
@@ -1829,7 +1829,7 @@ mod wiring_fallback_tests {
         ctx.project_root = "/work/My Apps/a".to_string();
         assert_eq!(
             super::changed_detect_command(&ctx, "/work/My Apps/b", &spaced),
-            "`'/work/My Apps/b/.claude/skills/impeccable/scripts/impeccable' detect --json --changed` from `/work/My Apps/a`"
+            "`'/work/My Apps/b/.claude/skills/melzi/scripts/impeccable' detect --json --changed` from `/work/My Apps/a`"
         );
     }
 }

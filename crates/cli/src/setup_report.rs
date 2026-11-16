@@ -109,7 +109,7 @@ pub fn run(io: &Io) -> i32 {
         let mut env = io.env.clone();
         env.insert(
             "IMPECCABLE_SKILL_DIR".into(),
-            format!("{home}/{dir}/skills/impeccable"),
+            format!("{home}/{dir}/skills/melzi"),
         );
         if let Some(v) = impeccable_context::context_cli::installed_skill_version(
             &env,

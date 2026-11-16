@@ -765,14 +765,14 @@ pub fn copy_provider_hooks(sys: &crate::providers::Sys, bundle_dir: &str, root: 
 /// Once a global install has the Codex, Cursor or Grok hook in its home
 /// manifest, a project manifest an older global install wrote for the same
 /// provider (naming the same home skill) only makes the hook fire twice.
-/// Removes Impeccable's entries from that project manifest, keeping every
+/// Removes Melzi's entries from that project manifest, keeping every
 /// other entry and key, and only when:
 ///
 /// - the home hook is current (`home_hook_is_current`: a dangling, partial or
 ///   legacy `.mjs` home hook does not count);
 /// - the project manifest is not the home one (cwd is home, or a relative
 ///   `CODEX_HOME` points into the project);
-/// - every Impeccable command in it names the home skill. A command naming a
+/// - every Melzi command in it names the home skill. A command naming a
 ///   project skill belongs to a project install and stays.
 ///
 /// A project manifest with nothing else left is removed, as
@@ -788,7 +788,7 @@ pub fn prune_duplicate_home_hooks(sys: &Sys, home_root: &str, project_root: &str
             continue;
         }
         let Some(home_dest) = user_scope_hook_dest(sys, home_root, provider) else { continue };
-        let skill_dir = jsp::join(&[home_root, provider, "skills", "impeccable"]);
+        let skill_dir = jsp::join(&[home_root, provider, "skills", "melzi"]);
         if !home_hook_is_current(sys, home_root, provider) {
             continue;
         }
@@ -813,7 +813,7 @@ pub fn prune_duplicate_home_hooks(sys: &Sys, home_root: &str, project_root: &str
 
 /// The Codex, Cursor or Grok hook in the home manifest is current, the way
 /// `user_claude_hook_is_current` decides it for Claude: the home launcher
-/// exists, the manifest carries every current entry, and each Impeccable
+/// exists, the manifest carries every current entry, and each Melzi
 /// command in it is a launcher command naming the home skill. A legacy
 /// `node .../hook.mjs` entry, a partial manifest, or one naming a launcher
 /// that is gone is a dead hook: it must be rewritten, not counted, and it
@@ -834,7 +834,7 @@ pub fn home_hook_is_current(sys: &Sys, home_root: &str, provider: &str) -> bool 
     let Some(hooks @ (Value::Object(_) | Value::Array(_))) = map.get("hooks") else { return false };
     let mut commands = Vec::new();
     collect_impeccable_hook_commands(hooks, &mut commands);
-    let skill_dir = jsp::join(&[home_root, provider, "skills", "impeccable"]);
+    let skill_dir = jsp::join(&[home_root, provider, "skills", "melzi"]);
     !commands.is_empty()
         && commands.iter().all(|c| is_launcher_hook_command(c) && command_names_skill_dir(c, &skill_dir))
 }

@@ -1,7 +1,7 @@
 ---
 name: melzi
 description: "Use when the user wants to design, redesign, shape, critique, audit, polish, simplify, harden, animate, or otherwise improve a frontend interface: websites, landing pages, dashboards, product UI, components, forms, settings, onboarding, empty states, and native iOS or Android screens. Handles UX review, hierarchy, layout, typography, color, motion, UX copy, accessibility, responsive behavior, edge cases, and capturing or documenting design systems (DESIGN.md, tokens). Also for making bland UI bolder, loud UI quieter, or ambitious visual effects. Also use for hand-drawn SVG mascots, spot illustrations, annotation marks, and sketch diagrams. Not for backend-only or non-UI tasks."
-claude-code-description: "Use to design, redesign, critique, audit, polish or animate a frontend: websites, landing pages, dashboards, app UI, components, native iOS/Android screens, a design system (DESIGN.md), or hand-drawn SVG illustrations."
+claude-code-description: "Use to design, redesign, critique, audit, polish or animate a frontend: websites, landing pages, dashboards, app UI, components, iOS/Android screens, a design system (DESIGN.md), or hand-drawn SVG."
 argument-hint: "[{{command_hint}}] [target]"
 user-invocable: true
 allowed-tools:
@@ -103,6 +103,6 @@ After init writes PRODUCT.md, resume without rerunning `impeccable context`; ini
 
 **Review island:** Before an HTML prototype goes to the user to look at, inject the review island so their judgement comes back attached to the thing it is about: a note on the page as a whole or pinned to an element, and the colours and typefaces they tried on the real page rather than described. Declare the project's own candidates and its retired list, or the island falls back to a neutral starter set. Load [reference/review-layer.md](reference/review-layer.md) at that handoff, and again when reading a round back. A round carries an `unresolved` list you must read first, and a memory of what they have already rejected. <!-- rule:skill-review-layer -->
 
-**Foundations:** `{{command_prefix}}impeccable foundations` runs `{{scripts_path}}/impeccable foundations` and walks the user through the product-foundations roadmap (secrets, 404 page, icons, CI and more); `{{command_prefix}}impeccable foundations <id>` fixes that one item. Load [reference/foundations.md](reference/foundations.md) when the user invokes it.
+**Foundations:** `{{command_prefix}}melzi foundations` runs `{{scripts_path}}/impeccable foundations` and walks the user through the product-foundations roadmap (secrets, 404 page, icons, CI and more); `{{command_prefix}}melzi foundations <id>` fixes that one item. Load [reference/foundations.md](reference/foundations.md) when the user invokes it.
 
 **Never repair drift as a side effect of a design task.** A `CONTEXT_STALE` finding is reported, not acted on, unless the user asks. The one exception is a finding marked `auto`, which the next write to that file performs anyway. <!-- rule:skill-drift-not-a-side-quest -->

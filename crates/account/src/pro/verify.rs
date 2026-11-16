@@ -65,7 +65,7 @@ fn b64(s: &str) -> Option<Vec<u8>> {
 }
 
 /// The manifest the release job signs. The signature is detached
-/// (`X-Impeccable-Signature`, base64url Ed25519) over these exact bytes.
+/// (`X-Melzi-Signature`, base64url Ed25519) over these exact bytes.
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Manifest {
     pub schema: u32,

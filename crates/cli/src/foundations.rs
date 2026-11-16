@@ -306,7 +306,7 @@ fn print_roadmap(
                 io.out(&format!("  {f} ({lines} lines)\n"));
             }
         }
-        io.out(&format!("  Ask your agent: /impeccable foundations {id}\n"));
+        io.out(&format!("  Ask your agent: /melzi foundations {id}\n"));
     } else if !items.is_empty() {
         io.out("\nEverything checked is in place.\n");
     }

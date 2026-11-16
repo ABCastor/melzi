@@ -5,9 +5,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f \"${CLAUDE_PLUGIN_ROOT}/skills/impeccable/scripts/impeccable\" ] || sh \"${CLAUDE_PLUGIN_ROOT}/skills/impeccable/scripts/impeccable\" hook",
-            "windows": "cmd /c if exist ${CLAUDE_PLUGIN_ROOT}\\skills\\impeccable\\scripts\\impeccable.cmd ${CLAUDE_PLUGIN_ROOT}\\skills\\impeccable\\scripts\\impeccable.cmd hook",
-            "commandWindows": "cmd /c if exist \"${CLAUDE_PLUGIN_ROOT}\\skills\\impeccable\\scripts\\impeccable.cmd\" \"${CLAUDE_PLUGIN_ROOT}\\skills\\impeccable\\scripts\\impeccable.cmd\" hook",
+            "command": "[ ! -f \"${CLAUDE_PLUGIN_ROOT}/skills/melzi/scripts/impeccable\" ] || sh \"${CLAUDE_PLUGIN_ROOT}/skills/melzi/scripts/impeccable\" hook",
+            "windows": "cmd /c if exist ${CLAUDE_PLUGIN_ROOT}\\skills\\melzi\\scripts\\impeccable.cmd ${CLAUDE_PLUGIN_ROOT}\\skills\\melzi\\scripts\\impeccable.cmd hook",
+            "commandWindows": "cmd /c if exist \"${CLAUDE_PLUGIN_ROOT}\\skills\\melzi\\scripts\\impeccable.cmd\" \"${CLAUDE_PLUGIN_ROOT}\\skills\\melzi\\scripts\\impeccable.cmd\" hook",
             "env": {
               "IMPECCABLE_HOOK_HARNESS": "vscode"
             },
@@ -23,9 +23,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f \"${CLAUDE_PLUGIN_ROOT}/skills/impeccable/scripts/impeccable\" ] || sh \"${CLAUDE_PLUGIN_ROOT}/skills/impeccable/scripts/impeccable\" hook",
-            "windows": "cmd /c if exist ${CLAUDE_PLUGIN_ROOT}\\skills\\impeccable\\scripts\\impeccable.cmd ${CLAUDE_PLUGIN_ROOT}\\skills\\impeccable\\scripts\\impeccable.cmd hook",
-            "commandWindows": "cmd /c if exist \"${CLAUDE_PLUGIN_ROOT}\\skills\\impeccable\\scripts\\impeccable.cmd\" \"${CLAUDE_PLUGIN_ROOT}\\skills\\impeccable\\scripts\\impeccable.cmd\" hook",
+            "command": "[ ! -f \"${CLAUDE_PLUGIN_ROOT}/skills/melzi/scripts/impeccable\" ] || sh \"${CLAUDE_PLUGIN_ROOT}/skills/melzi/scripts/impeccable\" hook",
+            "windows": "cmd /c if exist ${CLAUDE_PLUGIN_ROOT}\\skills\\melzi\\scripts\\impeccable.cmd ${CLAUDE_PLUGIN_ROOT}\\skills\\melzi\\scripts\\impeccable.cmd hook",
+            "commandWindows": "cmd /c if exist \"${CLAUDE_PLUGIN_ROOT}\\skills\\melzi\\scripts\\impeccable.cmd\" \"${CLAUDE_PLUGIN_ROOT}\\skills\\melzi\\scripts\\impeccable.cmd\" hook",
             "env": {
               "IMPECCABLE_HOOK_HARNESS": "vscode"
             },
@@ -40,9 +40,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f \"${CLAUDE_PLUGIN_ROOT}/skills/impeccable/scripts/impeccable\" ] || sh \"${CLAUDE_PLUGIN_ROOT}/skills/impeccable/scripts/impeccable\" hook",
-            "windows": "cmd /c if exist ${CLAUDE_PLUGIN_ROOT}\\skills\\impeccable\\scripts\\impeccable.cmd ${CLAUDE_PLUGIN_ROOT}\\skills\\impeccable\\scripts\\impeccable.cmd hook",
-            "commandWindows": "cmd /c if exist \"${CLAUDE_PLUGIN_ROOT}\\skills\\impeccable\\scripts\\impeccable.cmd\" \"${CLAUDE_PLUGIN_ROOT}\\skills\\impeccable\\scripts\\impeccable.cmd\" hook",
+            "command": "[ ! -f \"${CLAUDE_PLUGIN_ROOT}/skills/melzi/scripts/impeccable\" ] || sh \"${CLAUDE_PLUGIN_ROOT}/skills/melzi/scripts/impeccable\" hook",
+            "windows": "cmd /c if exist ${CLAUDE_PLUGIN_ROOT}\\skills\\melzi\\scripts\\impeccable.cmd ${CLAUDE_PLUGIN_ROOT}\\skills\\melzi\\scripts\\impeccable.cmd hook",
+            "commandWindows": "cmd /c if exist \"${CLAUDE_PLUGIN_ROOT}\\skills\\melzi\\scripts\\impeccable.cmd\" \"${CLAUDE_PLUGIN_ROOT}\\skills\\melzi\\scripts\\impeccable.cmd\" hook",
             "env": {
               "IMPECCABLE_HOOK_HARNESS": "vscode"
             },

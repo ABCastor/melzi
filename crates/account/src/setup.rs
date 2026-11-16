@@ -309,7 +309,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
             if crate::stale_grant::status(io, "setup:write") {
                 "Setup status: on, but this sign-in can't save yet. Run impeccable login.\n"
             } else {
-                "Setup status: on. This machine reports where Impeccable is installed, once a day.\n"
+                "Setup status: on. This machine reports where Melzi is installed, once a day.\n"
             }
         } else {
             "Setup status: off.\n"
@@ -330,7 +330,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
     drop(local_lock);
     if verb != "forget" {
         io.out(if verb == "on" {
-            "Setup status: on. This machine reports where Impeccable is installed, once a day.\n"
+            "Setup status: on. This machine reports where Melzi is installed, once a day.\n"
         } else {
             "Setup status: off.\n"
         });

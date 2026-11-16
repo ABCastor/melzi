@@ -59,7 +59,7 @@ export function stageVSCodeExtension(rootDir, distDir) {
       virtualWorkspaces: false,
       agentsWindow: { supported: true },
     },
-    contributes: { chatSkills: [{ path: './skills/impeccable/SKILL.md' }] },
+    contributes: { chatSkills: [{ path: './skills/melzi/SKILL.md' }] },
   };
   fs.writeFileSync(path.join(extensionRoot, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   fs.copyFileSync(path.join(rootDir, 'scripts/lib/assets/plugin-icon.png'), path.join(extensionRoot, 'icon.png'));

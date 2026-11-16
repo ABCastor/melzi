@@ -12,7 +12,7 @@ use serde_json::Value;
 
 const PATH: &str = "/cli/v1/setup";
 /// The project this folder is, sent in a header so no log carries it.
-const PROJECT_HEADER: &str = "Impeccable-Project";
+const PROJECT_HEADER: &str = "Melzi-Project";
 /// Set when login's setup lines already named `impeccable loop connect`, so the
 /// CLI's own Loop sentence doesn't print the same command twice.
 static NAMED_LOOP_CONNECT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -128,7 +128,7 @@ pub fn after_login(io: &mut Io, account: &Account) {
     }
 }
 
-const USAGE: &str = "Usage: impeccable status [--json]\n\nShows what Impeccable is connected to for your account (your agent, its tools,\nLoop, the Chrome extension and GitHub pull requests), this project when your\naccount knows it, and the one next step.\n\n  --json   Print the account service's answer as it came.\n";
+const USAGE: &str = "Usage: impeccable status [--json]\n\nShows what Melzi is connected to for your account (your agent, its tools,\nLoop, the Chrome extension and GitHub pull requests), this project when your\naccount knows it, and the one next step.\n\n  --json   Print the account service's answer as it came.\n";
 
 /// `impeccable status [--json]`.
 pub fn run(args: &[String], io: &mut Io) -> i32 {
@@ -219,8 +219,8 @@ mod tests {
         let mut v = example();
         v["next"] = Value::Null;
         assert!(!lines(&v).contains("Next"));
-        v["next"] = json!({ "id": "sign-in-agent", "place": "agent", "label": "Sign in", "url": "https://x.test/", "command": "npx impeccable login" });
-        assert!(lines(&v).ends_with("Next: Sign in: npx impeccable login\n"));
+        v["next"] = json!({ "id": "sign-in-agent", "place": "agent", "label": "Sign in", "url": "https://x.test/", "command": "npx melzi login" });
+        assert!(lines(&v).ends_with("Next: Sign in: npx melzi login\n"));
         // A url that isn't https is never shown to open.
         v["next"] = json!({ "id": "get-loop", "place": "loop", "label": "Get it for Mac", "url": "javascript:alert(1)", "command": null });
         assert!(lines(&v).ends_with("Next: Get it for Mac\n"));

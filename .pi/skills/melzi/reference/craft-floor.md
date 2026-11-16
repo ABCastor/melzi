@@ -41,4 +41,6 @@ Surface habits:
 - Geometric masks standing in for organic contours. A circle, polygon, or radial-gradient cutout approximating a photographic subject's edge is the cheap version of the effect and reads worse than omitting it. Derive an alpha matte from the actual image, or produce a cut-out asset.
 - Light or dark picked by category. Pick it from the use scene: who, where, under what ambient light.
 
-The floor holds the mechanics; it never picks the direction. With every check green, spend the page on the committed world, and when torn between refined and committed, commit.
+The floor holds the mechanics; it never picks the direction. With every check green, spend the page on the committed world, and when torn between refined and committed, commit. On an Operate or Read surface, commit through structure, proportion and type; adding world material there is the costume [taste-bar.md](taste-bar.md) tests for.
+
+The floor says what must not be wrong. [taste-bar.md](taste-bar.md), loaded alongside this file, says what good looks like and carries the director's pass you run on every render before it is shown.

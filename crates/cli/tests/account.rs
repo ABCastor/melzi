@@ -126,7 +126,7 @@ fn whoami_shows_what_the_plan_includes_and_falls_back_without_the_catalog() {
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(text.contains("Pro rules: included."), "{text}");
     // The account is named, and a non-production service shows its host.
-    assert!(text.starts_with("Signed in to Impeccable (127.0.0.1:"), "{text}");
+    assert!(text.starts_with("Signed in to Melzi (127.0.0.1:"), "{text}");
     // Pro gets no pricing pointer; an account without Pro gets the one live page (launch CTA audit).
     assert!(!text.contains("impeccable.style/pricing"), "{text}");
     fake.knobs.lock().unwrap().entitled = false;
@@ -143,7 +143,7 @@ fn whoami_shows_what_the_plan_includes_and_falls_back_without_the_catalog() {
                 { "text": "Live++", "soon": true },
             ] },
         ],
-        "start": { "signIn": "npx impeccable login", "pricing": "https://impeccable.style/pricing" },
+        "start": { "signIn": "npx melzi login", "pricing": "https://impeccable.style/pricing" },
     });
     fake.route(
         "GET",
@@ -243,7 +243,7 @@ fn login_offers_loop_connect_only_when_loop_is_installed_and_an_agent_is_not_con
     assert!(!err.contains("Loop"), "no Loop, no offer: {err}");
     assert_eq!(out, "", "stdout carries the link alone");
 
-    let macos = home.join("Applications/Impeccable Loop.app/Contents/MacOS");
+    let macos = home.join("Applications/Melzi Loop.app/Contents/MacOS");
     std::fs::create_dir_all(&macos).unwrap();
     std::fs::write(macos.join("loop-hook"), "#!/bin/sh\nexit 0\n").unwrap();
     let (out, err) = login_output(&env, &home);

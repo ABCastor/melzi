@@ -190,7 +190,7 @@ pub fn cursor_manifest_has_retired_gate(manifest: &serde_json::Value) -> bool {
         .is_some_and(value_has_impeccable_hook_marker)
 }
 
-/// True when any string under `v` is an Impeccable hook command of either
+/// True when any string under `v` is an Melzi hook command of either
 /// era and any verb.
 pub fn value_has_impeccable_hook_marker(v: &serde_json::Value) -> bool {
     match v {

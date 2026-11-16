@@ -531,10 +531,10 @@ fn repair_update_hook_manifests(sys: &crate::providers::Sys, hook_root: &str, sk
     Ok(())
 }
 
-/// An Impeccable skill under `<root>/.codex/skills`, which `update` never
+/// An Melzi skill under `<root>/.codex/skills`, which `update` never
 /// refreshes: `.codex/skills` is not an install target. Codex reads repository
 /// skills from `.agents/skills` only (its loader joins that onto each directory
-/// from the project root to the cwd), and the user-level install Impeccable
+/// from the project root to the cwd), and the user-level install Melzi
 /// maintains is `~/.agents/skills`, so a copy there (an unzipped bundle, a
 /// hand copy) stays at the version it was. `managed` holds the real paths of
 /// the skills dirs this run updates: an entry that resolves into one of them
@@ -567,18 +567,18 @@ fn note_unmanaged_codex_skill(sys: &Sys, io: &mut Io, root: &str, user: bool, ha
     let Some(name) = unmanaged_codex_skill(root, managed) else { return };
     let shown = if user { format!("{}/.codex/skills/{name}", sys.format_path_for_display(root)) } else { format!(".codex/skills/{name}") };
     let reads = if user {
-        "the user-level install Impeccable maintains is ~/.agents/skills/impeccable"
+        "the user-level install Melzi maintains is ~/.agents/skills/melzi"
     } else {
         "Codex reads repository skills from .agents/skills, so that copy is never loaded"
     };
-    let install = if user { "`npx impeccable install --providers=codex --scope=global`" } else { "`npx impeccable install --providers=codex`" };
+    let install = if user { "`npx melzi install --providers=codex --scope=global`" } else { "`npx melzi install --providers=codex`" };
     let tail = if user { " so Codex loads one copy" } else { "" };
     let step = if has_agents {
         format!("Delete {shown}{tail}")
     } else {
         format!("Run {install} to install it there, then delete {shown}{tail}")
     };
-    out(io, &format!("Found an Impeccable skill at {shown}, which update does not manage: {reads}. {step}."));
+    out(io, &format!("Found an Melzi skill at {shown}, which update does not manage: {reads}. {step}."));
 }
 
 /// Ends an update with the doctor pass over the project: the skill just
@@ -894,7 +894,7 @@ fn install(flags: &[String], io: &mut Io) -> R<()> {
     install_engine_binaries(&sys, io, &written);
     bundle::report_provider_agents(&sys, io, &agent_results);
     report_hook_targets(&sys, io, &hook_targets, if want_hooks { &targets } else { &[] });
-    out(io, "\nDone! Now type /impeccable init in your AI coding agent's chat (not in this terminal) to set up design context.\n");
+    out(io, "\nDone! Now type /melzi init in your AI coding agent's chat (not in this terminal) to set up design context.\n");
     Ok(())
 }
 
@@ -938,7 +938,7 @@ fn update(flags: &[String], io: &mut Io) -> R<()> {
         if explicit_scope != Some(Scope::Project) {
             note_unmanaged_codex_skill(&sys, io, &home, true, false, &[]);
         }
-        out(io, "Run `npx impeccable install` to install first.");
+        out(io, "Run `npx melzi install` to install first.");
         return Err(Flow::Exit(1));
     };
 

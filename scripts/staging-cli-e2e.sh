@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pro CLI end-to-end against Impeccable's staging service, unattended.
+# Pro CLI end-to-end against Melzi's staging service, unattended.
 # Run by pristine's staging-only CI job (workflow_dispatch, staging-deploy environment), or locally.
 #
 # Sign-in consent is given as Platform's seeded staging test person through pristine's own

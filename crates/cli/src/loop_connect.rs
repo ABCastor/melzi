@@ -2,7 +2,7 @@
 //! Needs you and Loop.
 //!
 //! For each agent found (Claude Code, Codex), connect:
-//! 1. adds the Impeccable MCP server, only if the agent has no server of that name, through
+//! 1. adds the Melzi MCP server, only if the agent has no server of that name, through
 //!    the agent's own CLI, then checks the exact global entry it wrote;
 //! 2. adds Loop's hooks through the agents engine (journaled, undone exactly);
 //! 3. writes the record Loop's helper reads.
@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-/// The Impeccable MCP servers. Constants of the build: the account service the CLI
+/// The Melzi MCP servers. Constants of the build: the account service the CLI
 /// signs in to (`IMPECCABLE_ACCOUNT_URL`) chooses between them, and nothing else can name
 /// one. An entry is written into the agent's own global configuration and outlives the
 /// variable, so an account URL that is neither service is refused, never followed and
@@ -66,7 +66,7 @@ fn mcp_for_account(raw: Option<&str>) -> Result<&'static str> {
         .find(|(account, _)| origin.as_deref() == Some(*account))
         .map(|(_, mcp)| *mcp)
         .ok_or_else(|| {
-            "IMPECCABLE_ACCOUNT_URL isn't the Impeccable account or its staging service, so no MCP server was added. Unset it to connect to Impeccable.".into()
+            "IMPECCABLE_ACCOUNT_URL isn't the Melzi account or its staging service, so no MCP server was added. Unset it to connect to Melzi.".into()
         })
 }
 
@@ -106,12 +106,12 @@ const OWNER: &str = "impeccable-loop";
 /// The instruction connect keeps in the agent's own rule file (~/.claude/CLAUDE.md,
 /// ~/.codex/AGENTS.md) as an engine-managed block, so agents bring questions to Loop
 /// instead of waiting in a terminal. Disconnect removes the block with the hooks.
-const INSTRUCTION: &str = "When you need a person's decision or input, use needs_you.post (Impeccable) instead of asking in chat or a built-in question tool. If needs_you says Loop isn't connected, ask normally.";
-const APP: &str = "Applications/Impeccable Loop.app";
+const INSTRUCTION: &str = "When you need a person's decision or input, use needs_you.post (Melzi) instead of asking in chat or a built-in question tool. If needs_you says Loop isn't connected, ask normally.";
+const APP: &str = "Applications/Melzi Loop.app";
 const HELPER: &str = "Contents/MacOS/loop-hook";
 /// Where Loop's helper keeps its state (the old name stays until Loop migrates it).
 const SUPPORT_PARENT: &str = "Library/Application Support";
-const SUPPORT: [&str; 2] = ["Impeccable Reviews", "Loop"];
+const SUPPORT: [&str; 2] = ["Melzi Reviews", "Loop"];
 /// This command's own note, per connected agent and config folder, of where its MCP
 /// server lives, so disconnect can print the exact command to remove it.
 const TARGETS: &str = "connect.json";
@@ -711,7 +711,7 @@ fn missing_loop(helper: &Path) -> String {
             helper.display()
         )
     } else {
-        "Impeccable Loop isn't installed in ~/Applications, or is too old to connect agents. Run impeccable loop install first.".into()
+        "Melzi Loop isn't installed in ~/Applications, or is too old to connect agents. Run impeccable loop install first.".into()
     }
 }
 
@@ -1351,7 +1351,7 @@ pub(crate) fn offer_taste(io: &mut Io, agents: &[String], choice: Taste) -> (Str
         Taste::Ask if io.stdin_is_tty && std::io::stdout().is_terminal() => {
             let files: Vec<String> = ask.iter().map(|f| tilde(&home, f)).collect();
             io.out(&format!(
-                "Let your agents use your Impeccable taste? This adds 3 lines to {}. [Y/n] ",
+                "Let your agents use your Melzi taste? This adds 3 lines to {}. [Y/n] ",
                 files.join(" and ")
             ));
             let _ = std::io::Write::flush(&mut io.stdout);
@@ -1453,7 +1453,7 @@ pub(crate) fn offer_taste(io: &mut Io, agents: &[String], choice: Taste) -> (Str
         }
     }
     if yes.is_none() && !ask.is_empty() {
-        out.push_str("To let your agents use your Impeccable taste: impeccable loop connect --taste\n");
+        out.push_str("To let your agents use your Melzi taste: impeccable loop connect --taste\n");
     }
     if note[TASTE_KEY] != before {
         if let Err(e) = publish(&support, TARGETS, &note) {

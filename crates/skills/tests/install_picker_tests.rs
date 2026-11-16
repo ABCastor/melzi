@@ -1,5 +1,5 @@
 //! #1235: a harness the user picks interactively is installed even when
-//! another harness already has Impeccable. Detected only stays quiet about
+//! another harness already has Melzi. Detected only stays quiet about
 //! a harness the user did not name.
 
 use std::collections::HashMap;
@@ -40,7 +40,7 @@ fn fixture(name: &str) -> Fixture {
     std::fs::create_dir_all(format!("{project}/.git")).unwrap();
     std::fs::create_dir_all(&home).unwrap();
     for provider in [".claude", ".agents", ".cursor"] {
-        write(&format!("{bundle}/{provider}/skills/impeccable/SKILL.md"), SKILL);
+        write(&format!("{bundle}/{provider}/skills/melzi/SKILL.md"), SKILL);
     }
     let mut env = HashMap::new();
     // A fixture home has to name both or the verb writes into the real profile.
@@ -53,7 +53,7 @@ fn fixture(name: &str) -> Fixture {
 }
 
 fn seed_install(base: &str, provider: &str) {
-    write(&format!("{base}/{provider}/skills/impeccable/SKILL.md"), SKILL);
+    write(&format!("{base}/{provider}/skills/melzi/SKILL.md"), SKILL);
 }
 
 /// Runs `install --no-hooks` with `stdin` as the piped (non-TTY) prompt answers.
@@ -77,7 +77,7 @@ fn customize_installs_a_picked_provider_when_another_is_installed() {
     let (code, stdout) = run_install(&fx, "customize\ncodex\nproject\n");
     assert_eq!(code, 0, "{stdout}");
     assert!(!stdout.contains("Skills are up to date"), "{stdout}");
-    assert!(exists(&format!("{}/.agents/skills/impeccable/SKILL.md", fx.project)), "{stdout}");
+    assert!(exists(&format!("{}/.agents/skills/melzi/SKILL.md", fx.project)), "{stdout}");
     std::fs::remove_dir_all(&fx.root).ok();
 }
 
@@ -88,7 +88,7 @@ fn customize_mixed_selection_installs_the_missing_provider() {
     let (code, stdout) = run_install(&fx, "customize\nclaude,codex\nproject\n");
     assert_eq!(code, 0, "{stdout}");
     assert!(stdout.contains("Installed impeccable into: .agents (project)"), "{stdout}");
-    assert!(exists(&format!("{}/.agents/skills/impeccable/SKILL.md", fx.project)), "{stdout}");
+    assert!(exists(&format!("{}/.agents/skills/melzi/SKILL.md", fx.project)), "{stdout}");
     std::fs::remove_dir_all(&fx.root).ok();
 }
 
@@ -101,7 +101,7 @@ fn customize_mixed_selection_installs_the_opencode_command_bridge() {
     write(&format!("{bundle}/.opencode/commands/impeccable.md"), "Bridge fixture.\n");
     let (code, stdout) = run_install(&fx, "customize\nclaude,opencode\nproject\n");
     assert_eq!(code, 0, "{stdout}");
-    assert!(exists(&format!("{}/.opencode/skills/impeccable/SKILL.md", fx.project)), "{stdout}");
+    assert!(exists(&format!("{}/.opencode/skills/melzi/SKILL.md", fx.project)), "{stdout}");
     assert!(exists(&format!("{}/.opencode/commands/impeccable.md", fx.project)), "{stdout}");
     std::fs::remove_dir_all(&fx.root).ok();
 }
@@ -112,7 +112,7 @@ fn direct_picker_installs_a_picked_provider_when_another_is_installed() {
     seed_install(&fx.home, ".agents");
     let (code, stdout) = run_install(&fx, "claude\nglobal\n");
     assert_eq!(code, 0, "{stdout}");
-    assert!(exists(&format!("{}/.claude/skills/impeccable/SKILL.md", fx.home)), "{stdout}");
+    assert!(exists(&format!("{}/.claude/skills/melzi/SKILL.md", fx.home)), "{stdout}");
     std::fs::remove_dir_all(&fx.root).ok();
 }
 
@@ -124,6 +124,6 @@ fn detected_only_leaves_a_detected_provider_without_an_install_alone() {
     let (code, stdout) = run_install(&fx, "detected\nproject\n");
     assert_eq!(code, 0, "{stdout}");
     assert!(stdout.contains("Skills are up to date"), "{stdout}");
-    assert!(!exists(&format!("{}/.cursor/skills/impeccable", fx.project)), "{stdout}");
+    assert!(!exists(&format!("{}/.cursor/skills/melzi", fx.project)), "{stdout}");
     std::fs::remove_dir_all(&fx.root).ok();
 }

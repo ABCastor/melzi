@@ -46,7 +46,7 @@ pub fn run(args: &[String], io: &mut Io, pack: InstalledPack) -> i32 {
             0
         }
         "--version" | "-v" => {
-            // The installed skill's version, the number `npx impeccable update` moves;
+            // The installed skill's version, the number `npx melzi update` moves;
             // the npm shim answers --version itself, so this reaches direct runs only.
             let cwd = io.cwd.to_string_lossy().into_owned();
             let version = impeccable_context::context_cli::installed_skill_version(&io.env, &cwd)
@@ -183,7 +183,7 @@ pub fn run(args: &[String], io: &mut Io, pack: InstalledPack) -> i32 {
         }
         "hooks" | "hook-admin" => impeccable_hook::run_hook_admin(rest, io),
         v if v.starts_with("live") => impeccable_live::run(v, rest, io),
-        // `npx impeccable src/` shorthand: a path-shaped, flag, URL, or existing
+        // `npx melzi src/` shorthand: a path-shaped, flag, URL, or existing
         // first arg is a detect target (cli.js looksLikeDetectTarget).
         v if impeccable_detect::looks_like_detect_target(v, &io.cwd.to_string_lossy()) => {
             detect(args, io, &engines, pack.rule_pack)
@@ -292,7 +292,7 @@ fn scan_after_login(
     if synced.recorded() {
         let find = match impeccable_account::config::Account::from_env(&io.env).ok().and_then(|a| a.home_url()) {
             Some(url) => format!("See it on your Home: {url}"),
-            None => "Find it under Repositories in your Impeccable account.".to_string(),
+            None => "Find it under Repositories in your Melzi account.".to_string(),
         };
         io.err(&format!(
             "Added this repository to your account: {found} in {files} files. Sent its name, finding counts and foundations checks, never your code or file names. {find}\n"

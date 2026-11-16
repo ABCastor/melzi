@@ -419,7 +419,7 @@ fn status_report(rt: &Runtime, cwd: &str) -> String {
         }
     };
     let mut lines = vec![
-        "Impeccable design hook".to_string(),
+        "Melzi design hook".to_string(),
         format!(
             "  state:        {}",
             if cfg.enabled { "enabled" } else { "disabled" }
@@ -480,7 +480,7 @@ pub fn repair_for_context(rt: &Runtime, cwd: &str) -> Result<Option<String>, Str
     }
     let result = repair_hook_manifests(rt, cwd, true)?;
     Ok(if result.written.is_empty() { None } else {
-        Some(format!("Repaired Impeccable hook wiring for: {}.", result.written.join(", ")))
+        Some(format!("Repaired Melzi hook wiring for: {}.", result.written.join(", ")))
     })
 }
 
@@ -555,8 +555,8 @@ fn set_enabled(rt: &Runtime, cwd: &str, value: bool) -> Result<String, String> {
         let user_dir = impeccable_context::context_cli::claude_config_dir(&rt.proc_cwd, &rt.env);
         parts.push(format!(
             "No design harness is wired. Checked Claude Code project skill {} and user launcher {}. Install the skill for your harness or fix the skipped settings, then run impeccable hooks on.",
-            jsp::join(&[cwd, ".claude/skills/impeccable"]),
-            jsp::join(&[&user_dir, "skills/impeccable/scripts/impeccable"]),
+            jsp::join(&[cwd, ".claude/skills/melzi"]),
+            jsp::join(&[&user_dir, "skills/melzi/scripts/impeccable"]),
         ));
     }
     Ok(parts.join(" "))
@@ -590,7 +590,7 @@ fn repair_hook_manifests(rt: &Runtime, cwd: &str, safe_only: bool) -> Result<Rep
         let project_skill = jsp::join(&[cwd, target.skill_rel]);
         let user_claude_dir = impeccable_context::context_cli::claude_config_dir(&rt.proc_cwd, &rt.env);
         let user_skill = if target.provider == ".claude" {
-            jsp::join(&[&user_claude_dir, "skills", "impeccable"])
+            jsp::join(&[&user_claude_dir, "skills", "melzi"])
         } else {
             jsp::join(&[&rt.homedir(), target.skill_rel])
         };
@@ -613,7 +613,7 @@ fn repair_hook_manifests(rt: &Runtime, cwd: &str, safe_only: bool) -> Result<Rep
             // A user-scope skill gets its hook where a user-scope install
             // writes it: the active Claude config dir, with the absolute launcher.
             // In the project only the gitignored `settings.local.json` loses
-            // its Impeccable entries, and only after the user hook is written
+            // its Melzi entries, and only after the user hook is written
             // or already present: an unreadable user file is skipped, and the
             // project hook is then the only one the machine has. The committed
             // `settings.json` belongs to the team and is never rewritten with

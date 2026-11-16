@@ -72,7 +72,7 @@ fn scans_dispatch_to_the_pro_build_except_where_guarded() {
     assert!(!err.contains("Pro rules are on."), "{err}");
     for (guard, value) in [
         ("IMPECCABLE_PRO_CHILD", "1"),
-        ("IMPECCABLE_BIN", "/elsewhere/impeccable"),
+        ("IMPECCABLE_BIN", "/elsewhere/melzi"),
         ("IMPECCABLE_PRO", "off"),
     ] {
         let (out, _) = run(&env, &[(guard, value)], &["detect", &target]);

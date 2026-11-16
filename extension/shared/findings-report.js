@@ -11,7 +11,7 @@ globalThis.ImpeccableReport = (() => {
     return finding.category === 'slop' ? 'slop' : 'quality';
   }
 
-  // Maps each anti-pattern to the most relevant Impeccable skill(s) for fixing it.
+  // Maps each anti-pattern to the most relevant Melzi skill(s) for fixing it.
   // These are suggestions; the user decides whether and how to apply them.
   const FIX_SKILLS = {
     // AI slop
@@ -69,13 +69,13 @@ globalThis.ImpeccableReport = (() => {
 
   function formatFindingsForCopy(findings, pageUrl = '') {
     const url = pageUrl.split('#')[0];
-    const lines = ['# Impeccable findings'];
+    const lines = ['# Melzi findings'];
     const count = findings.reduce((sum, item) => sum + item.findings.length, 0);
     if (url) lines.push(`URL: ${url}`);
     lines.push(`Total findings: ${count}`);
     lines.push('');
     if (!count) {
-      lines.push('Impeccable found no anti-patterns on this page.');
+      lines.push('Melzi found no anti-patterns on this page.');
       return lines.join('\n');
     }
 
@@ -100,19 +100,19 @@ globalThis.ImpeccableReport = (() => {
     // Roll up suggested skills across all findings (most-relevant first)
     const skills = uniqueSkillsForFindings(findings);
     if (skills.length) {
-      lines.push(`Suggested Impeccable skills to fix: ${skills.join(', ')}`);
+      lines.push(`Suggested Melzi skills to fix: ${skills.join(', ')}`);
       lines.push('');
     }
 
     lines.push('---');
-    lines.push('Detected by [Impeccable](https://impeccable.style). Skills are suggestions, not required.');
+    lines.push('Detected by [Melzi](https://impeccable.style). Skills are suggestions, not required.');
     return lines.join('\n');
   }
 
   function formatSingleFindingForCopy(item, finding, pageUrl = '') {
     const url = pageUrl.split('#')[0];
     const where = item.isPageLevel ? '_(page-level)_' : `\`${item.selector}\``;
-    const lines = [`# Impeccable: ${finding.name}`];
+    const lines = [`# Melzi: ${finding.name}`];
     if (url) lines.push(`URL: ${url}`);
     lines.push(`Element: ${where}`);
     lines.push(`Detail: ${finding.detail}`);
@@ -120,7 +120,7 @@ globalThis.ImpeccableReport = (() => {
     lines.push(finding.description);
     lines.push('');
     const skills = fixSkillFor(finding);
-    if (skills) lines.push(`Suggested Impeccable skill(s) to fix: ${skills}`);
+    if (skills) lines.push(`Suggested Melzi skill(s) to fix: ${skills}`);
     return lines.join('\n');
   }
 

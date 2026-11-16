@@ -4,7 +4,7 @@ Interactive live variant mode: select elements in the browser, pick a design act
 
 A running dev server with HMR (Vite, Next.js, Bun, etc.), OR a static HTML file open in the browser. If the dev server's default port is busy, the app is very likely ALREADY running; probe the default URL before spawning a second server.
 
-Live editing requires a local checkout; injection into deployed production sites (including HTTPS) is unsupported. For production inspection, use `.trae-cn/skills/impeccable/scripts/impeccable detect <url>` or the browser extension, not the live helper. Do not disable browser security or weaken production CSP to enable live mode.
+Live editing requires a local checkout; injection into deployed production sites (including HTTPS) is unsupported. For production inspection, use `.github/skills/melzi/scripts/impeccable detect <url>` or the browser extension, not the live helper. Do not disable browser security or weaken production CSP to enable live mode.
 
 ## The contract (read once)
 
@@ -12,7 +12,7 @@ Execute in order. No step skipped, no step reordered. Every tool output in live 
 
 1. `impeccable live --allow-missing-context --dev-url --auto-config`: boot (always with all three flags; see Start). If the request names or implies a file, route, or app inside a monorepo, infer the concrete path and add `--target <path>`; then run the rest of this live session from the returned `projectRoot`. The boot resolves the app root from dev-server config files and persists it in `.impeccable/live/roots.json`; every helper re-anchors to that manifest at startup (a wrong cwd cannot fork session state), PRODUCT.md / DESIGN.md are discovered upward to the git root, and relative helper args like `--file` resolve against the app root.
 2. Open the page. This is how to find its URL wherever the boot's `_instructions` say to open a `pageFiles` page. `devUrl` is the origin of a running dev server: append the route the request names, or the path that serves the target `pageFiles` entry; a bare `devUrl` is the root page only. When `devUrl` is null the boot says which case this is. `pageUrls` lists ready `file://` URLs for a static folder: open the one for the target page. `devCommand` names the project's dev script: the probe may simply have missed a server on an unlisted port or on HTTPS, so check the terminal output, the dev config's port, and any open tab first, and start `devCommand` in the background only when nothing is running, wait for it to print its URL, then boot again. With neither field, find the app's URL the same way before starting anything. Never use `serverPort`; it's the helper, not the app. Always tell the user the URL in one line, so they can open it themselves when you have no browser tool, and on a project's first Live session add the first move in the same breath: click anything on the page, say what to change, press Go (Pick is already on in a browser's first session; later it is the crosshair in the bar at the bottom of the page). **Cursor:** `browser_navigate` to that URL before polling; do not skip. **Other harnesses:** use the available browser tool; if no URL can be found, ask the user once.
-3. Poll loop with the default long timeout (600000 ms). Run `impeccable live-poll` again immediately after every event or `--reply`; Codex runs this one-shot poll in the foreground. Never pass a short `--timeout=`. The global bar's **Impeccable mark** dims with a pulsing amber dot when nothing is polling `/poll`; restart `impeccable live-poll` to reconnect.
+3. Poll loop with the default long timeout (600000 ms). Run `impeccable live-poll` again immediately after every event or `--reply`; Codex runs this one-shot poll in the foreground. Never pass a short `--timeout=`. The global bar's **Melzi mark** dims with a pulsing amber dot when nothing is polling `/poll`; restart `impeccable live-poll` to reconnect.
 4. On `generate`: reuse `event.scaffold` when present; read the screenshot if present; load the action's reference; deliver variants; `--reply done`; poll again. Generate in this thread: you already hold the project's tokens and layout. The overlay preview IS the verification channel; do not screenshot, re-render, or QA variants between generate and accept. Apply craft-floor's contrast, spacing, and type floors by construction as you write; full verification runs once at accept on the chosen variant.
 5. On `steer`: read the message and `pageUrl`; do the work; `--reply steer_done`; poll again. No pickup ack.
 6. On `accept` / `discard`: the poll script runs `impeccable live-accept`, acknowledges delivery, and prints `_completionAck`. Plain accepts/discards are terminal immediately; carbonize accepts stay recoverable until `impeccable live-complete --id EVENT_ID` runs. Finish that cleanup before polling again.
@@ -33,7 +33,7 @@ Chat is overhead. No recap, no tutorial output, no pasting PRODUCT / DESIGN bodi
 
 ```
 LOOP:
-  .trae-cn/skills/impeccable/scripts/impeccable live-poll   # default long timeout; no --timeout=
+  .github/skills/melzi/scripts/impeccable live-poll   # default long timeout; no --timeout=
   Read JSON; dispatch on "type"
 
   "generate"  → Handle Generate; reply done; LOOP
@@ -54,7 +54,7 @@ LOOP:
 ## Start
 
 ```bash
-.trae-cn/skills/impeccable/scripts/impeccable live --allow-missing-context --dev-url --auto-config
+.github/skills/melzi/scripts/impeccable live --allow-missing-context --dev-url --auto-config
 ```
 
 Output JSON: `{ ok, serverPort, serverToken, configCreated, pageFiles, roots, targetPath, devUrl, pageUrls, devCommand, contextMissing, hasProduct, product, productPath, hasDesign, design, designPath, hasSurfaceBrief, surfaceBrief }`. `devUrl` is the running dev server that serves the page, or null when none answered; `pageUrls` or `devCommand` then name the next step (step 2). `contextMissing` lists PRODUCT.md or DESIGN.md when absent: Live never waits on init or document. Work from the page as below, and offer `init` or `document` after the session, not before it. `roots` is the resolved root manifest; `projectRoot` mirrors `roots.appRoot`. The surface brief rides along; do not shell out to `impeccable surface-brief` separately. Precedence for generation: **DESIGN.md wins on visual decisions; PRODUCT.md wins on durable product and voice decisions; the surface brief wins on this surface's strategy.** When DESIGN.md is missing, identity is **not** absent; extract it from CSS variables, computed styles, and sibling components (Step 4 Phase A). Identity preservation is the default; departure requires the user's explicit redesign intent.
@@ -65,18 +65,18 @@ A plain page needs no setup: when the app root holds an `index.html` page shell 
 
 If output is `{ ok: false, error: "config_invalid", message, path }`, the config at `path` exists but `message` names what is wrong with it: repair that field in the existing file ([live-setup.md](live-setup.md) describes each field), keep every other field as it is, and boot again. Never replace the file with the common-case config below.
 
-If output is `{ ok: false, error: "config_missing", path }`, the boot could not decide alone. A static folder whose page has another name takes one step: when `.trae-cn/skills/impeccable/scripts/impeccable detect-csp` reports `shape: null`, write `{"files":["<page>.html"],"insertBefore":"</body>","commentSyntax":"html","cspChecked":true}` at the boot's reported `path` and boot again. Anything else (another framework, a CSP, several HTML files): read [live-setup.md](live-setup.md) and follow it. If the output carries a non-null `configDrift`, tell the user once which HTML files are uncovered and suggest adding them or switching `files` to a glob; never auto-edit the config.
+If output is `{ ok: false, error: "config_missing", path }`, the boot could not decide alone. A static folder whose page has another name takes one step: when `.github/skills/melzi/scripts/impeccable detect-csp` reports `shape: null`, write `{"files":["<page>.html"],"insertBefore":"</body>","commentSyntax":"html","cspChecked":true}` at the boot's reported `path` and boot again. Anything else (another framework, a CSP, several HTML files): read [live-setup.md](live-setup.md) and follow it. If the output carries a non-null `configDrift`, tell the user once which HTML files are uncovered and suggest adding them or switching `files` to a glob; never auto-edit the config.
 
-On `no_page`, tell the person in one sentence that there is nothing for Live to open yet. Offer to build the first page with `/impeccable craft <what they want>` and start Live on it once it exists. Do not create a page unless the person asks for one.
+On `no_page`, tell the person in one sentence that there is nothing for Live to open yet. Offer to build the first page with `/melzi craft <what they want>` and start Live on it once it exists. Do not create a page unless the person asks for one.
 
 ## Recovery commands
 
 The append-only journal under `.impeccable/live/sessions/` is canonical durable state (not project source). When the chat was interrupted, polling was missed, the helper restarted, or the browser reloaded:
 
 ```bash
-.trae-cn/skills/impeccable/scripts/impeccable live-status      # helper state, active sessions, queued events; works with the helper down
-.trae-cn/skills/impeccable/scripts/impeccable live-resume --id SESSION_ID   # active snapshot, pending event, next safe action
-.trae-cn/skills/impeccable/scripts/impeccable live-complete --id SESSION_ID # canonical manual final acknowledgement after verified cleanup
+.github/skills/melzi/scripts/impeccable live-status      # helper state, active sessions, queued events; works with the helper down
+.github/skills/melzi/scripts/impeccable live-resume --id SESSION_ID   # active snapshot, pending event, next safe action
+.github/skills/melzi/scripts/impeccable live-complete --id SESSION_ID # canonical manual final acknowledgement after verified cleanup
 ```
 
 Server restart rule: start `impeccable live-server` again, then poll; startup requeues unacknowledged events, so never ask the user to click Go again unless `impeccable live-resume` says no active session exists.
@@ -95,7 +95,7 @@ Speed matters; the user is watching the selected element. Reuse preflight metada
 2. If `event.scaffold` is present, use it and do **not** run the helper again. Otherwise:
 
 ```bash
-.trae-cn/skills/impeccable/scripts/impeccable live-insert --id EVENT_ID --count EVENT_COUNT --position after \
+.github/skills/melzi/scripts/impeccable live-insert --id EVENT_ID --count EVENT_COUNT --position after \
   --element-id "ANCHOR_ID" --classes "class1,class2" --tag "section" --text "ANCHOR_TEXT"
 ```
 
@@ -116,7 +116,7 @@ When `event.scaffold` is present, the helper already found the source and comput
 **On source-preview targets `event.scaffold` carries `sourceWritten: false`.** The helper did NOT write the wrapper; it hands you `scaffold.wrapperBlock` plus the picked element's source range (`replaceStartLine`, `replaceEndLine`, 1-indexed). Write the wrapper **and** all variants in ONE edit: splice your variants into `wrapperBlock` at the "Variants: insert below this line" marker, then replace lines `[replaceStartLine, replaceEndLine]` with the result. A separate scaffold write reloads the framework before your variant write lands and strands the browser at 0/N. (`replaceEndLine < replaceStartLine` means insert mode: insert, remove nothing.) The `svelte-component` path never sets `sourceWritten`.
 
 ```bash
-.trae-cn/skills/impeccable/scripts/impeccable live-wrap --id EVENT_ID --count EVENT_COUNT --element-id "ELEMENT_ID" --classes "class1,class2" --tag "div" --text "TEXT_SNIPPET"
+.github/skills/melzi/scripts/impeccable live-wrap --id EVENT_ID --count EVENT_COUNT --element-id "ELEMENT_ID" --classes "class1,class2" --tag "div" --text "TEXT_SNIPPET"
 ```
 
 Flag mapping (keep separate, never collapse into `--query`): `--element-id` ← `event.element.id`; `--classes` ← classes joined with commas; `--tag` ← tagName; `--text` ← first ~80 chars of textContent, **every call**: it disambiguates repeated sibling components, and without it a class locator lands on the first match. If `event.pageUrl` implies the file, pass `--file PATH`. If `--text` still matches several candidates, wrap exits `{ error: "element_ambiguous", candidates, fallback: "agent-driven" }`: pick the right range from page context and write the wrapper manually per the fallback flow.
@@ -124,7 +124,7 @@ Flag mapping (keep separate, never collapse into `--query`): `--element-id` ← 
 An element with neither an id nor classes (a bare `<h1>`, the usual first pick on a fresh page) leaves both flags out; the tag alone locates it:
 
 ```bash
-.trae-cn/skills/impeccable/scripts/impeccable live-wrap --id EVENT_ID --count EVENT_COUNT --tag "h1" --text "TEXT_SNIPPET"
+.github/skills/melzi/scripts/impeccable live-wrap --id EVENT_ID --count EVENT_COUNT --tag "h1" --text "TEXT_SNIPPET"
 ```
 
 A tag alone never lands on the first match: when the tag repeats and `--text` does not single out one element, or the element shares a source line with other markup (`reason: "shared_line"`), wrap exits `element_ambiguous`; follow the fallback flow as above. Short text settles it only when it is one element's whole text.
@@ -256,14 +256,14 @@ Three kinds: `range` (slider; drives `--p-<id>`; author `var(--p-color-amount, 0
 ### 8. Signal done
 
 ```bash
-.trae-cn/skills/impeccable/scripts/impeccable live-poll --reply EVENT_ID done --file RELATIVE_PATH
+.github/skills/melzi/scripts/impeccable live-poll --reply EVENT_ID done --file RELATIVE_PATH
 ```
 
 `RELATIVE_PATH` is relative to project root; the browser fetches source directly if the dev server lacks HMR. Then poll again immediately.
 
 ### Aborting an in-flight session
 
-If wrap or generation fails after the browser flipped to GENERATING, tell the **browser** so its bar resets: `.trae-cn/skills/impeccable/scripts/impeccable live-poll --reply EVENT_ID error "Short reason"`. Never use `live-accept --discard` for this (pure file mutator, browser never sees it, bar sticks on dots); `--discard` is only source-side cleanup for a discard the browser itself initiated.
+If wrap or generation fails after the browser flipped to GENERATING, tell the **browser** so its bar resets: `.github/skills/melzi/scripts/impeccable live-poll --reply EVENT_ID error "Short reason"`. Never use `live-accept --discard` for this (pure file mutator, browser never sees it, bar sticks on dots); `--discard` is only source-side cleanup for a discard the browser itself initiated.
 
 ## Handle fallback
 
@@ -304,7 +304,7 @@ Event: `{id, _acceptResult, _completionAck}`. The poll script already restored t
 
 ## Handle `steer`
 
-Event: `{id, message, pageUrl}`: page-level direction from the global bar's Steer control (typed or spoken), no element context, no variant cycling. Read `message`, inspect the page or files as needed, make edits or answer in prose. Reply `.trae-cn/skills/impeccable/scripts/impeccable live-poll --reply EVENT_ID steer_done ["Optional short toast"]`, or on failure `--reply EVENT_ID error "Short reason"`, then poll immediately. No separate pickup reply; the Steer bar unlocks on `steer_done` or `error`.
+Event: `{id, message, pageUrl}`: page-level direction from the global bar's Steer control (typed or spoken), no element context, no variant cycling. Read `message`, inspect the page or files as needed, make edits or answer in prose. Reply `.github/skills/melzi/scripts/impeccable live-poll --reply EVENT_ID steer_done ["Optional short toast"]`, or on failure `--reply EVENT_ID error "Short reason"`, then poll immediately. No separate pickup reply; the Steer bar unlocks on `steer_done` or `error`.
 
 ## Handle `prefetch`
 
@@ -322,7 +322,7 @@ An op with `deleted: true` and `removeElement: true` is the browser's Remove bad
 
 If `repair` is present, the previous Apply changed source but final validation failed. Fix the current source and return the same canonical JSON result; do not roll files back yourself. The browser will ask the user before any rollback.
 
-After source edits finish, reply exactly once with `.trae-cn/skills/impeccable/scripts/impeccable live-poll --reply EVENT_ID done --data '{"status":"done","appliedEntryIds":["8hexid"],"failed":[],"files":["src/page.html"],"notes":[]}'`. Use `status:"partial"` or `status:"error"` with `failed[]` when not every entry applied. Then poll again. Never reply without the event id; `--reply done --file ...` is invalid for manual Apply.
+After source edits finish, reply exactly once with `.github/skills/melzi/scripts/impeccable live-poll --reply EVENT_ID done --data '{"status":"done","appliedEntryIds":["8hexid"],"failed":[],"files":["src/page.html"],"notes":[]}'`. Use `status:"partial"` or `status:"error"` with `failed[]` when not every entry applied. Then poll again. Never reply without the event id; `--reply done --file ...` is invalid for manual Apply.
 
 ## Exit
 
@@ -331,7 +331,7 @@ The user stops live mode by saying so in chat, closing the tab (SSE drops; poll 
 ## Cleanup
 
 ```bash
-.trae-cn/skills/impeccable/scripts/impeccable live-server stop
+.github/skills/melzi/scripts/impeccable live-server stop
 ```
 
 Stops the helper and runs `impeccable live-inject --remove` to strip the injected script (use `stop --keep-inject` to keep it for a quick restart; `.impeccable/live/config.json` persists as project config). Then search for and remove any leftover `impeccable-variants-start` wrappers and `impeccable-carbonize-start` blocks, stop a dev server this session started (by its own process id), and when the boot's context asked for the detector (`MANUAL_DETECTOR_REQUIRED`), run it once over the files an accept changed.

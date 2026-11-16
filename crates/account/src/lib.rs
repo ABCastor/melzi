@@ -1,4 +1,4 @@
-//! `impeccable login | logout | whoami`: sign in to the Impeccable account
+//! `impeccable login | logout | whoami`: sign in to the Melzi account
 //! service with OAuth (loopback PKCE), and keep the credential lifecycle
 //! (storage, lock, generation, logout tombstone). docs/RUNTIME-ENV.md (Account sign-in) has the
 //! whole contract. Tokens are never printed or logged.
@@ -397,7 +397,7 @@ pub fn run_whoami(args: &[String], io: &mut Io) -> i32 {
 
 const LOGIN_USAGE: &str = "Usage: impeccable login [--no-browser] [--force]
 
-Sign in to your Impeccable account in the browser. Already signed in, it says so
+Sign in to your Melzi account in the browser. Already signed in, it says so
 and opens nothing.
 
 Options:

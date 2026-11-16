@@ -1,7 +1,7 @@
 ---
 name: impeccable-manual-edit-applier
 codex-name: impeccable_manual_edit_applier
-description: Applies leased Impeccable live manual copy-edit batches to source and returns canonical Apply results.
+description: Applies leased Melzi live manual copy-edit batches to source and returns canonical Apply results.
 model: inherit
 effort: medium
 max-turns: 12

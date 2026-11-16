@@ -1,0 +1,215 @@
+> **Additional context needed**: performance constraints.
+
+Use motion to explain state, relationship, and hierarchy, or to create one authored moment the surface has earned. Decoration without purpose is animation debt.
+
+---
+
+## Visitor mode
+
+- **Persuade + Experience:** motion may carry the voice. Prefer one rehearsed focal sequence to repeated section reveals.
+- **Operate + Read:** motion serves feedback, state, and continuity. Keep routine transitions fast and do not make users wait through page-load choreography.
+- **Native (`ios` / `android` / `adaptive`):** follow the Motion section of [ios.md](ios.md) or [android.md](android.md), including the platform's Reduce Motion behavior. Do not apply the web tooling below.
+- **Rendered (a film, reel or ad exported to video, or a talk deck where slides move):** the thesis, material and timing below still apply; brief, storyboard, review, export and delivery follow [motion-film.md](motion-film.md).
+
+## Find the job
+
+Inspect the existing motion language, interaction states, target devices, and performance budget. Find only the places where motion would:
+
+- acknowledge an action;
+- make a state change or spatial relationship legible;
+- preserve continuity through navigation or layout change;
+- direct attention at a meaningful moment;
+- embody the selected visual world.
+
+Ask only when a material constraint cannot be inferred. Do not animate a static area merely because it exists.
+
+## Set the motion thesis
+
+Write a short plan before implementation:
+
+- **Focal moment:** the one sequence or interaction that deserves authorship, if any.
+- **Continuity:** the state, layout, or navigation changes that need explanation.
+- **Feedback:** the controls and outcomes that need acknowledgment.
+- **Budget:** which effects may be expensive and how often they run.
+- **Character:** three or four words for how things move (soft or sharp, slow or quick, many pauses or few, gentle or forceful) and one image in the form "like a surface catching light". Character chooses the easing and the timing; a curve name chosen first rarely carries one.
+
+The focal moment must come from this product and surface concept. A generic fade-and-rise, hover lift, parallax layer, or scroll reveal is not a thesis.
+
+## Choose material by meaning
+
+Transform and opacity are reliable foundations, not the entire palette. Choose properties for what the transition communicates:
+
+- **Continuity and relationship:** shared-element motion, FLIP-style transforms, view transitions, or deliberate spatial movement.
+- **Focus and depth:** bounded blur, filter, backdrop, light, or shadow changes.
+- **Reveal and composition:** masks, clip paths, cropping, or controlled occlusion.
+- **Material and energy:** color, gradient position, texture, distortion, or shader effects when the world and runtime support them.
+- **State and feedback:** the smallest change that makes cause and result unmistakable.
+
+Do not stack techniques for spectacle. One strong material idea, carried through the focal sequence and quiet supporting states, is usually enough.
+
+Sibling stagger is appropriate when a list appears as a list. Cap the total delay, and never reinterpret every scrolled section as a staggered list.
+
+## Timing and easing
+
+Timing should express distance and consequence:
+
+| Duration | Typical use |
+|---|---|
+| 100–150 ms | immediate feedback |
+| 150–300 ms | routine state change |
+| 300–500 ms | layout, overlay, or view transition |
+| 500–800 ms | a deliberately authored focal entrance |
+
+Exit faster than entrance. Use natural deceleration such as `cubic-bezier(0.16, 1, 0.3, 1)` for confident arrivals; do not use bounce or elastic curves by reflex. Long feedback feels like latency.
+
+Each curve family has a character; pick it from the thesis, not from habit:
+
+| Curve | Reads as | Use for |
+|---|---|---|
+| ease-out, expo-out | arriving with confidence | entrances; the default |
+| ease-in | gathering speed to leave | exits |
+| ease-in-out | travelling between two rests | moves and morphs within the frame |
+| back-out (overshoot) | springy, playful | an earned moment, never routine UI |
+| anticipation (a small wind-up before the move) | gathering itself | a deliberate reveal |
+| `steps()` | mechanical, discrete | typewriter text, counters, pixel worlds |
+| linear | machine-constant | continuous loops, progress, rotation |
+
+## Hover
+
+Hover motion never moves a neighbor or takes its pointer target. Keep the hovered element still and let a child carry the motion (`.card:hover .card-surface { transform: translateY(-2px) }`). An element that moves itself slides out from under a pointer near its edge and flickers. Optional previews wait for the pointer to settle: for a CSS reveal, set `transition-delay` on the hover state only, so leaving is not delayed.
+
+## Implement to the runtime
+
+- Use CSS transitions and keyframes for declarative state and bounded sequences.
+- Use Web Animations API or the project's existing motion library for interruption, sequencing, and dynamic values.
+- Use View Transitions or shared-element techniques when continuity across states is the point.
+- Use scroll-driven motion only when the scroll relationship itself carries meaning, with a robust fallback.
+- Do not add a dependency for an effect the existing stack can express cleanly.
+
+Keep content visible in the default state so failed scripts do not hide the page. Avoid casually animating layout-driving properties such as `width`, `height`, `top`, `left`, and margins; use FLIP, transforms, or grid techniques when appropriate. Bound blur, filter, shadow, canvas, and shader work to isolated regions. Apply `will-change` only during known animation. Measure on target viewports and devices rather than assuming transform means fast.
+
+Three traps that look like bugs elsewhere:
+
+- An animation with `fill-mode: both` (or `forwards` / `backwards`) owns `opacity` and `transform` for as long as it applies, so the element's static values in those properties silently stop working. Put the resting state and the animation on different elements, typically a wrapper.
+- A mask with `overflow: hidden`, such as a text-rise container, clips everything that leaves it. Decoration meant to spill out sits outside the mask.
+- When morphing between two layouts, never switch `display` or `flex-direction` mid-move: measure both states and FLIP each element.
+
+## Accessibility and control
+
+Respect autoplay and sound preferences. Any nonessential loop must stop when offscreen or hidden.
+
+Every web animation needs a `prefers-reduced-motion` path with an intentional alternative. Remove or reduce spatial movement while preserving opacity, color, and state transitions that carry meaning. Reduced motion means fewer and gentler animations, not disabling all motion; feedback that confirms an action should remain legible.
+
+## Capture existing motion
+
+Motion you did not write has to be recorded before it can be judged. The DOM, the computed styles, and a still screenshot all describe one instant: they prove a transition is declared and show where it lands, and they say nothing about how it got there. Write the shortest interaction script that reaches the behavior in question, then record it:
+
+```bash
+node .devin/skills/melzi/scripts/motion-eyes.mjs \
+  --url <url-or-local-html> \
+  --do "scroll 0..100 over 4s; hover a.link for 1s; click [data-theme-toggle] then 1s" \
+  --name motion-review \
+  --output-dir .impeccable/motion
+```
+
+Interactions are semicolon-separated: `wait <duration>`, `scroll <start>..<end> over <duration>`, `hover <css-selector> [for <duration>]`, `click <css-selector> [then <duration>]`. Durations take `ms` or `s`; scroll positions are percentages of the document unless suffixed with `px`. `--help` carries the rest. Requires a Playwright install the script can resolve, and installs nothing itself.
+
+Read `motion-review-frames.png` first. Twelve stamped frames in one image show choreography: which elements entered and in what order, how far the scroll travelled, whether a reveal overshoots, whether the opening and closing states cohere. Then watch `motion-review.webm` before saying anything about smoothness, frame pacing, easing shape, perceived latency, interruption, or scroll coupling. Judge easing shape at quarter speed as well as full speed (playback rate 0.25), since at full speed most curves look alike. A hitch that falls between two sampled frames leaves no trace on the sheet, so the sheet can confirm those properties but never rule a defect out.
+
+Check `uniqueFrameCount` in the JSON before trusting either artifact. Frames that are all identical mean the page never moved or the capture never saw it move, and the sheet then looks like evidence while carrying none.
+
+When the brief names a reference ("like the website", "as smooth as X"), record the reference with the same script, viewport and scroll distance, and read the two contact sheets side by side. A recording that is only consistent with itself proves nothing about matching the thing it was meant to match.
+
+Report the command, the viewport, the frame count, and any console errors next to the verdict. When the browser cannot launch or the target is unreachable, say the motion is unverified and name the blocker. A failed capture is missing evidence, never a verdict in either direction.
+
+## Technical ambition catalogue
+
+The `overdrive` alias loads this catalogue after [bolder.md](bolder.md) settles the direction. Choose by the job, not by novelty.
+
+### Cinematic transitions
+
+- **View Transitions API:** shared-element morphing within a document across current browsers; cross-document transitions still need a Firefox fallback. Use it for a list item expanding into detail or a trigger becoming a dialog.
+- **`@starting-style`:** animate entry from `display: none` with CSS, including entry keyframes.
+- **Spring physics:** use motion, GSAP, or a small solver when mass, tension, and damping express the material better than a cubic bezier.
+
+### Scroll-coupled motion
+
+- **Scroll-driven animations (`animation-timeline: scroll()`):** CSS-native parallax, progress, and reveal sequences in Chrome, Edge, and Safari. Firefox still needs a static fallback.
+
+### Rendering beyond CSS
+
+- **WebGL:** shader effects, post-processing, particles, and large custom scenes on all major browsers. Three.js, OGL, or regl are options when the project already justifies a library.
+- **WebGPU:** GPU compute and rendering where supported. Always provide WebGL2 or a complete static fallback.
+- **Canvas 2D and OffscreenCanvas:** pixel work or custom rendering, with heavy rendering moved to a Worker where necessary.
+- **SVG filter chains:** displacement, turbulence, and morphology when an authored vector effect is the right material. Keep the region bounded.
+
+### Data and large interfaces
+
+- **Virtual scrolling:** render only visible rows for very large tables and lists. A small implementation can be library-free; complex cases may justify TanStack Virtual.
+- **GPU charts:** use Canvas or WebGL when the dataset is too large for SVG or DOM rendering; deck.gl or a regl-based renderer may fit an existing stack.
+- **Animated data transitions:** morph states through D3 or View Transitions instead of replacing them without continuity. Force-directed graph layouts may settle naturally when the data relationship, not spectacle, calls for them.
+
+### Complex property animation
+
+- **`@property`:** register typed custom properties so gradients, colors, and other compound values interpolate.
+- **Web Animations API:** use composable, cancellable, reversible JavaScript-driven animation when CSS cannot express the sequence or interruption model.
+
+### Performance work
+
+- **Web Workers:** move expensive search, image processing, indexing, and other computation off the main thread.
+- **OffscreenCanvas:** keep custom rendering off the main thread when the browser supports it.
+- **WASM:** use near-native computation for work such as image processing, physics, or codecs only when profiling shows JavaScript is the bottleneck.
+
+### Direct manipulation
+
+- **Model-driven dragging:** when a surface needs a bespoke drag (reorder a structure, move a piece between slots, pull the parts of a diagram or an explorable), declare for each draggable element which next states of the model a drag may lead to, and let the engine render those states speculatively, interpolate between them mid-drag and settle on the nearest legal one on drop. The element can only land where the product's rules allow, and the drag feels continuous because every frame is a blend of real states. For React and SVG, Dragology implements it, with composable modifiers for floating, snapping and transitions; in any other runtime, keep the same contract by hand: legal states first, geometry derived from them, never free pixel dragging validated afterwards. Every drag also gets a keyboard and click path to the same states, and passes harden's interrupted-gesture checks.
+
+### Device interaction
+
+- **Web Audio API:** audio-reactive work or sonic feedback, started only by a user gesture and with explicit consent.
+- **Device APIs:** orientation, ambient light, and geolocation only when the product needs them, with permission and a complete denied-permission path.
+
+The catalogue changes how an existing feature feels; collaboration, offline support, and new backend capability are product changes outside this command.
+
+### Progressive enhancement and performance
+
+Every technique degrades to a complete experience:
+
+```css
+@supports (animation-timeline: scroll()) {
+  .hero { animation-timeline: scroll(); }
+}
+```
+
+```javascript
+if ('gpu' in navigator && await navigator.gpu.requestAdapter()) { /* WebGPU */ }
+else if (canvas.getContext('webgl2')) { /* WebGL2 fallback */ }
+/* The CSS-only result remains complete. */
+```
+
+Target 60fps and simplify when the experience drops below 50fps on representative hardware. Lazy-initialize WebGL, WASM, and other heavy resources near the viewport. Pause offscreen rendering. Test on real mid-range devices rather than treating a development machine as the audience.
+
+## Verify
+
+On the web, capture implemented motion before calling it smooth. Use the skill-internal measuring verb (not a separate user command), once normally and once with reduced motion, with the same URL, interaction, and region:
+
+```sh
+.devin/skills/melzi/scripts/impeccable motion-capture <url> --click '<selector>' --region '<region-selector>' --out-dir .impeccable/review/motion/normal
+.devin/skills/melzi/scripts/impeccable motion-capture <url> --click '<selector>' --region '<region-selector>' --reduced-motion --out-dir .impeccable/review/motion/reduced
+```
+
+For keyboard or multi-step interactions pass `--steps <json-file>` instead of `--click`, such as `[{"click":"#toggle"},{"press":"Enter"}]`; steps are click, hover, press (navigation keys), and wait (milliseconds). Capture each entrance and exit separately: for an exit, `--setup <json-file>` runs the same kind of steps and lets them settle before the first frame, such as opening the panel whose close is under review. The fixed capture points are before, first animated, evenly spaced middle, last animated, and settled frames. Inspect each directory's frame PNGs, `filmstrip.png`, and `report.json` before sending it: blank, wrong-region, stale, or missing evidence requires recapture. The report's limitations are unmeasured checks, not a clean result. Never judge motion by a single element or a single screenshot.
+
+Spawn the shipped `impeccable-motion-reviewer` fresh (`impeccable_motion_reviewer` in Codex; `/impeccable-motion-reviewer` in Cursor; on GitHub Copilot say "Use the impeccable-motion-reviewer agent"), with no forked conversation history. Pass the original request, the motion thesis above, both capture directories (plus entrance and exit captures where applicable), DESIGN.md's motion rules if any, and the craft-floor reference path. The reviewer has no browser and reviews only the provided evidence. Never read its agent definition before spawning; the harness loads it. Wait with one long timeout; verify a disposition-first return with `continuity`, `craft`, `reduced_motion`, `material_fixes`, and `keep`. Respawn an empty or incomplete return once with the same packet. Only when the harness has no subagent capability, run a separate fresh pass from [degraded/motion-reviewer.md](degraded/motion-reviewer.md), and disclose the substitution at finish.
+
+Act on the disposition. **recapture:** repair the named evidence and request a full review; invalid evidence binds no verdict. **fix:** apply the ordered material fixes in one batch, recapture normal and reduced motion over the same files, and continue the same reviewer for a verdict pass scoring each fix resolved, partial, or unresolved. Without continuation, pass the prior findings and new captures to a fresh reviewer. **ship:** report that word at the scope the reviewer actually checked. Two rounds maximum (initial review, then post-fix verdict); stop if a round resolves nothing. Report remaining fixes or missing evidence honestly at the ceiling; never turn a partial or unresolved verdict into a claim of smoothness.
+
+- The focal motion is specific to the selected world and surface.
+- Every supporting animation explains feedback, state, or relationship.
+- Interruption and repeated use behave correctly.
+- Desktop, mobile, and keyboard paths remain usable.
+- The `prefers-reduced-motion` path reduces movement without erasing meaningful feedback or state changes.
+- Expensive effects stay smooth on the target device.
+- Removing an animation would lose meaning or authored character, not merely decoration.
+
+When motion earns its place, hand off to `/melzi polish` for the final pass.

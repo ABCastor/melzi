@@ -1,4 +1,4 @@
-"""impeccable-design-hook: the Impeccable design detector as a Hermes plugin.
+"""impeccable-design-hook: the Melzi design detector as a Hermes plugin.
 
 Hermes has no command-hook manifest, so this plugin feeds the engine's ``hook`` verb the
 Claude-shaped events it already understands: ``transform_tool_result`` on ``write_file`` /
@@ -6,7 +6,7 @@ Claude-shaped events it already understands: ``transform_tool_result`` on ``writ
 ``pre_verify`` sends a Stop event so the deep pass can keep the turn going. The engine owns
 everything else (UI-file filtering, ``hook.enabled``, dedupe between the two passes).
 
-It runs only where the impeccable skill is reachable: a ``.hermes/skills/impeccable`` above the
+It runs only where the impeccable skill is reachable: a ``.hermes/skills/melzi`` above the
 edited file in a project Hermes trusts (``hermes skills trust``, the gate Hermes itself puts on
 project skills), else the one in the Hermes home. Fail-open: any error, timeout or missing
 launcher leaves Hermes untouched.
@@ -27,7 +27,7 @@ _EDIT_TIMEOUT_S = 5
 _STOP_TIMEOUT_S = 30
 _TRUTHY = {"1", "true", "yes", "on"}
 _LAUNCHER = "impeccable.cmd" if os.name == "nt" else "impeccable"
-_SKILL_SCRIPTS = os.path.join("skills", "impeccable", "scripts", _LAUNCHER)
+_SKILL_SCRIPTS = os.path.join("skills", "melzi", "scripts", _LAUNCHER)
 
 
 def _disabled() -> bool:

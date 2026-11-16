@@ -4,6 +4,7 @@ Resolve one stable target, run two independent assessments, synthesize a design 
 
 ### Hard Invariants
 
+- Read [rigor.md](rigor.md) before synthesizing. It is mandatory here: every material finding carries the narrowest accurate evidence label, confidence sits on the decision rather than on every sentence, and a clean detector is never evidence of quality.
 - Assessment A (design review) and Assessment B (detector/browser evidence) are both required, except on a native platform (see Assessment Orchestration).
 - Assessment A and B MUST run as two isolated sub-agents whenever a sub-agent/Task tool is exposed. Running them inline in this context is "possible" but is NOT permitted; it is a degraded run. Inline is allowed ONLY when no sub-agent tool exists (or the user declined, on harnesses that ask). Native platforms run A alone (see Assessment Orchestration).
 - If you degrade for any reason, the report's first line MUST be a banner: `⚠️ DEGRADED: single-context (<reason>)`. A silent degraded critique is a failed critique.
@@ -23,7 +24,7 @@ Resolve one stable target, run two independent assessments, synthesize a design 
    - "this page" -> the current URL or source file
 2. **Confirm the target slugs cleanly**:
    ```bash
-   .grok/skills/impeccable/scripts/impeccable critique-storage slug "<resolved-path-or-url>"
+   .agents/skills/melzi/scripts/impeccable critique-storage slug "<resolved-path-or-url>"
    ```
    Every later command also accepts the resolved target directly and derives the same slug internally; never hand-write a slug. If this exits non-zero, skip persistence and trend for this run, but continue the critique.
 3. **Read `.impeccable/critique/ignore.md`** if it exists. Drop matching findings silently; it is the only prior-run input critique consumes.
@@ -40,6 +41,16 @@ Sub-agent gate (all harnesses):
 - "Unavailable" means exactly one thing: no sub-agent/Task tool is exposed in this session (or, on harnesses that ask, the user declined). It does not mean inconvenient.
 - If and only if sub-agents are unavailable, fall back sequentially: read [critique-rubric.md](critique-rubric.md) now, finish and record Assessment A, then run Assessment B, then synthesize, and emit the degraded banner.
 - Whichever path you take, declare it in the report header (see Report header provenance). Skipping sub-agents without the banner is the most common failure of this command.
+
+Codex sub-agent gate (overrides the default above; Codex's permission model requires asking before spawning):
+- Asking is the normal path, not a degradation. Approving and spawning is the dual-agent path; do not emit the degraded banner just for asking.
+- If `spawn_agent` is exposed and the user explicitly allowed sub-agents, delegation, or parallel agent work, spawn A and B immediately (for a desktop app, A first and B once A has finished, as the default gate above says).
+- If `spawn_agent` is exposed but the user did not explicitly allow sub-agents, ask exactly once: "Melzi critique is designed to run two independent sub-agents for an unanchored assessment. May I use sub-agents for this critique?" Then stop until the user answers.
+- If allowed, spawn A and B (in sequence for a desktop app). If declined, run sequentially and lead the report with `⚠️ DEGRADED: single-context (sub-agents declined by user)`.
+- If `spawn_agent` is not exposed, do not ask; run sequentially and lead with `⚠️ DEGRADED: single-context (spawn_agent unavailable in this session)`.
+- If spawning fails after permission, run sequentially and lead with `⚠️ DEGRADED: single-context (sub-agent spawn failed: <exact error>)`.
+Running sequentially is the fallback above, rubric read first.
+Prefer `fork_context: false` with self-contained prompts containing cwd, target, live URL, references, product context, and output contract. If using `fork_context: true`, omit `agent_type`, `model`, and `reasoning_effort`.
 
 If browser automation is available, each assessment creates its own new tab. Never reuse an existing tab, even if it is already at the right URL. Desktop apps are the exception (see **Desktop apps** under Assessment B).
 
@@ -66,7 +77,7 @@ Run the bundled detector and browser visualization evidence. On web, Assessment 
 
 CLI scan:
 ```bash
-.grok/skills/impeccable/scripts/impeccable detect --json [target]
+.agents/skills/melzi/scripts/impeccable detect --json [target]
 ```
 
 - Pass markup files/directories as `[target]`; do not pass CSS-only files.
@@ -80,27 +91,33 @@ Browser visualization is required for a viewable target when browser automation 
 1. Create a fresh tab and navigate. Prefer the harness's native/browser-canvas screenshot path before hand-rolling a Playwright/Puppeteer script; only fall back to a custom script when no native browser tool is exposed.
 2. Preflight mutable injection by setting `document.title` and appending a `<script>` tag. Read-only evaluate APIs do not count.
 3. If mutation is unavailable, skip live server, browser presentation, and injection; report fallback signal.
-4. If mutation is available, start `.grok/skills/impeccable/scripts/impeccable live-server --background`, present the browser if supported, label `[Human]`, scroll top, inject `http://localhost:PORT/detect.js`, wait 2-3 seconds, read `impeccable` console messages, then run `.grok/skills/impeccable/scripts/impeccable live-server stop --keep-inject`. The overlay went in through the browser, so the project's HTML has no script tag to strip; a bare `stop` also runs `live-inject --remove` against the project's entry file, an edit a read-only critique should not make.
+4. If mutation is available, start `.agents/skills/melzi/scripts/impeccable live-server --background`, present the browser if supported, label `[Human]`, scroll top, inject `http://localhost:PORT/detect.js`, wait 2-3 seconds, read `impeccable` console messages, then run `.agents/skills/melzi/scripts/impeccable live-server stop --keep-inject`. The overlay went in through the browser, so the project's HTML has no script tag to strip; a bare `stop` also runs `live-inject --remove` against the project's entry file, an edit a read-only critique should not make.
 5. For multi-view targets, inject on 3-5 representative pages.
 
 **Desktop apps** (Electron, NW.js, CEF, WebView2): there is no URL to open, so Assessment B attaches to the running app instead.
 
 1. Launch the app with a local DevTools port: `--remote-debugging-port=9222` (Electron, NW.js, CEF), or `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` for WebView2. Keep the port on 127.0.0.1 and never expose it beyond this machine; prefer a test profile and test data.
 2. Seed the state under review (route, open panel, theme, data). The scan reads the window as it stands. Keep the window on screen: a minimized or hidden window scans without the pixel contrast reads.
-3. Run `.grok/skills/impeccable/scripts/impeccable detect --cdp 9222 --target <part of the page URL or title> --json`. It returns the same JSON as a URL scan and leaves the page as found. With several pages open it fails and lists them; rerun with a `--target` that names one.
+3. Run `.agents/skills/melzi/scripts/impeccable detect --cdp 9222 --target <part of the page URL or title> --json`. It returns the same JSON as a URL scan and leaves the page as found. With several pages open it fails and lists them; rerun with a `--target` that names one.
 4. Take screenshots through the harness's CDP tooling (`Page.captureScreenshot` on the same target). Skip the live-server overlay: there is no `[Human]` tab.
 
 The app has one window, so the assessments take turns in it instead of opening tabs (A, then B; see the sub-agent gate), and each must leave it as found: put back any route, scroll, theme, or panel it changed. Tauri on macOS (WKWebView) and on Linux (WebKitGTK) expose no CDP: run Assessment A and the source scan only, and say so in Run Notes.
 
+Codex Browser note: Use the Browser skill. Do not spend a Browser attempt on `file://`. Only call `visibility.set(true)` after mutable script injection is confirmed for the `[Human]` overlay path; verify with `get()`. Use `tab.dev.logs({ filter: "impeccable" })` for console results. Its Playwright `evaluate(...)` surface is read-only; do not rely on it for mutation.
+
 Return: CLI findings JSON/counts, browser console findings if applicable, false positives, and skipped/failed browser steps with concrete reasons.
 
 After Assessment B returns usable CLI findings, reuse them. Do not rerun `impeccable detect` in the parent unless Assessment B failed, was truncated, or omitted count, rule names, or file locations.
+
+Codex failure accounting: final Run Notes must include target slug, ignore list, assessment independence, CLI detector, browser visibility, overlay injection, live-server cleanup, temp-file cleanup, and any fallback signal used. Do not run repo status checks, late API spelunking, or unrelated verification after the report is assembled.
 
 ### Generate Combined Critique Report
 
 Synthesize both assessments into a single report. Do not simply concatenate. Weave the findings together, noting where the LLM review and detector agree, where the detector caught issues the LLM missed, and where detector findings are false positives.
 
 The chat response is the primary user-facing deliverable. Present the full structured critique below in chat; do not replace it with a summary and a link. The persisted snapshot is an archive of that run.
+
+Codex final-answer note: `$melzi critique` produces a report artifact, so the final chat response should intentionally exceed the usual concise close-out style. Do not title the final response "Critique Summary" unless the user explicitly asked for a summary.
 
 Structure your feedback as a design director would:
 
@@ -159,7 +176,7 @@ For each issue, tag with **P0-P3 severity** (see [Issue Severity below](#issue-s
 - **[P?] What**: Name the problem clearly
 - **Why it matters**: How this hurts users or undermines goals
 - **Fix**: What to do about it (be concrete)
-- **Suggested command**: Which command could address this (from: /impeccable adapt, /impeccable animate, /impeccable audit, /impeccable bolder, /impeccable clarify, /impeccable colorize, /impeccable critique, /impeccable delight, /impeccable distill, /impeccable document, /impeccable harden, /impeccable layout, /impeccable onboard, /impeccable optimize, /impeccable overdrive, /impeccable polish, /impeccable quieter, /impeccable shape, /impeccable typeset)
+- **Suggested command**: Which command could address this (from: $melzi animate, $melzi audit, $melzi bolder, $melzi clarify, $melzi colorize, $melzi critique, $melzi document, $melzi explore, $melzi generate, $melzi handdrawn, $melzi harden, $melzi identity, $melzi init, $melzi layout, $melzi live, $melzi polish, $melzi quieter, $melzi shape, $melzi study, $melzi teach, $melzi typeset)
 
 #### Persona Red Flags
 > *Use Assessment A's persona red flags; it selected the personas from [critique-rubric.md](critique-rubric.md).*
@@ -183,6 +200,11 @@ Provocative questions that might unlock better solutions:
 - "Does this need to feel this complex?"
 - "What would a confident version of this look like?"
 
+#### Run Notes
+Keep this compact. Include status for target slug, ignore list, assessment independence, CLI detector, browser visibility, overlay injection, live server cleanup, and temp-file cleanup. For failed or skipped steps, give the concrete observed reason and the fallback signal used. In the final chat response, also include snapshot write and trend read status after persistence has run.
+
+Codex Run Notes are final-chat only. Do not include this section in the persisted snapshot body, because persistence, trend read, and temp cleanup happen after the snapshot write and would otherwise archive stale status such as "pending after persistence."
+
 **Remember**:
 - Be direct. Vague feedback wastes everyone's time.
 - Be specific. "The submit button," not "some elements."
@@ -201,7 +223,7 @@ Persistence is not the end of the run. After it, the response continues with the
 
 ### Persist the Snapshot
 
-Once the report above is finalized, write it to `.impeccable/critique/` so the user can refer back, and so `/impeccable polish` can pick up the priority issues without a copy-paste.
+Once the report above is finalized, write it to `.impeccable/critique/` so the user can refer back, and so `$melzi polish` can pick up the priority issues without a copy-paste.
 
 Skip this step if the Setup slug was null (vague or root-level target).
 
@@ -209,10 +231,12 @@ Skip this step if the Setup slug was null (vague or root-level target).
 
    This is a copy of the report you already delivered above, for later commands to read. It is not delivery. If you find yourself composing the report for the first time inside this heredoc, you have skipped Deliver the Report; go back and send it.
 
+   Codex: exclude Run Notes from the temp body file; Run Notes are final-chat only because persistence, trend read, and temp cleanup happen after the snapshot write.
+
 2. **Pass the structured metadata** through `IMPECCABLE_CRITIQUE_META` (JSON), then run the write command:
    ```bash
    IMPECCABLE_CRITIQUE_META='{"target":"<user phrasing>","total_score":<n>,"max_score":<n>,"na_heuristics":"<comma-separated numbers, or empty>","p0_count":<n>,"p1_count":<n>}' \
-     .grok/skills/impeccable/scripts/impeccable critique-storage write "<resolved target>" <body-file>
+     .agents/skills/melzi/scripts/impeccable critique-storage write "<resolved target>" <body-file>
    ```
    `max_score` is the applicable maximum from the heuristic table (40 when every heuristic applied), so a later run can tell a renormalized total from a full one. For a local file target, the helper also records an exact content fingerprint so polish can distinguish the assessed bytes from later edits without relying on Git state or timestamps. The helper prints the absolute path it wrote. Leave that file on disk. Polish closes it; this run does not. `REPORTS OFF:` instead means the project opted out of saved reports: skip the trend read and carry on.
 
@@ -220,7 +244,7 @@ Skip this step if the Setup slug was null (vague or root-level target).
 
 4. **Read the trend** for context:
    ```bash
-   .grok/skills/impeccable/scripts/impeccable critique-storage trend "<resolved target>" 5
+   .agents/skills/melzi/scripts/impeccable critique-storage trend "<resolved target>" 5
    ```
    This returns a JSON array of the last 5 frontmatter entries (including the one you just wrote).
 
@@ -233,7 +257,7 @@ Skip this step if the Setup slug was null (vague or root-level target).
 
    If this is the first run for the slug, the trend is just one score; say so: "First run for this target, no trend yet."
 
-6. **Close the run.** Go to Ask the User below and emit the questions, or the `Questions skipped: <reason>` line when the count allows it. The run is not complete until you do. Persistence is bookkeeping and cleanup is not an ending; stopping here leaves the user with a report and no way forward, and leaves `/impeccable polish` with no priorities to inherit.
+6. **Close the run.** Go to Ask the User below and emit the questions, or the `Questions skipped: <reason>` line when the count allows it. The run is not complete until you do. Persistence is bookkeeping and cleanup is not an ending; stopping here leaves the user with a report and no way forward, and leaves `$melzi polish` with no priorities to inherit.
 
 This is fire-and-forget. Do not show the user the helper's JSON output; only the human-readable trend line and the written path. Failures here should not block the rest of the flow; print the error and move on.
 
@@ -269,25 +293,25 @@ Ask questions along these lines (adapt to the specific findings; do not ask gene
 
 List recommended commands in priority order, based on the user's answers:
 
-1. **`/command-name`**: Brief description of what to fix (specific context from critique findings)
-2. **`/command-name`**: Brief description (specific context)
+1. **`$command-name`**: Brief description of what to fix (specific context from critique findings)
+2. **`$command-name`**: Brief description (specific context)
 ...
 
 **Rules for recommendations**:
-- Only recommend commands from: /impeccable adapt, /impeccable animate, /impeccable audit, /impeccable bolder, /impeccable clarify, /impeccable colorize, /impeccable critique, /impeccable delight, /impeccable distill, /impeccable document, /impeccable harden, /impeccable layout, /impeccable onboard, /impeccable optimize, /impeccable overdrive, /impeccable polish, /impeccable quieter, /impeccable shape, /impeccable typeset
+- Only recommend commands from: $melzi animate, $melzi audit, $melzi bolder, $melzi clarify, $melzi colorize, $melzi critique, $melzi document, $melzi explore, $melzi generate, $melzi handdrawn, $melzi harden, $melzi identity, $melzi init, $melzi layout, $melzi live, $melzi polish, $melzi quieter, $melzi shape, $melzi study, $melzi teach, $melzi typeset
 - Order by the user's stated priorities first, then by impact
 - Each item's description should carry enough context that the command knows what to focus on
 - Map each Priority Issue to the appropriate command
 - Skip commands that would address zero issues
 - If the user chose a limited scope, only include items within that scope
 - If the user marked areas as off-limits, exclude commands that would touch those areas
-- End with `/impeccable polish` as the final step if any fixes were recommended
+- End with `$melzi polish` as the final step if any fixes were recommended
 
 After presenting the summary, tell the user:
 
 > You can ask me to run these one at a time, all at once, or in any order you prefer.
 >
-> Re-run `/impeccable critique` after fixes to see your score improve.
+> Re-run `$melzi critique` after fixes to see your score improve.
 
 ---
 

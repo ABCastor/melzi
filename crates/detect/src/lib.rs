@@ -74,12 +74,12 @@ Commands:
   update                           Refresh skills from an explicit local bundle
   check                            Compare skills with an explicit local bundle
   telemetry off|on|status          Turn the roll API's anonymous usage data off or on, or show it
-  login                            Sign in to your Impeccable account
+  login                            Sign in to your Melzi account
   logout                           Sign out on this machine
   whoami                           Show the signed-in account and whether it includes Pro rules
-  status                           Show what Impeccable is connected to for you, and the one next step
+  status                           Show what Melzi is connected to for you, and the one next step
   walkthrough <recording>          Turn a screen recording into a Needs you walkthrough (MP4, poster, chapters)
-  world <id> [--print]             Seed this project's DESIGN.md from a world in the Impeccable catalog
+  world <id> [--print]             Seed this project's DESIGN.md from a world in the Melzi catalog
   health on|off|forget|status      Save each full scan's counts to your account, or stop and delete them
   foundations [path]               Check which product foundations this project has in place
 

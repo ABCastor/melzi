@@ -35,7 +35,7 @@ pub(super) fn run(args: &[String], io: &mut Io) -> i32 {
     }) {
         Ok(()) => {
             io.out(if on {
-                "DESIGN.md sync: on. Your DESIGN.md uploads to your Impeccable account whenever it changes. To stop: impeccable health design off\n"
+                "DESIGN.md sync: on. Your DESIGN.md uploads to your Melzi account whenever it changes. To stop: impeccable health design off\n"
             } else {
                 "DESIGN.md sync: off.\n"
             });

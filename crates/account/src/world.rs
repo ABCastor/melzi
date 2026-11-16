@@ -1,5 +1,5 @@
 //! `impeccable world <id> [--print]`: seed a project's design system from a
-//! world in the Impeccable catalog.
+//! world in the Melzi catalog.
 //!
 //! The service renders the world as a finished DESIGN.md and sidecar
 //! (`GET /cli/v1/worlds/<id>/seed`, plan-gated there), so the catalog and the
@@ -17,14 +17,14 @@ use std::path::Path;
 const MAX_DESIGN_MD: usize = 256 * 1024;
 const MAX_SIDECAR: usize = 256 * 1024;
 
-const UNREADABLE: &str = "Your Impeccable account sent a world this CLI can't read. Update the Impeccable CLI and try again.\n";
+const UNREADABLE: &str = "Your Melzi account sent a world this CLI can't read. Update the Melzi CLI and try again.\n";
 
 const USAGE: &str = "Usage: impeccable world <id> [--print]\n";
 /// `--help`: what a world is and what the verb writes, before any sign-in.
 const HELP: &str = "Usage: impeccable world <id> [--print]
 
 Starts this project from a world: a finished visual direction, with its type,
-color, spacing and components. Copy the id from the world in the Impeccable
+color, spacing and components. Copy the id from the world in the Melzi
 worlds catalog.
 
 Writes DESIGN.md beside PRODUCT.md (at the project root when there is none)
@@ -35,7 +35,7 @@ system, it writes nothing and tells you how to merge.
   --print   Print the seed as JSON instead of writing it (its DESIGN.md is in
             design_md), to merge into the design system you have.
 
-Needs an Impeccable account (impeccable login). Some worlds need Pro.
+Needs an Melzi account (impeccable login). Some worlds need Pro.
 ";
 
 /// The seed's DESIGN.md carrying `world: "<id>"` in its frontmatter, the line
@@ -152,7 +152,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
     };
     if !valid_id(&id) {
         io.err(&format!(
-            "\"{}\" isn't a world id. Copy the id from the world in the Impeccable worlds catalog.\n",
+            "\"{}\" isn't a world id. Copy the id from the world in the Melzi worlds catalog.\n",
             id.escape_debug()
         ));
         return 1;
@@ -236,7 +236,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
         Some(md) => seed.design_md = md,
         None => {
             io.err(&format!(
-                "The DESIGN.md your Impeccable account sent for {id} can't record which world it came from, so nothing was written. Update the Impeccable CLI and try again.\n"
+                "The DESIGN.md your Melzi account sent for {id} can't record which world it came from, so nothing was written. Update the Melzi CLI and try again.\n"
             ));
             return 1;
         }
@@ -251,7 +251,7 @@ pub fn run(args: &[String], io: &mut Io) -> i32 {
             let design = relative(&design_root.join("DESIGN.md"));
             let sidecar = relative(&root.join(".impeccable/design.json"));
             out.push_str(&format!(
-                "Wrote {design} and {sidecar}.\nNext: ask your agent for your next page, like /impeccable craft a pricing page. It builds in {name}.\n"
+                "Wrote {design} and {sidecar}.\nNext: ask your agent for your next page, like /melzi craft a pricing page. It builds in {name}.\n"
             ));
             io.out(&out);
             0
@@ -377,7 +377,7 @@ fn failure(id: &str, e: &SessionError) -> String {
     use crate::http::ApiError;
     match e {
         SessionError::NotSignedIn => {
-            "Using a world needs your Impeccable account. Run impeccable login, then try again.\n".into()
+            "Using a world needs your Melzi account. Run impeccable login, then try again.\n".into()
         }
         SessionError::Expired | SessionError::Api(ApiError::Status { status: 401, .. }) => {
             "Your sign-in expired. Run impeccable login, then try again.\n".into()
@@ -391,12 +391,12 @@ fn failure(id: &str, e: &SessionError) -> String {
             format!("The world {id} needs Pro. {}\n", crate::pro::PRICING)
         }
         SessionError::Api(ApiError::Status { status: 404, .. }) => format!(
-            "No world has the id {id}. Copy the id from the world in the Impeccable worlds catalog.\n"
+            "No world has the id {id}. Copy the id from the world in the Melzi worlds catalog.\n"
         ),
         // The service answered, but not with JSON: the same advice as a seed
         // whose shape this CLI can't read, never "couldn't reach".
         SessionError::Api(ApiError::Network(m)) if m == crate::http::NOT_JSON => UNREADABLE.into(),
-        e => format!("Couldn't reach your Impeccable account: {e}.\n"),
+        e => format!("Couldn't reach your Melzi account: {e}.\n"),
     }
 }
 

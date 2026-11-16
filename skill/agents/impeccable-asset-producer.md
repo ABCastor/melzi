@@ -1,7 +1,7 @@
 ---
 name: impeccable-asset-producer
 codex-name: impeccable_asset_producer
-description: Produces clean reusable raster assets from approved Impeccable mock references without redesigning the direction.
+description: Produces clean reusable raster assets from approved Melzi mock references without redesigning the direction.
 model: inherit
 effort: medium
 max-turns: 24

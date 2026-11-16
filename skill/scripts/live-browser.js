@@ -3961,7 +3961,7 @@
       }
       stashResult = await res.json();
     } catch (err) {
-      console.error('[impeccable] element removal stash failed:', err);
+      console.error('[melzi] element removal stash failed:', err);
       showToast('Remove failed - retry or cancel', 4000);
       return;
     }
@@ -4000,7 +4000,7 @@
       else updatePendingCounter(remaining);
       showToast('Restored ' + desc(target), 2500);
     } catch (err) {
-      console.error('[impeccable] undo removal failed:', err);
+      console.error('[melzi] undo removal failed:', err);
       showToast('Undo failed - see console', 4000);
     }
   }
@@ -7857,7 +7857,7 @@
             updateGlobalBarState();
             showToast('Click anything on the page to restyle it.', 8000);
           } else if (!hasProjectContext && !liveBarHiddenByHelper) showToast(`No PRODUCT.md found. Variants will be brand-agnostic. Run ${IMPECCABLE_COMMAND} init to generate one.`, 7000);
-          console.log('[impeccable] Live mode connected.');
+          console.log('[melzi] Live mode connected.');
           syncAgentPollingUi(!!msg.agentPolling);
           startAgentStatusPoll();
           restoreFromActiveSessions(msg.activeSessions, 'sse_connected');

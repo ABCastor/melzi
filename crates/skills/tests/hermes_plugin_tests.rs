@@ -143,10 +143,10 @@ fn run_hermes_install(f: &Fixture, with_plugin: bool) -> String {
     let plain = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     let exec = plain.unix_permissions(0o755);
     let mut entries = vec![
-        (".hermes/skills/impeccable/SKILL.md".to_string(), "---\nname: impeccable\n---\n", plain),
-        (".hermes/skills/impeccable/scripts/impeccable".to_string(), "#!/bin/sh\nexit 0\n", exec),
-        (".hermes/skills/impeccable/scripts/VERSION".to_string(), "9.9.9\n", plain),
-        (format!(".hermes/skills/impeccable/scripts/bin/{os}-{arch}/impeccable"), "#!/bin/sh\nexit 0\n", exec),
+        (".hermes/skills/melzi/SKILL.md".to_string(), "---\nname: impeccable\n---\n", plain),
+        (".hermes/skills/melzi/scripts/impeccable".to_string(), "#!/bin/sh\nexit 0\n", exec),
+        (".hermes/skills/melzi/scripts/VERSION".to_string(), "9.9.9\n", plain),
+        (format!(".hermes/skills/melzi/scripts/bin/{os}-{arch}/impeccable"), "#!/bin/sh\nexit 0\n", exec),
     ];
     if with_plugin {
         entries.push((format!("{PLUGIN}/plugin.yaml"), "name: impeccable-design-hook\n", plain));

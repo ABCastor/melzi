@@ -61,10 +61,10 @@ fn stop_manifest_entry_with_windows(command: &str, windows: &str) -> Value {
 /// The launcher paths the manifests invoke, per harness. Project-relative
 /// (or `${CLAUDE_PROJECT_DIR}` / repo-root anchored) so a committed manifest
 /// resolves on every teammate's checkout.
-const CLAUDE_HOOK_COMMAND: &str = "\"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/impeccable\" hook";
-const AGENTS_HOOK_COMMAND: &str = "\".agents/skills/impeccable/scripts/impeccable\" hook";
-const CURSOR_HOOK_COMMAND: &str = "\".cursor/skills/impeccable/scripts/impeccable\" hook";
-const GITHUB_HOOK_COMMAND: &str = "\"$(git rev-parse --show-toplevel)/.github/skills/impeccable/scripts/impeccable\" hook";
+const CLAUDE_HOOK_COMMAND: &str = "\"${CLAUDE_PROJECT_DIR}/.claude/skills/melzi/scripts/impeccable\" hook";
+const AGENTS_HOOK_COMMAND: &str = "\".agents/skills/melzi/scripts/impeccable\" hook";
+const CURSOR_HOOK_COMMAND: &str = "\".cursor/skills/melzi/scripts/impeccable\" hook";
+const GITHUB_HOOK_COMMAND: &str = "\"$(git rev-parse --show-toplevel)/.github/skills/melzi/scripts/impeccable\" hook";
 
 pub struct ManifestTarget {
     pub provider: &'static str,
@@ -83,7 +83,7 @@ pub fn claude_manifest_for_command(cmd: &str) -> Value {
             "description",
             // JS: Claude Code folded multi-edit behavior into Edit; the manifest
             // tracks the current Edit and Write tools (upstream 7d5c60d2).
-            Value::from("Impeccable design detector: immediate-tier checks after Edit/Write on UI files, full-rule deep pass on Stop."),
+            Value::from("Melzi design detector: immediate-tier checks after Edit/Write on UI files, full-rule deep pass on Stop."),
         ),
         (
             "hooks",
@@ -107,9 +107,9 @@ fn claude_manifest() -> Value {
 
 fn grok_manifest() -> Value {
     let command = if cfg!(windows) {
-        crate::hook_markers::windows_launcher_hook_command(".grok/skills/impeccable/scripts/impeccable", "hook")
+        crate::hook_markers::windows_launcher_hook_command(".grok/skills/melzi/scripts/impeccable", "hook")
     } else {
-        "\".grok/skills/impeccable/scripts/impeccable\" hook".to_string()
+        "\".grok/skills/melzi/scripts/impeccable\" hook".to_string()
     };
     let mut manifest = claude_manifest_for_command(&command);
     manifest["hooks"]["PostToolUse"][0]["matcher"] = Value::from("Edit|Write|MultiEdit");
@@ -118,7 +118,7 @@ fn grok_manifest() -> Value {
 
 fn agents_manifest() -> Value {
     let cmd = AGENTS_HOOK_COMMAND;
-    let win = &crate::hook_markers::windows_launcher_hook_command(".agents/skills/impeccable/scripts/impeccable", "hook");
+    let win = &crate::hook_markers::windows_launcher_hook_command(".agents/skills/melzi/scripts/impeccable", "hook");
     obj(vec![(
         "hooks",
         obj(vec![
@@ -138,7 +138,7 @@ fn agents_manifest() -> Value {
 }
 
 /// Cursor runs the post-edit design hook like the other harnesses (the
-/// before-edit gate is retired). `merge_hook_manifests` strips Impeccable
+/// before-edit gate is retired). `merge_hook_manifests` strips Melzi
 /// entries from every event, so `on` also drops a leftover `preToolUse`
 /// gate entry while writing this one.
 fn cursor_manifest() -> Value {
@@ -171,8 +171,8 @@ fn github_manifest() -> Value {
 /// token stays bare; PowerShell reads the env var. Timeouts are milliseconds.
 /// No per-edit detector: BeforeTool carries the session id into
 /// `build-phase` shell calls, AfterAgent runs the build-completion check.
-const GEMINI_HOOK_COMMAND: &str = "$GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable hook";
-const GEMINI_HOOK_COMMAND_WINDOWS: &str = "& \"$env:GEMINI_PROJECT_DIR/.gemini/skills/impeccable/scripts/impeccable.cmd\" hook";
+const GEMINI_HOOK_COMMAND: &str = "$GEMINI_PROJECT_DIR/.gemini/skills/melzi/scripts/impeccable hook";
+const GEMINI_HOOK_COMMAND_WINDOWS: &str = "& \"$env:GEMINI_PROJECT_DIR/.gemini/skills/melzi/scripts/impeccable.cmd\" hook";
 
 fn gemini_manifest() -> Value {
     let cmd = if cfg!(windows) { GEMINI_HOOK_COMMAND_WINDOWS } else { GEMINI_HOOK_COMMAND };
@@ -199,7 +199,7 @@ fn gemini_manifest() -> Value {
 pub const HOOK_MANIFEST_TARGETS: &[ManifestTarget] = &[
     ManifestTarget {
         provider: ".claude",
-        skill_rel: ".claude/skills/impeccable",
+        skill_rel: ".claude/skills/melzi",
         dest_rel: ".claude/settings.local.json",
         shared_dest_rel: Some(".claude/settings.json"),
         manifest: claude_manifest,
@@ -207,7 +207,7 @@ pub const HOOK_MANIFEST_TARGETS: &[ManifestTarget] = &[
     },
     ManifestTarget {
         provider: ".agents",
-        skill_rel: ".agents/skills/impeccable",
+        skill_rel: ".agents/skills/melzi",
         dest_rel: ".codex/hooks.json",
         shared_dest_rel: None,
         manifest: agents_manifest,
@@ -215,7 +215,7 @@ pub const HOOK_MANIFEST_TARGETS: &[ManifestTarget] = &[
     },
     ManifestTarget {
         provider: ".cursor",
-        skill_rel: ".cursor/skills/impeccable",
+        skill_rel: ".cursor/skills/melzi",
         dest_rel: ".cursor/hooks.json",
         shared_dest_rel: None,
         manifest: cursor_manifest,
@@ -223,7 +223,7 @@ pub const HOOK_MANIFEST_TARGETS: &[ManifestTarget] = &[
     },
     ManifestTarget {
         provider: ".github",
-        skill_rel: ".github/skills/impeccable",
+        skill_rel: ".github/skills/melzi",
         dest_rel: ".github/hooks/impeccable.json",
         shared_dest_rel: None,
         manifest: github_manifest,
@@ -231,7 +231,7 @@ pub const HOOK_MANIFEST_TARGETS: &[ManifestTarget] = &[
     },
     ManifestTarget {
         provider: ".grok",
-        skill_rel: ".grok/skills/impeccable",
+        skill_rel: ".grok/skills/melzi",
         dest_rel: ".grok/hooks/impeccable.json",
         shared_dest_rel: None,
         manifest: grok_manifest,
@@ -239,7 +239,7 @@ pub const HOOK_MANIFEST_TARGETS: &[ManifestTarget] = &[
     },
     ManifestTarget {
         provider: ".gemini",
-        skill_rel: ".gemini/skills/impeccable",
+        skill_rel: ".gemini/skills/melzi",
         dest_rel: ".gemini/settings.json",
         shared_dest_rel: None,
         manifest: gemini_manifest,

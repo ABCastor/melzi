@@ -6,7 +6,9 @@ The store is `~/.impeccable/taste/`, beside the genesis ledger, because taste is
 
 ## 1. When this runs
 
-After a genesis hand exists, or any time two or more candidate screens are worth comparing: two directions in a redesign, two renditions of one world, a child screen against the parent it came from.
+Only when the user asks for it by name: a taste session, a calibration, a comparison round. This file is never part of the default flow, and no other reference may route here or offer it on its own; a design task that finishes without it is complete. The default quality gate is the model's own, in [taste-bar.md](taste-bar.md), which reads the profile this loop produced when one exists and never collects more.
+
+Once he has asked, it fits after a genesis hand exists, or any time two or more candidate screens are worth comparing: two directions in a redesign, two renditions of one world, a child screen against the parent it came from.
 
 Never as the first step in a fresh project. There is nothing to compare, and a profile fitted on nothing still prints a confident-looking answer with no evidence under it. Build first, through [genesis.md](genesis.md) or [new-work.md](new-work.md), then come back here with screens in hand.
 

@@ -47,14 +47,14 @@ impl Account {
         self.home.join("account").join(id)
     }
 
-    /// The account as people read it: "Impeccable" for the production
-    /// service, and "Impeccable (<host>)" for any other, so a staging or test
+    /// The account as people read it: "Melzi" for the production
+    /// service, and "Melzi (<host>)" for any other, so a staging or test
     /// sign-in is never mistaken for the real account.
     pub fn display_name(&self) -> String {
         if self.issuer == DEFAULT_ACCOUNT_URL {
-            "Impeccable".to_string()
+            "Melzi".to_string()
         } else {
-            format!("Impeccable ({})", self.display_host())
+            format!("Melzi ({})", self.display_host())
         }
     }
 
@@ -147,12 +147,12 @@ mod tests {
 
     #[test]
     fn the_account_is_named_impeccable_and_only_other_services_show_a_host() {
-        // Catches: sign-in lines naming the host (api.impeccable.style) where a person expects their Impeccable account.
+        // Catches: sign-in lines naming the host (api.impeccable.style) where a person expects their Melzi account.
         let at = |url: &str| Account { issuer: url.to_string(), home: PathBuf::from("/h") };
-        assert_eq!(at(DEFAULT_ACCOUNT_URL).display_name(), "Impeccable");
+        assert_eq!(at(DEFAULT_ACCOUNT_URL).display_name(), "Melzi");
         assert_eq!(
             at("https://api.staging.impeccable.style").display_name(),
-            "Impeccable (api.staging.impeccable.style)"
+            "Melzi (api.staging.impeccable.style)"
         );
         // Catches: a Home link to the wrong app, or to an app a test service doesn't have.
         assert_eq!(at(DEFAULT_ACCOUNT_URL).home_url(), Some("https://app.impeccable.style/app"));

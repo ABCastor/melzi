@@ -1,4 +1,4 @@
-//! A fake Impeccable account service on 127.0.0.1 for tests: OAuth metadata,
+//! A fake Melzi account service on 127.0.0.1 for tests: OAuth metadata,
 //! the consent dialog (which approves at once), the token endpoint with
 //! refresh rotation and reuse detection, revocation, and the CLI resource.
 #![allow(dead_code)]
@@ -77,7 +77,7 @@ pub struct Record {
     pub refused: Vec<(String, serde_json::Value)>,
     pub forgets: usize,
     pub setups: Vec<serde_json::Value>,
-    /// The `Impeccable-Project` header of each setup read (`GET /cli/v1/setup`).
+    /// The `Melzi-Project` header of each setup read (`GET /cli/v1/setup`).
     pub setup_projects: Vec<Option<String>>,
     pub designs: Vec<serde_json::Value>,
     codes: HashMap<String, (String, String, String)>,

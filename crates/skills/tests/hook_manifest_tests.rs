@@ -918,17 +918,17 @@ fn skill_dir_match_reads_every_command_spelling_the_installer_writes() {
     assert!(command_names_skill_dir_for(&posix, &format!(r"\\?\{dir}"), true));
     assert!(command_names_skill_dir_for(&posix, &dir.replace("D:", "d:").replace("home", "HOME"), true));
     // POSIX paths keep their case and stay distinct from a sibling skill.
-    let unix = "[ ! -f '/home/u/.cursor/skills/impeccable/scripts/impeccable' ] || '/home/u/.cursor/skills/impeccable/scripts/impeccable' hook";
-    assert!(command_names_skill_dir_for(unix, "/home/u/.cursor/skills/impeccable", false));
-    assert!(!command_names_skill_dir_for(unix, "/home/U/.cursor/skills/impeccable", false));
+    let unix = "[ ! -f '/home/u/.cursor/skills/melzi/scripts/impeccable' ] || '/home/u/.cursor/skills/melzi/scripts/impeccable' hook";
+    assert!(command_names_skill_dir_for(unix, "/home/u/.cursor/skills/melzi", false));
+    assert!(!command_names_skill_dir_for(unix, "/home/U/.cursor/skills/melzi", false));
     assert!(!command_names_skill_dir_for(unix, "/home/u/.cursor/skills/impeccable-old", false));
-    assert!(!command_names_skill_dir_for("\".cursor/skills/impeccable/scripts/impeccable\" hook", "/home/u/.cursor/skills/impeccable", false));
+    assert!(!command_names_skill_dir_for("\".cursor/skills/melzi/scripts/impeccable\" hook", "/home/u/.cursor/skills/melzi", false));
 }
 
 #[test]
 fn skill_dir_match_decodes_a_shell_quoted_apostrophe() {
     // `sh_single_quote` writes `/home/Ann's` as `'/home/Ann'\''s'`.
-    let dir = "/home/Ann's/.cursor/skills/impeccable";
+    let dir = "/home/Ann's/.cursor/skills/melzi";
     let q = sh_single_quote(&format!("{dir}/scripts/impeccable"));
     assert!(q.contains("'\\''"), "{q}");
     let command = format!("[ ! -f {q} ] || {q} hook");
@@ -963,9 +963,9 @@ fn a_dead_home_hook_does_not_count_as_installed() {
     let fx = home_fixture("home-hooks-legacy");
     let sys = home_sys(&fx.home, &fx.project, &[]);
     for (provider, rel, legacy) in [
-        (".agents", ".codex/hooks.json", json!({ "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|apply_patch", "hooks": [{ "type": "command", "command": format!("node '{}/.agents/skills/impeccable/scripts/hook.mjs'", fx.home) }] }] } })),
-        (".cursor", ".cursor/hooks.json", json!({ "version": 1, "hooks": { "preToolUse": [{ "command": format!("node '{}/.cursor/skills/impeccable/scripts/hook-before-edit.mjs'", fx.home) }] } })),
-        (".grok", ".grok/hooks/impeccable.json", json!({ "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": format!("node '{}/.grok/skills/impeccable/scripts/hook.mjs'", fx.home) }] }] } })),
+        (".agents", ".codex/hooks.json", json!({ "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|apply_patch", "hooks": [{ "type": "command", "command": format!("node '{}/.agents/skills/melzi/scripts/hook.mjs'", fx.home) }] }] } })),
+        (".cursor", ".cursor/hooks.json", json!({ "version": 1, "hooks": { "preToolUse": [{ "command": format!("node '{}/.cursor/skills/melzi/scripts/hook-before-edit.mjs'", fx.home) }] } })),
+        (".grok", ".grok/hooks/impeccable.json", json!({ "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": format!("node '{}/.grok/skills/melzi/scripts/hook.mjs'", fx.home) }] }] } })),
     ] {
         let path = jsp::join(&[&fx.home, rel]);
         write(&path, &legacy.to_string());
@@ -991,9 +991,9 @@ fn global_install_writes_codex_cursor_and_grok_hooks_under_home() {
     let grok = jsp::join(&[&fx.home, ".grok", "hooks", "impeccable.json"]);
     let github = jsp::join(&[&fx.project, ".github", "hooks", "impeccable.json"]);
     assert_eq!(written, [codex.clone(), cursor.clone(), grok.clone(), github.clone()]);
-    assert!(all_commands_name(&codex, &jsp::join(&[&fx.home, ".agents", "skills", "impeccable"])), "{}", read(&codex));
-    assert!(all_commands_name(&cursor, &jsp::join(&[&fx.home, ".cursor", "skills", "impeccable"])), "{}", read(&cursor));
-    assert!(all_commands_name(&grok, &jsp::join(&[&fx.home, ".grok", "skills", "impeccable"])), "{}", read(&grok));
+    assert!(all_commands_name(&codex, &jsp::join(&[&fx.home, ".agents", "skills", "melzi"])), "{}", read(&codex));
+    assert!(all_commands_name(&cursor, &jsp::join(&[&fx.home, ".cursor", "skills", "melzi"])), "{}", read(&cursor));
+    assert!(all_commands_name(&grok, &jsp::join(&[&fx.home, ".grok", "skills", "melzi"])), "{}", read(&grok));
     // Copilot stays in the project; nothing else lands there.
     assert!(exists(&github));
     for rel in [".codex", ".cursor", ".grok"] {
@@ -1016,7 +1016,7 @@ fn global_codex_hook_honors_codex_home() {
 
     let dest = std::path::Path::new(&fx.project).join(&codex_home).join("hooks.json").to_string_lossy().into_owned();
     assert_eq!(written, [dest.clone()]);
-    assert!(all_commands_name(&dest, &jsp::join(&[&fx.home, ".agents", "skills", "impeccable"])), "{}", read(&dest));
+    assert!(all_commands_name(&dest, &jsp::join(&[&fx.home, ".agents", "skills", "melzi"])), "{}", read(&dest));
     assert!(!exists(&jsp::join(&[&fx.home, ".codex", "hooks.json"])));
     assert!(!exists(&jsp::join(&[&fx.project, ".codex"])));
     // The path `context` reads for a user-scope Codex hook is this one.
@@ -1080,18 +1080,18 @@ fn global_install_prunes_only_the_stale_project_copy_of_the_home_hook() {
     // What an older global install left in the project: the Cursor hook
     // naming the home skill beside the user's own hook, and a Codex manifest
     // holding nothing but ours.
-    let cursor_skill = jsp::join(&[&fx.home, ".cursor", "skills", "impeccable", "scripts", "impeccable"]);
+    let cursor_skill = jsp::join(&[&fx.home, ".cursor", "skills", "melzi", "scripts", "impeccable"]);
     let old_cursor = format!("[ ! -f '{cursor_skill}' ] || '{cursor_skill}' hook");
     let project_cursor = jsp::join(&[&fx.project, ".cursor", "hooks.json"]);
     write(&project_cursor, &json!({ "version": 1, "hooks": {
         "postToolUse": [{ "command": old_cursor, "matcher": "^Write$", "timeout": 5 }, { "command": "./format.sh" }],
     } }).to_string());
-    let codex_skill = jsp::join(&[&fx.home, ".agents", "skills", "impeccable", "scripts", "impeccable"]);
+    let codex_skill = jsp::join(&[&fx.home, ".agents", "skills", "melzi", "scripts", "impeccable"]);
     let project_codex = jsp::join(&[&fx.project, ".codex", "hooks.json"]);
     write(&project_codex, &json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": format!("[ ! -f '{codex_skill}' ] || '{codex_skill}' hook") }] }] } }).to_string());
     // A Grok hook from a project install of the skill is not ours to move.
     let project_grok = jsp::join(&[&fx.project, ".grok", "hooks", "impeccable.json"]);
-    let project_grok_text = json!({ "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "[ ! -f \".grok/skills/impeccable/scripts/impeccable\" ] || \".grok/skills/impeccable/scripts/impeccable\" hook" }] }] } }).to_string();
+    let project_grok_text = json!({ "hooks": { "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit", "hooks": [{ "type": "command", "command": "[ ! -f \".grok/skills/melzi/scripts/impeccable\" ] || \".grok/skills/melzi/scripts/impeccable\" hook" }] }] } }).to_string();
     write(&project_grok, &project_grok_text);
 
     copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".agents", ".cursor", ".grok"], false, Some(&fx.home), Some(&fx.project)).unwrap();
@@ -1114,10 +1114,10 @@ fn global_install_keeps_a_project_owned_hook_on_the_project_skill() {
     let sys = home_sys(&fx.home, &fx.project, &[]);
     copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".cursor"], false, Some(&fx.home), Some(&fx.project)).unwrap();
     assert!(file_has_impeccable_hook_marker(&jsp::join(&[&fx.home, ".cursor", "hooks.json"])));
-    write(&jsp::join(&[&fx.project, ".cursor", "skills", "impeccable", "scripts", "impeccable"]), "#!/bin/sh\n");
+    write(&jsp::join(&[&fx.project, ".cursor", "skills", "melzi", "scripts", "impeccable"]), "#!/bin/sh\n");
     let project_cursor = jsp::join(&[&fx.project, ".cursor", "hooks.json"]);
     write(&project_cursor, &json!({ "version": 1, "hooks": {
-        "postToolUse": [{ "command": "node .cursor/skills/impeccable/scripts/hook.mjs", "matcher": "^Write$", "timeout": 5 }],
+        "postToolUse": [{ "command": "node .cursor/skills/melzi/scripts/hook.mjs", "matcher": "^Write$", "timeout": 5 }],
     } }).to_string());
 
     repair_stale_hook_manifests(&sys, &fx.project, &[".cursor"], Some(&fx.home)).unwrap();
@@ -1127,7 +1127,7 @@ fn global_install_keeps_a_project_owned_hook_on_the_project_skill() {
     assert!(file_has_impeccable_hook_marker(&project_cursor), "{after}");
     assert!(!after.contains("hook.mjs"), "{after}");
     assert!(!after.contains(&fx.home), "{after}");
-    assert!(after.contains(".cursor/skills/impeccable/scripts/impeccable"), "{after}");
+    assert!(after.contains(".cursor/skills/melzi/scripts/impeccable"), "{after}");
 }
 
 #[test]
@@ -1139,7 +1139,7 @@ fn first_global_install_repairs_and_prunes_a_v3_project_hook() {
     let sys = home_sys(&fx.home, &fx.project, &[]);
     let project_cursor = jsp::join(&[&fx.project, ".cursor", "hooks.json"]);
     write(&project_cursor, &json!({ "version": 1, "hooks": {
-        "postToolUse": [{ "command": "node .cursor/skills/impeccable/scripts/hook.mjs", "matcher": "^Write$", "timeout": 5 }],
+        "postToolUse": [{ "command": "node .cursor/skills/melzi/scripts/hook.mjs", "matcher": "^Write$", "timeout": 5 }],
     } }).to_string());
 
     copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".cursor"], false, Some(&fx.home), Some(&fx.project)).unwrap();
@@ -1160,7 +1160,7 @@ fn first_global_install_leaves_a_v3_project_hook_when_no_home_hook_is_written() 
     let sys = home_sys(&fx.home, &fx.project, &[]);
     let project_cursor = jsp::join(&[&fx.project, ".cursor", "hooks.json"]);
     let text = json!({ "version": 1, "hooks": {
-        "postToolUse": [{ "command": "node .cursor/skills/impeccable/scripts/hook.mjs", "matcher": "^Write$", "timeout": 5 }],
+        "postToolUse": [{ "command": "node .cursor/skills/melzi/scripts/hook.mjs", "matcher": "^Write$", "timeout": 5 }],
     } }).to_string();
     write(&project_cursor, &text);
 
@@ -1175,7 +1175,7 @@ fn first_global_install_never_rewrites_committed_claude_settings() {
     let fx = home_fixture("home-hooks-first-install-claude");
     let sys = home_sys(&fx.home, &fx.project, &[]);
     let settings = jsp::join(&[&fx.project, ".claude", "settings.json"]);
-    let text = json!({ "hooks": { "PostToolUse": [{ "hooks": [{ "type": "command", "command": "node .claude/skills/impeccable/scripts/hook.mjs" }] }] } }).to_string();
+    let text = json!({ "hooks": { "PostToolUse": [{ "hooks": [{ "type": "command", "command": "node .claude/skills/melzi/scripts/hook.mjs" }] }] } }).to_string();
     write(&settings, &text);
 
     copy_provider_hooks(&sys, &fx.bundle, &fx.project, &[".claude", ".cursor"], false, Some(&fx.home), Some(&fx.project)).unwrap();
@@ -1187,7 +1187,7 @@ fn first_global_install_never_rewrites_committed_claude_settings() {
 fn stale_project_copy_stays_while_the_home_hook_is_not_wired() {
     let fx = home_fixture("home-hooks-unwired");
     let sys = home_sys(&fx.home, &fx.project, &[]);
-    let cursor_skill = jsp::join(&[&fx.home, ".cursor", "skills", "impeccable", "scripts", "impeccable"]);
+    let cursor_skill = jsp::join(&[&fx.home, ".cursor", "skills", "melzi", "scripts", "impeccable"]);
     let project_cursor = jsp::join(&[&fx.project, ".cursor", "hooks.json"]);
     let text = json!({ "version": 1, "hooks": { "postToolUse": [{ "command": format!("[ ! -f '{cursor_skill}' ] || '{cursor_skill}' hook"), "matcher": "^Write$", "timeout": 5 }] } }).to_string();
     write(&project_cursor, &text);
@@ -1274,7 +1274,7 @@ fn partial_user_settings_never_prune_the_project_hook() {
     let root = dir.join("project").to_string_lossy().into_owned();
     let home = dir.join("home").to_string_lossy().into_owned();
     let sys = sys_with_home(&home);
-    write(&format!("{home}/.claude/skills/impeccable/scripts/impeccable"), "");
+    write(&format!("{home}/.claude/skills/melzi/scripts/impeccable"), "");
     let command = user_claude_hook_command(&home, cfg!(windows)).unwrap();
     write(&format!("{home}/.claude/settings.json"), &json!({"hooks":{"Stop":[{"hooks":[{"type":"command","command":command}]}]}}).to_string());
     let local = format!("{root}/.claude/settings.local.json");

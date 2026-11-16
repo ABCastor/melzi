@@ -29,7 +29,7 @@ under the home dir renders as `<HOME>/...` instead of `<IMPECCABLE>`).
 
 ## Account sign-in (`login`, `logout`, `whoami`; `crates/account`)
 
-`impeccable login` signs in to the Impeccable account service with OAuth 2.1:
+`impeccable login` signs in to the Melzi account service with OAuth 2.1:
 authorization code, PKCE S256, a loopback redirect on
 `http://127.0.0.1:<port>/callback`, the public client `impeccable-cli`,
 resource `<issuer>/cli`, scopes `account:read rules:read`. The callback's
@@ -149,7 +149,7 @@ except the artifact download, which has ten minutes.
 
 1. `GET /cli/v1/manifest?engine=<this version>&target=<os-arch>`
    (`darwin-arm64`, `linux-x64`, `windows-x64`, ...). The body's exact bytes
-   must verify against `X-Impeccable-Signature` (base64url Ed25519) under a
+   must verify against `X-Melzi-Signature` (base64url Ed25519) under a
    **pinned release key**, then parse as the manifest below with this
    engine and target. A revision below the **revision floor** is refused.
 2. The artifact is cached by digest at

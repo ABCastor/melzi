@@ -223,8 +223,8 @@ impl std::fmt::Display for CallbackError {
     }
 }
 
-const PAGE_OK: &str = "<!doctype html><meta charset=utf-8><title>Impeccable</title><p>Signed in. You can close this tab.";
-const PAGE_FAIL: &str = "<!doctype html><meta charset=utf-8><title>Impeccable</title><p>Sign-in didn't finish. Check your terminal.";
+const PAGE_OK: &str = "<!doctype html><meta charset=utf-8><title>Melzi</title><p>Signed in. You can close this tab.";
+const PAGE_FAIL: &str = "<!doctype html><meta charset=utf-8><title>Melzi</title><p>Sign-in didn't finish. Check your terminal.";
 
 impl Pending {
     /// Wait for the browser to come back with a code, until `timeout` has

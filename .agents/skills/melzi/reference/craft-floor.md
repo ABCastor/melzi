@@ -47,4 +47,6 @@ Surface habits:
 - Backgrounds are surfaces, textured only from the subject's world. `repeating-linear-gradient` stripes and two-axis grid overlays need an actual canvas, map, blueprint, or measuring tool under them.
 - Claims and configuration come from supplied truth; label illustrative values honestly. Naming a concept and then ironizing it is not a claim.
 
-The floor holds the mechanics; it never picks the direction. With every check green, spend the page on the committed world, and when torn between refined and committed, commit.
+The floor holds the mechanics; it never picks the direction. With every check green, spend the page on the committed world, and when torn between refined and committed, commit. On an Operate or Read surface, commit through structure, proportion and type; adding world material there is the costume [taste-bar.md](taste-bar.md) tests for.
+
+The floor says what must not be wrong. [taste-bar.md](taste-bar.md), loaded alongside this file, says what good looks like and carries the director's pass you run on every render before it is shown.

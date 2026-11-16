@@ -137,7 +137,7 @@ fn replit_file_claims_the_agents_dir_detection() {
     let home = temp_root("replit-agents-home");
     let project = temp_root("replit-agents-project");
     std::fs::write(jsp::join(&[&project, ".replit"]), "").unwrap();
-    let skill_dir = jsp::join(&[&project, ".agents", "skills", "impeccable"]);
+    let skill_dir = jsp::join(&[&project, ".agents", "skills", "melzi"]);
     std::fs::create_dir_all(&skill_dir).unwrap();
     std::fs::write(jsp::join(&[&skill_dir, "SKILL.md"]), "---\nname: impeccable\n---\n").unwrap();
     let found = agents_project_detections(&sys_with(&home, &[]), &project);
