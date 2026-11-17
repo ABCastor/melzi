@@ -24,7 +24,7 @@ Melzi shares Impeccable's git history and merges its releases, and this version 
 | Motion | `animate` | `animate` with model-driven dragging, recorded motion review, and films and talk decks |
 | Findings | Ranked P0 to P3 | Ranked, and labelled by the evidence behind each one |
 | Install | `npx impeccable install`, editor plugins, a Chrome extension | A local build only; remote `install`, `update`, and `check` refuse to run |
-| Commands | 24 | 21, with eight of Impeccable's folded into others |
+| Commands | 24 | 21 canonical commands, with eight of Impeccable's folded into others |
 
 **If you want a one-command install, editor plugins, or the browser extension, use Impeccable.** Melzi is for working from a checkout you build and can read.
 
