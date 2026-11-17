@@ -1,8 +1,8 @@
 // The taste model. FORK-ONLY (skill/scripts/melzi/taste-model.mjs).
 //
 // What these tests are really guarding: this module produces sentences about
-// the owner that he cannot check. He has said plainly he cannot review a design,
-// which is the whole reason the tool learns from binary choices, and it is also
+// the decider that they cannot check. They cannot review a design, which is the
+// whole reason the tool learns from binary choices, and it is also
 // the reason a wrong answer here is expensive: "you prefer generous whitespace"
 // arrives as a readable, confident claim with nothing behind it that he could
 // audit. So the assertions below are about correctness under conditions we know

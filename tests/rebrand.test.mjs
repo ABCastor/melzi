@@ -15,16 +15,15 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 /**
  * scripts/rebrand.mjs re-applies our brand after every upstream merge. It rewrites 200+
  * files and it is the whole reason merging upstream stays "merge, re-run, verify" instead
- * of archaeology. It also had NO tests until 2026-07-16, because the loop and process.exit
- * ran at module top level and `import` meant "rebrand the repo, then kill the test runner".
+ * of archaeology. Its loop and process.exit sit behind a main-module check, because at
+ * module top level `import` would mean "rebrand the repo, then kill the test runner".
  *
  * Three bugs of the IDENTICAL shape shipped in it -- exit 0, no error, wrong -- and each
  * was found by accident, weeks apart, by a different task:
  *
  *   1. `upstream/impeccable` was unprotected, so our own tooling announced
  *      "upstream/melzi shipped 40 commit(s)", crediting pbakaus's work to this fork.
- *   2. The Chrome Web Store URL of pbakaus's PUBLISHED extension was rewritten to our
- *      slug. The ID still resolved, so the site's "Install Melzi" button worked and
+ *   2. The Chrome Web Store URL of pbakaus's PUBLISHED extension got our slug. The ID still resolved, so the site's "Install Melzi" button worked and
  *      served THEIR product under OUR name. A working link is worse than a broken one.
  *   3. The fast path was case-sensitive, so `--check` reported "no drift" about 23 files
  *      it had never read.
@@ -119,8 +118,7 @@ describe('rebrand: the transform is honest about what it owns', () => {
       '.impeccable/design.json',
       '**/.impeccable/hook.cache.json',
       // The provider hook manifests. One writer (transformers/providers.js), six
-      // readers; a rename to one half is a silent desync, which is what the
-      // 2026-07-27 upstream sync found in the GitHub entry.
+      // readers; a rename to one half is a silent desync, as the GitHub entry shows.
       'hooks/impeccable.json',
       '.github/hooks/impeccable.json',
       '.grok/hooks/impeccable.json',
@@ -130,7 +128,7 @@ describe('rebrand: the transform is honest about what it owns', () => {
       'lib/impeccable-config.mjs',
       'impeccable_asset_producer.toml',
       'impeccable-logo-on-dark.svg',
-      // The engine launcher and binary names (2026-09-14, Rust engine). The build,
+      // The Rust engine's launcher and binary names. The build,
       // the launcher, the hook manifests, and the binary's install detection all
       // agree on `impeccable`; a rename to any one of them is a silent desync.
       '{{scripts_path}}/impeccable context',
@@ -161,12 +159,11 @@ describe('rebrand: the transform is honest about what it owns', () => {
   // dead weight; asserting only the appetite would not stop the run. Together they say
   // "this file is still dangerous to itself, and here is the line that holds it off".
   //
-  // The exclusion used to be an accident: isBinary() skips anything containing a NUL,
-  // and SENTINEL was written as literal NUL bytes, so rebrand.mjs fell out of its own
-  // scan without anyone deciding that. --check therefore reported "no drift" while
-  // never reading the transform it was checking. Escaping those bytes on 2026-07-29
-  // made the file greppable again and removed the accident, which is what made an
-  // explicit exclusion necessary.
+  // Why the exclusion is explicit: isBinary() skips anything containing a NUL, so a
+  // SENTINEL written as literal NUL bytes drops rebrand.mjs out of its own scan without
+  // anyone deciding that, and --check reports "no drift" while never reading the
+  // transform it checks. With those bytes escaped the file is greppable, the accident
+  // is gone, and only an explicit exclusion holds the line.
   describe('it never transforms itself', () => {
     it('excludes its own path from the scan', () => {
       assert.equal(SELF, 'scripts/rebrand.mjs');
@@ -213,8 +210,7 @@ describe('rebrand: the transform is honest about what it owns', () => {
 
     it('.gitignore ignores the live-mode paths the tool actually writes', () => {
       // The real contract, checked against the real writer rather than a remembered path.
-      // The writer is the Rust live crate since the 2026-09-14 engine adoption; the JS
-      // live-inject.mjs this used to read is gone. Same contract, current writer.
+      // The writer is the Rust live crate. Same contract, current writer.
       const injectSrc = readFileSync(path.join(ROOT, 'crates/live/src/gitignore.rs'), 'utf8');
       const written = [...injectSrc.matchAll(/"(src\/lib\/[^"]+)"/g)].map((m) => m[1]);
       assert.ok(written.length > 0, 'expected crates/live/src/gitignore.rs to declare src/lib paths');
@@ -237,7 +233,7 @@ describe('rebrand: the transform is honest about what it owns', () => {
       // TANSTACK_COMPONENT_DIR = 'src/melzi' and no matching ignore line, which meant
       // live mode's own generated component was committable in any TanStack project.
       // Adapters declare their dir as an exported constant; that is what this reads.
-      // Adapters are Rust modules under crates/live/src/inject/ since 2026-09-14, declaring
+      // Adapters are Rust modules under crates/live/src/inject/, declaring
       // the same constant as `pub const *_COMPONENT_DIR: &str`. Same contract, current writer.
       const adapters = readdirSync(path.join(ROOT, 'crates/live/src/inject'))
         .filter((f) => f.endsWith('.rs'));
@@ -284,7 +280,7 @@ describe('rebrand: the transform is honest about what it owns', () => {
           .join('|')}|plugin)/`,
       );
       // Mirrors COMMAND_RE in scripts/rebrand.mjs, including its launcher and binary
-      // KEEP rows (2026-09-14): `scripts/impeccable` and `bin/impeccable` name the engine,
+      // KEEP rows: `scripts/impeccable` and `bin/impeccable` name the engine,
       // not a command, so a file carrying only those is not a blind spot.
       const STALE = /(?<!(?:scripts|bin|debug|release|custom|tools|arm64|x64|[\d}>*]|\$version|\$arch)\\?)\/impeccable(?![-A-Za-z0-9._])|npx impeccable|IMPECCABLE_SUB_COMMANDS/;
 

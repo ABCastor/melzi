@@ -4,15 +4,14 @@
  * FORK-ONLY. Upstream has no population step and no notion of a candidate's
  * lineage, so this file carries zero merge burden. It reads `taste-store.mjs` and `taste-model.mjs` and writes nothing else.
  *
- * WHY THIS EXISTS. The owner cannot review a design and has said so plainly. What he
+ * WHY THIS EXISTS. The tool serves a decider who cannot review a design. What they
  * can do reliably is say WHICH OF THESE TWO, and point at a part of a screen and say
- * something about it. His own words for the step this module implements: "Let me
- * mark a region of a candidate I am rejecting as keep this part. Treat the candidate
- * set as an evolving population: my pairwise choices are the fitness signal, and the
- * system generates new candidates by recombining high-scoring candidates and my kept
- * regions." So the fitness signal is the pairwise verdict, chosen because it costs
- * him almost nothing next to scoring, and the crossover material is the verdict plus
- * the regions he pointed at.
+ * something about it. This module is the step built on that: a region of a rejected
+ * candidate can be marked "keep this part", the candidate set is an evolving
+ * population, the pairwise choices are the fitness signal, and new candidates come
+ * from recombining high-scoring candidates with the kept regions. The fitness signal
+ * is the pairwise verdict because it costs the decider almost nothing next to
+ * scoring, and the crossover material is the verdict plus the regions they marked.
  *
  * THE PART THAT CARRIES THE WHOLE FEATURE. `keptRegions` gathers keep-annotations
  * from comparisons the candidate LOST. That is not an edge case, it is the normal

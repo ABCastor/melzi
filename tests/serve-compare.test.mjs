@@ -1,11 +1,10 @@
 // The comparison table. FORK-ONLY (skill/scripts/melzi/serve-compare.mjs).
 //
-// What these tests are really guarding: this is the surface the owner asked for most
-// directly, in his own words, "so I can click on something and write something for
-// you to steer on there". So the assertions follow the whole path of one piece of
+// What these tests are really guarding: this is the surface where the decider can
+// click on something and write a steer right there. So the assertions follow the whole path of one piece of
 // pointing: the screen is served WITH the annotation script and the file on disk is
 // still byte-for-byte what the build wrote, a click's annotation reaches the server,
-// survives into the verdict, and comes back out of --wait in his words. Plus the two
+// survives into the verdict, and comes back out of --wait in the decider's words. Plus the two
 // things that would quietly destroy the signal: an unsigned POST forging feedback
 // from inside a framed screen, and a scoring control that is not binary.
 import { describe, it } from 'node:test';

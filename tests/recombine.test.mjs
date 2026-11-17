@@ -2,12 +2,13 @@
 //
 // What these tests are really guarding, in order of how much it would cost to lose:
 //
-// 1. A keep-annotation made on a candidate he REJECTED has to survive into the brief.
-//    That is the whole feature. He rejects a screen and salvages one part of it; if
-//    the loss binned the salvage, marking a region would be an expensive no-op.
-// 2. His EXACT words reach the author, next to the selector and the element text, so
-//    the author can find the thing he pointed at. A paraphrase of his words is a
-//    paraphrase of the taste being learned.
+// 1. A keep-annotation made on a candidate the decider REJECTED has to survive into
+//    the brief. That is the whole feature. A decider rejects a screen and salvages one
+//    part of it; if the loss binned the salvage, marking a region would be an
+//    expensive no-op.
+// 2. The decider's EXACT words reach the author, next to the selector and the element
+//    text, so the author can find the thing they pointed at. A paraphrase of those
+//    words is a paraphrase of the taste being learned.
 // 3. The diversity guard actually bites on near-twins. Two twins produce a third
 //    twin and the population collapses back to one world with three names.
 //

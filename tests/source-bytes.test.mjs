@@ -17,9 +17,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * classify the whole thing as binary, and from then on plain grep prints NOTHING and
  * exits 1. Not "no match": silence. ripgrep at least says "binary file matches" but
  * still withholds the line, and an agent's search tool reports the same emptiness a
- * genuinely absent string would. On 2026-07-29 that cost three separate readings of
- * "the feature is missing" against code that was sitting right there, because
- * skill/scripts/melzi/taste-store.mjs held a NUL separator inside `pairKey`.
+ * genuinely absent string would. A NUL separator inside a key builder is enough to make
+ * code that is sitting right there read as "the feature is missing".
  *
  * The obvious response, a line in the docs saying "use grep -a on that file", was
  * already written and had already failed: you only reach that note if you ALREADY

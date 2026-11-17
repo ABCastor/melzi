@@ -23,7 +23,7 @@
  * HOW IT FILLS, AND THE LINE IT DOES NOT CROSS. Only through the documented
  * re-roll chain `concept-seed.mjs` already walks: GET /roll?scope=direction&
  * key=K&reroll=R for R = 0..rounds-1, where each round returns roughly six
- * challengers and excludes what earlier rounds drew. That is the same traffic a
+ * challengers and excludes what the preceding rounds drew. That is the same traffic a
  * user re-rolling a few times generates, just kept instead of thrown away. There
  * is no enumeration endpoint here, no id guessing, and no scraping: the catalog
  * is the paid service's moat and we cache only what the service chooses to deal
@@ -335,7 +335,7 @@ async function fetchRoll({ apiBase, key, mode, reroll, fetchImpl, timeoutMs }) {
  * Walk the re-roll chain under one key and keep everything it deals.
  *
  * A network failure of any kind ends the chain where it stands rather than
- * failing the build: whatever earlier rounds returned is still worth keeping,
+ * failing the build: whatever the preceding rounds returned is still worth keeping,
  * and the caller gets the same `{ added, total }` shape either way. `total` is
  * the pool size after the append, so a fully offline call reports the cache.
  */

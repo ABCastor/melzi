@@ -41,7 +41,7 @@ export const SUITES = {
       /^vscode\//,
       /^\.github\/workflows\/release-engine\.yml$/,
       /^cli\/bin\//,
-      // Our hand-written tests/ alternation is GONE on purpose, 2026-08-13:
+      // No hand-written tests/ alternation here, on purpose:
       // upstream now generates a per-file trigger from every suite's own
       // commands.files list (see the loop below the SUITES literal), which
       // covers our fork-only test files too, and its meta-test pins the
@@ -157,10 +157,10 @@ export const SUITES = {
       // The Pollux engine: the twin-loop UI-testing core behind /melzi explore.
       // Listed separately because its tests live beside their source, not under tests/.
       //
-      // These were in NO suite until 2026-07-16, so `bun run test` never ran them and
-      // reported green over ~107 untested assertions. They passed only because someone
-      // ran `node --test skill/scripts/pollux-uxui/*.test.mjs` by hand as a fourth gate,
-      // which is not a gate: it is a habit, and habits do not survive a handoff. Fast and
+      // Outside a suite, `bun run test` never runs them and reports green over ~107
+      // untested assertions. Running `node --test skill/scripts/pollux-uxui/*.test.mjs`
+      // by hand as a fourth gate is not a gate: it is a habit, and habits do not survive
+      // a handoff. Fast and
       // hermetic (no browser, no network), so they belong in core rather than opt-in.
       {
         runner: 'node',
@@ -510,11 +510,11 @@ export function suiteFiles(suiteNames) {
   return files;
 }
 
-// Every tree that holds tests. This used to be just `tests/`, which made the
-// "assigns every test file to a suite" guard a guard over one directory: the
-// Pollux engine keeps its 18 test files beside their source, so ~107 assertions
-// sat in no suite at all and `bun run test` never ran them, while the guard
-// reported clean about files it had never read. Add a root here the moment tests
+// Every tree that holds tests. With just `tests/`, the "assigns every test file to
+// a suite" guard is a guard over one directory: the Pollux engine keeps its 18 test
+// files beside their source, so ~107 assertions would sit in no suite at all and
+// `bun run test` would never run them, while the guard reports clean about files it
+// has never read. Add a root here the moment tests
 // start living somewhere new, or the guard silently narrows again.
 export const TEST_ROOTS = ['tests', 'skill/scripts/pollux-uxui'];
 

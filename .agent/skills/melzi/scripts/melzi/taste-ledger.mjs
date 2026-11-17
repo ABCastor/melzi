@@ -6,14 +6,13 @@
  * (one import, one call), recorded as a fork delta.
  *
  * WHY THIS EXISTS. The visual-direction round is the one place in the whole tool
- * where the owner's own taste enters as data: the browser table shows him two or
- * three worlds and he clicks one, re-rolls the hand, or types a steer. That is a
- * preference signal produced at almost no cost to him, and it was being destroyed.
- * `serve-question.mjs` wrote the answer to a file, printed it, then removed the
- * file (`fs.rmSync(answerFile(key))`); nothing anywhere aggregated it and nothing
- * ever read it back into a later generation. Measured 2026-07-28: 100% of choices
- * discarded. The product goal is design "tuned only by my taste", and the taste was
- * going in the bin.
+ * where the decider's own taste enters as data: the browser table shows two or
+ * three worlds and the decider clicks one, re-rolls the hand, or types a steer. That
+ * is a preference signal produced at almost no cost to them. Upstream's decision
+ * page writes the answer to a file, prints it, then removes the file; nothing there
+ * aggregates it or reads it back into a later generation, so every choice would be
+ * discarded. The product goal is design tuned by one person's taste, and that
+ * needs the taste kept as data.
  *
  * WHAT IT RECORDS, AND WHY THE REFUSALS MATTER MORE THAN THE PICK. A pick is one
  * bit of information about a hand of two or three. The options he did NOT take,

@@ -154,7 +154,7 @@ test('explore-step fails loudly on an unreadable a11y file rather than silently 
   rmSync(runDir, { recursive: true, force: true });
 });
 
-// Found by the first live real-app run (2026-07-16), not by any in-process test.
+// A live real-app run exposes this, not any in-process test.
 // `--steps-max` was re-read from argv on every invocation with an Infinity default,
 // while explore.md instructs the Explorer to pass it "on the first step only". Every
 // step after the first therefore ran with an infinite budget and the budget branch of

@@ -7,8 +7,8 @@
  * which is deliberate: this is the one module where a silent error is invisible
  * to the person it is about.
  *
- * WHY THIS EXISTS. The owner has said plainly that he cannot review a design. He
- * can reliably say WHICH OF THESE TWO, and he can point at a thing he dislikes.
+ * WHY THIS EXISTS. The tool serves a decider who cannot review a design. They
+ * can reliably say WHICH OF THESE TWO, and they can point at a thing they dislike.
  * So the tool has to learn from binary choices plus pointing. The obvious way to
  * do that is to score each candidate and keep the winners, and it is wrong: a
  * per-candidate score dies with the candidate. The next screen is a new screen

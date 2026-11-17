@@ -2465,9 +2465,9 @@ function readOwnBackgroundColor(el, computedStyle) {
 function resolveBackground(el, win, customPropMap) {
   let current = el;
   // Translucent layers (0.1 < a < 1) found on the way down to an opaque
-  // base. A browser composites these over the base; the old behavior
-  // either returned them as-if-opaque (browser mode) or skipped them
-  // entirely (static mode), both of which misstate the effective surface
+  // base. A browser composites these over the base, so this does too:
+  // returning them as if opaque (browser mode) or skipping them
+  // entirely (static mode) would misstate the effective surface
   // for contrast checks (e.g. `background: color-mix(in oklab, var(--hot)
   // 16%, transparent)` chips on dark pages).
   const overlays = [];
@@ -2485,9 +2485,9 @@ function resolveBackground(el, win, customPropMap) {
     // and a gradient/url overlay (a common pattern: `background: var(--paper)
     // radial-gradient(...)` for paper-grain texture), the solid color is the
     // dominant visible surface for contrast purposes; the overlay is
-    // decorative. The old behavior bailed on any gradient ancestor, which
-    // caused massive false-positive contrast findings on grain-textured
-    // body backgrounds.
+    // decorative. Bailing on any gradient ancestor instead produces
+    // massive false-positive contrast findings on grain-textured body
+    // backgrounds.
     // Real browsers serialize wide-gamut computed values as oklab()/oklch()
     // (e.g. any color-mix() result), which plain parseRgb misses.
     let bg = parseRgb(style.backgroundColor) || parseAnyColor(style.backgroundColor);

@@ -5,10 +5,10 @@
  *
  * FORK-ONLY. Upstream has no equivalent, so this file carries zero merge burden.
  *
- * WHY THIS EXISTS. The owner cannot review design and has said so plainly. What he
- * can do reliably is say WHICH OF THESE TWO, and point at a thing he dislikes. So
- * the tool has to learn his taste from binary choices plus pointing, and the learned
- * thing has to apply to designs he has never seen. A score attached to a candidate
+ * WHY THIS EXISTS. The tool serves a decider who cannot review design. What they
+ * can do reliably is say WHICH OF THESE TWO, and point at a thing they dislike. So
+ * the tool has to learn their taste from binary choices plus pointing, and the
+ * learned thing has to apply to designs they have never seen. A score attached to a candidate
  * cannot do that: the candidate is gone the moment the round ends. Only a model over
  * ATTRIBUTES generalizes, which is why this file spends most of its length on the
  * attribute vocabulary rather than on the comparisons themselves. The attribute layer
@@ -755,7 +755,7 @@ function uniqueId(label, attributes) {
 }
 
 /**
- * Fold this round's proposed attributes into the stored vocabulary.
+ * Fold the current comparison's proposed attributes into the stored vocabulary.
  *
  * Returns `{ added, merged, attributes }`: `added` the records created, `merged` the
  * proposals folded into something that already existed as `{ label, into }`, and
@@ -869,11 +869,11 @@ export function setVector(candidateId, values, { home = os.homedir() } = {}) {
  * takes `id` verbatim with no charset check, so nothing upstream of here rules any
  * separator out on its own.
  *
- * A NUL byte did this job until 2026-07-29 and cost three false "the feature is
- * missing" readings in one session: two NUL bytes make `file(1)` call the whole file
- * binary, and plain grep then returns silence rather than "no match". A pair key is
- * never persisted (it lives only in the `asked` map below), so the format was free
- * to change. `tests/source-bytes.test.mjs` now keeps control bytes out of source.
+ * The separator is printable on purpose: a NUL byte in source makes `file(1)` call
+ * the whole file binary, and plain grep then returns silence rather than "no match",
+ * which reads as "the feature is missing". A pair key is never persisted (it lives
+ * only in the `asked` map below), so its format is free to choose.
+ * `tests/source-bytes.test.mjs` keeps control bytes out of source.
  */
 function pairKey(a, b) {
   const [first, second] = a < b ? [a, b] : [b, a];

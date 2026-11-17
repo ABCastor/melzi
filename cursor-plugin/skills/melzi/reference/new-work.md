@@ -144,7 +144,7 @@ Do not create a separate tutorial interface disconnected from the product. Let e
 
 Use the project's existing tooltip and overlay primitives. Tippy.js, Popper.js, Intro.js, Shepherd.js, and React Joyride are options only when the stack already needs their behavior; a short flow does not justify a dependency by default. Modals need focus trapping, Escape, and return focus. Persist completion and dismissal in the account when it must travel across devices, otherwise the project's existing local state is enough. Track completion, drop-off, time to value, skip rate, first key action, and return behavior without inventing progress.
 
-When local state is the project's chosen boundary, keep the old implementation method reachable rather than redisplaying the same guide:
+When local state is the project's chosen boundary, record completion there so the same guide is not shown again:
 
 ```javascript
 localStorage.setItem('onboarding-completed', 'true');

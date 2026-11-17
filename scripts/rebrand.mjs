@@ -17,7 +17,7 @@
  * THE HARD-WON RULES
  * ------------------
  * `impeccable` is NOT one string with one meaning. It is at least six, and a
- * naive find-replace breaks the build (it did, on 2026-07-16). The distinctions:
+ * naive find-replace breaks the build. The distinctions:
  *
  *   RENAME  the command            `/impeccable audit`      -> `/melzi audit`
  *   RENAME  the skill/pkg identity `name: impeccable`       -> `name: melzi`
@@ -37,7 +37,7 @@
  * WHAT THIS SCRIPT CANNOT SEE (do these by hand, then guard them with a test)
  * --------------------------------------------------------------------------
  * Every rule here is a literal-text match, so a brand string that is BUILT at
- * runtime is invisible to it. Two classes bit us on 2026-07-16:
+ * runtime is invisible to it. Two classes matter:
  *
  *   1. Interpolated commands. `${PREFIX}impeccable` never contains the literal
  *      `/impeccable`, so the command rule could not match it, and every hook
@@ -80,8 +80,7 @@ const CHECK_ONLY = process.argv.includes('--check');
 //
 // extension/ is included for the same reason.
 //
-// tests/ is deliberately NOT included, and that was tried and reverted on
-// 2026-07-16. A JS regex literal opens with `/`, so `/impeccable live script
+// tests/ is deliberately NOT included. A JS regex literal opens with `/`, so `/impeccable live script
 // part: .../` is indistinguishable from the command `/impeccable audit` and the
 // command rule rewrites it. The source it asserts against says
 // `// --- impeccable live script part:` -- no slash, so no rule touches it. The
@@ -92,20 +91,20 @@ const CHECK_ONLY = process.argv.includes('--check');
 // a test green while checking the wrong string. Tests get rebranded by hand.
 //
 // `.gitignore` is in the list because it carries brand-COUPLED PATHS, not prose: it
-// must ignore exactly what live mode writes. It was outside the set until 2026-07-16
-// and had silently gone stale -- `live-inject.mjs` writes
+// must ignore exactly what live mode writes. Outside the set it goes stale in
+// silence -- `live-inject.mjs` writes
 // `src/lib/melzi/ImpeccableLiveRoot.svelte` (renamed by the command rule, whose
 // lookahead allows a following `/`), while .gitignore still said `src/lib/impeccable/`,
 // so the tool's own output stopped being ignored. `--check` reported no drift the whole
 // time because a file outside this set is never read. Same silent shape as the rest.
 // `site` stays in the list, but for a different reason than the block above describes.
-// Upstream deleted their marketing site in v4 (2026-07-27) and moved it to the private
+// Upstream's v4 moved their marketing site out of this repo, to the private
 // impeccable-site repo, so the 54 hand-edited doc files that justified adding it are gone.
 // What survives under `site/public/` is tracked BUILD OUTPUT (counts.js, the _data/api
 // JSON, Cloudflare _redirects), which still carries command forms. Dropping `site` would
 // push those outside the include set, where the blind-spot guard in tests/rebrand.test.mjs
 // would correctly start failing on them.
-// `crates` and `browser-bundle` joined on 2026-09-14 with upstream's Rust engine: the binary
+// `crates` and `browser-bundle` carry upstream's Rust engine: the binary
 // now prints every directive, command hint, and console tag the JS scripts used to, so
 // its sources carry the brand. The launcher and binary NAMES stay upstream's; see the
 // KEEP rows on COMMAND_RE. In-crate tests rename together with the code they assert on.
@@ -119,7 +118,7 @@ export const INCLUDE_DIRS = ['skill', 'scripts', 'cli', 'docs', 'site', 'extensi
 // reproduce the hand edits, and scope was the only thing missing.
 export const INCLUDE_FILES = ['README.md', 'README.npm.md', 'AGENTS.md', 'CLAUDE.md', 'package.json',
   '.claude-plugin/plugin.json', '.claude-plugin/marketplace.json', '.gitignore',
-  // Upstream's #688 rewrite (2026-09-14 sync) put `/impeccable init` in this repo's own
+  // Upstream's #688 rewrite puts `/impeccable init` in this repo's own
   // PRODUCT.md, so the product record now carries a command the fork must own.
   'PRODUCT.md'];
 
@@ -152,7 +151,7 @@ const SENTINEL = '\0UPSTREAM\0';
  *   `/impeccable.style`   -> KEEP     (dot = domain)
  *   `/impeccable_ai`      -> KEEP     (underscore = social handle)
  *   `pbakaus/impeccable`  -> KEEP     (protected by sentinel before this runs)
- *   `scripts/impeccable`  -> KEEP     (the engine LAUNCHER file, 2026-09-14)
+ *   `scripts/impeccable`  -> KEEP     (the engine LAUNCHER file)
  *   `bin/impeccable`      -> KEEP     (the engine BINARY: bin/, debug/, release/, ...)
  *   `scripts\/impeccable` -> KEEP     (the same, escaped inside a JS regex literal)
  *
@@ -199,39 +198,38 @@ const RULES = [
   [COMMAND_RE, '/melzi'],
   [CONSOLE_TAG_RE, '$1[melzi$2]'],
 
-  // Added 2026-08-13, all five for the same reason: upstream restored or newly
-  // introduced these user-visible strings, they were hand-maintained here
-  // before (or would have had to be), and a hand edit is what the next sync
-  // reverts in silence. Each was checked repo-wide and matches only its site.
+  // All five for the same reason: upstream ships these user-visible strings, a
+  // hand edit is the only other way to keep them ours, and a hand edit is what
+  // the next sync reverts in silence. Each was checked repo-wide and matches only its site.
   //
   // The hook envelope carries a protocol version, so CONSOLE_TAG_RE's
   // `[impeccable]` / `[impeccable.foo]` shapes miss `[impeccable@1]`. It is the
   // first thing the model and the user read from a hook.
-  // No leading-quote guard (2026-09-14): the version number already makes the shape
+  // No leading-quote guard: the version number already makes the shape
   // unique to the envelope, and the guard missed every envelope after the first in
   // JSON-escaped hook output, where the tag follows a literal `\n`.
   [/\[impeccable@(\d+)\]/g, '[melzi@$1]'],
-  // The live chrome's three connection tips name the CLI verb to run (upstream #1408,
-  // 2026-11-17 sync). Prose, so no command rule reaches them; exact sites only, since
+  // The live chrome's three connection tips name the CLI verb to run (upstream #1408).
+  // Prose, so no command rule reaches them; exact sites only, since
   // `scripts/impeccable live-poll` is the launcher and keeps its name.
   [/restart `impeccable live-poll` to continue/g, 'restart `melzi live-poll` to continue'],
   [/run impeccable live-poll to connect/g, 'run melzi live-poll to connect'],
   [/Run impeccable live-poll, then send it again/g, 'Run melzi live-poll, then send it again'],
   // hook_markers.rs finds the retired Cursor gate with a regex whose path separators are
-  // character classes, so no path rule sees its skill directory (2026-11-17 sync). The
+  // character classes, so no path rule sees its skill directory. The
   // launcher filename after it keeps upstream's name.
   [/skills\[\/\\\\\]\+impeccable\[\/\\\\\]\+scripts/g, 'skills[/\\\\]+melzi[/\\\\]+scripts'],
   // staleness_deep.rs's user-scope hook test joins the launcher path one segment per
   // line, so no path rule sees the skill directory between "skills" and "scripts"
-  // (2026-11-17 sync); its own write() of the same file is renamed by the path rule.
+  // and its own write() of the same file is renamed by the path rule.
   [/("skills",\n\s+)"impeccable"(,\n\s+"scripts",)/g, '$1"melzi"$2'],
   // The unmanaged-Codex-copy note ends its sentence on the skill path, and the dot after
   // it reads as a domain to COMMAND_RE, so the expected strings in drift_ports_tests.rs
-  // kept upstream's directory (2026-11-17 sync). Only a sentence-final .codex or .agents
+  // would keep upstream's directory. Only a sentence-final .codex or .agents
   // skills path, so a file name like skills/impeccable.md never matches.
   [/(\.(?:codex|agents)\/skills\/)impeccable\.(?=\s|\\n|"|`|$)/g, '$1melzi.'],
   // hook_tests.rs's `hooks on` case joins the Claude account's skill path one segment at
-  // a time, so no path rule sees our directory (2026-11-17 sync). Exact site: the
+  // a time, so no path rule sees our directory. Exact site: the
   // hook_manifest_tests.rs chains plant upstream-named fixtures on purpose.
   [/(account\.join\("skills"\)\.join\(")impeccable("\)\.join\("scripts"\))/g, '$1melzi$2'],
   // The clean-ack steer line names the skill to the user in prose.
@@ -245,7 +243,7 @@ const RULES = [
   // convention in reference prose. Curly apostrophe: it is what upstream ships.
   [/IMPECCABLE’S PICK/g, 'MELZI’S PICK'],
   // telemetry.rs recognises the pick card by its kicker after folding the curly
-  // apostrophe to a straight one, so the straight spelling follows (2026-11-17 sync).
+  // apostrophe to a straight one, so the straight spelling follows.
   [/IMPECCABLE'S PICK/g, "MELZI'S PICK"],
   // Cursor's pre-write deny message announces the product to the user.
   [/Impeccable design hook/g, 'Melzi design hook'],
@@ -259,12 +257,11 @@ const RULES = [
   [/const impeccableDir = join\(skillsDir, 'impeccable'\)/g,
    "const impeccableDir = join(skillsDir, 'melzi')"],
   // build.js checks the rewritten plugin SKILL.md at the skill DIRECTORY path.
-  // Upstream added the check in the 2026-09-14 sync's range. Same path.join blind
-  // spot as the pin.mjs rule above, but loud this time: build:release dies with
+  // Same path.join blind spot as the pin.mjs rule above, but loud: build:release dies with
   // ENOENT on plugin/skills/impeccable/SKILL.md. Exact site only, as above.
   [/verifyPluginSkillRewrite\(path\.join\(pluginSkillsDir, 'impeccable', 'SKILL\.md'\)\)/g,
    "verifyPluginSkillRewrite(path.join(pluginSkillsDir, 'melzi', 'SKILL.md'))"],
-  // pin.mjs's OpenCode slash-command bridge (upstream #483, 2026-09-14 sync). The
+  // pin.mjs's OpenCode slash-command bridge (upstream #483). The
   // body tells OpenCode's agent which skill to load BY NAME, so upstream's name
   // there is a functional break, not a cosmetic one: the bridge loads a skill
   // that does not exist in this fork. The command file name becomes the user's
@@ -273,7 +270,7 @@ const RULES = [
   [/Load the \\`impeccable\\` skill via the skill tool \(name: "impeccable"\)/g,
    'Load the \\`melzi\\` skill via the skill tool (name: "melzi")'],
   [/workflow via \/impeccable\./g, 'workflow via /melzi.'],
-  // --- Rust engine (2026-09-14). The same blind spots the JS had, in Rust spelling. ---
+  // --- Rust engine. The same blind spots as the JS, in Rust spelling. ---
   // Runtime-assembled command name: `<prefix>impeccable` never contains `/impeccable`.
   [/format!\("\{\}impeccable", command_prefix\)/g, 'format!("{}melzi", command_prefix)'],
   [/Shortcut for \{\}impeccable \{\}\./g, 'Shortcut for {}melzi {}.'],
@@ -342,9 +339,9 @@ const IDENTITY_RULES = [
   // across build.js, openai-plugin.js, and the CLI's hook resolution. COMMAND_RE
   // cannot see them: there is no slash, the name is its own quoted argument.
   //
-  // These were hand edits until the 2026-07-27 upstream sync reverted all five in
-  // silence and --check reported no drift, which is the exact loss the fork's sync ritual
-  // says this script exists to prevent. The breakage is quiet, not loud: our dist
+  // As hand edits, an upstream sync reverts all five in silence and --check reports no
+  // drift, which is the exact loss the fork's sync ritual says this script exists to
+  // prevent. The breakage is quiet, not loud: our dist
   // emits `skills/melzi/`, so a stale `impeccable` source path copies nothing
   // and resolves hooks to a directory that does not exist. Nothing throws.
   [/'skills', 'impeccable'/g, "'skills', 'melzi'"],
@@ -378,9 +375,9 @@ const IDENTITY_RULES = [
   // `fileHasImpeccableHookMarker` because there is no word boundary before a capital in
   // the middle of a camelCase name. That is what makes one rule safe.
   //
-  // DELIBERATELY NOT PAIRED with a lowercase equivalent. An earlier attempt renamed
-  // lowercase `impeccable` too and needed ten follow-up rules to undo the damage in code
-  // contexts, and still shipped a regression: `e === 'impeccable'` is how the installer
+  // DELIBERATELY NOT PAIRED with a lowercase equivalent. Renaming lowercase `impeccable`
+  // too needs a crowd of follow-up rules to undo the damage in code contexts, and still
+  // breaks things: `e === 'impeccable'` is how the installer
   // RECOGNISES a prior install, so half-renaming it made every existing project reinstall
   // instead of reporting "already installed". Rename what presents; leave what resolves.
   //
@@ -398,7 +395,7 @@ const IDENTITY_RULES = [
   //     idempotency check below is what catches a missing one.
   [/\bImpeccable\b/g, 'Melzi'],
 
-  // Added 2026-07-29 after a survey of every user-visible brand string. Each pattern was
+  // From a survey of every user-visible brand string. Each pattern was
   // checked repo-wide with the include-set walker before being added and matches only its
   // intended sites. All of them name the PRODUCT, so a rule reaches them safely and
   // `--check` guards them from here; none is the English adjective the KEEP list keeps.
@@ -417,7 +414,7 @@ const IDENTITY_RULES = [
   [/\\?`impeccable hooks on\\?`/g, (m) => (m.startsWith('\\') ? '\\`/melzi hooks on\\`' : '`/melzi hooks on`')],
   [/\\?`impeccable hooks off\\?`/g, (m) => (m.startsWith('\\') ? '\\`/melzi hooks off\\`' : '`/melzi hooks off`')],
 
-  // Same shape, arrived with the 2026-08-01 upstream sync: live-server.mjs names
+  // Same shape: live-server.mjs names
   // "an `impeccable document` run" in a comment. Bare, so COMMAND_RE's required
   // slash misses it, and it tells a reader to run a command that does not exist
   // under our name. The backticks are what make this safe to rule: `impeccable
@@ -451,12 +448,12 @@ const IDENTITY_RULES = [
  * expensive way to change nothing while `--check` keeps saying no drift.
  *
  * It never happened, and NOT because anyone arranged it. `isBinary()` skips any file
- * containing a NUL, and SENTINEL used to be written as literal NUL bytes, so this file
- * excluded itself by accident. That accident was doing real work: `--check` reported
+ * containing a NUL, and a SENTINEL written as literal NUL bytes makes this file exclude
+ * itself by accident. That accident was doing real work: `--check` reported
  * "no drift" while never once reading the transform it was checking, which is the same
  * shape as the casing bug described above `hasBrand` and the harness-dir rot described
- * above EXCLUDE_RE. The bytes were escaped on 2026-07-29 so the file stops reading as
- * binary to grep and `file(1)`, which removed the accident and left the danger.
+ * above EXCLUDE_RE. The bytes are escaped so the file does not read as binary to grep
+ * and `file(1)`, which removes the accident and leaves the danger.
  *
  * tests/rebrand.test.mjs holds this in place from both sides: the exclusion is
  * asserted, AND the transform is shown to still want to rewrite this file, so nobody
@@ -501,16 +498,16 @@ function isBinary(file) {
 //                             "Impeccable" extension while our site captioned it
 //                             "Install Melzi". A working link is worse than
 //                             a broken one here: it presents their product as ours.
-//                             We have never published an extension; that ID is theirs.
-//                             Verified 2026-07-16 by following the redirect.
+//                             We have never published an extension; that ID is theirs,
+//                             as following the redirect shows.
 export const UPSTREAM_REFS = [
   'pbakaus/impeccable',
   'upstream/impeccable',
   // Upstream's domain in mixed case (crates/context/src/url.rs test input). The prose
-  // rule renames a capitalised `Impeccable` whatever follows it, dot included. 2026-09-14.
+  // rule renames a capitalised `Impeccable` whatever follows it, dot included.
   'Impeccable.Style',
   'chromewebstore.google.com/detail/impeccable',
-  // Attribution, added 2026-07-29. The prose rule below renamed all three of these
+  // Attribution. The prose rule below renamed all three of these
   // before they were masked, and the third time it did it the repo's own guard caught
   // the consequence in its own words: we were presenting Paul Bakaus's work as ours.
   // A prose rename cannot be made safe over prose whose job is to NAME the thing we
@@ -521,7 +518,7 @@ export const UPSTREAM_REFS = [
   'Impeccable started from there.',
   "Impeccable asks for an issue and maintainer approval first.",
   "Impeccable's updates",
-  // Added 2026-08-06. The sync ledger's 2026-08-03 entry describes how git mapped
+  // A sync-ledger entry describes how git mapped
   // `skills/impeccable/` onto our own skills tree. That is upstream's directory path,
   // named in a sentence whose whole job is to record what moved where, so it is the
   // same category as the attribution phrases above rather than a brand string to
@@ -530,21 +527,21 @@ export const UPSTREAM_REFS = [
   // so the entry read as a live un-rebranded command. CI failed daily on it, and the
   // sync's own hand-off entry recorded the suite as green.
   //
-  // Masked as the SENTENCE, not the bare path. The first attempt used
-  // `skills/impeccable/` alone and broke the `things we own still rename` case:
+  // Masked as the SENTENCE, not the bare path. Masking `skills/impeccable/` alone
+  // breaks the `things we own still rename` case:
   // the identical string is OURS in .gitignore, where it must rename to
   // `skills/melzi/`. Upstream's tree and our tree are indistinguishable by
   // substring, so the discriminator has to be the surrounding prose — which is
   // why every other entry here is a phrase rather than a token.
   "upstream's `skills/impeccable/` paths",
-  // Added 2026-10-11. The Apache-2.0 modification notices the public release added
+  // The Apache-2.0 modification notices of the public release
   // (file headers, the README and npm README licence lines) name the work we modified.
   // Rebranding them rewrote "Modified from Impeccable" to "Modified from Melzi" and
   // "a modified fork of Impeccable by Paul Bakaus" to "of Melzi by Paul Bakaus".
   'Modified from Impeccable',
   'modified fork of [Impeccable]',
   'modified fork of Impeccable',
-  // The README's credit line, added 2026-10-11 with the "What Melzi adds" section.
+  // The README's credit line, beside the "What Melzi adds" section.
   'built on [Impeccable]',
   // The public docs also say what this fork does NOT take from upstream: its engine
   // packages, its signing identity, its hosted verification protocol. Rebranded, each
@@ -556,7 +553,7 @@ export const UPSTREAM_REFS = [
   // bundle is built from ui/component-review/, which the rules do not reach, so a rename
   // here makes the built asset disagree with its source (tests/component-review-bundle).
   'Impeccable, so it is also how the site labels things',
-  // Wire names a peer must match, added 2026-11-17. Upstream's hosted service reads
+  // Wire names a peer must match. Upstream's hosted service reads
   // `X-Impeccable-Telemetry: off` on the roll request; renamed, an opted-out user's
   // roll was recorded, because the server never saw the opt-out. The same holds for
   // the client header, the Pro signature header and the account service's project
@@ -568,7 +565,7 @@ export const UPSTREAM_REFS = [
   '/impeccable:taste',
   // The taste block's body repeats the account service's own MCP instruction word for word.
   'Impeccable Taste: before design or UI work',
-  // Upstream's hosted service names, added 2026-11-17. `loop install` and `loop connect`
+  // Upstream's hosted service names. `loop install` and `loop connect`
   // name upstream's own Mac app and its support folder (`~/Applications/Impeccable
   // Loop.app`, `Application Support/Impeccable Reviews`). They name upstream's service,
   // not this skill: renamed, the messages credited Melzi with upstream's product and the
@@ -579,9 +576,9 @@ export const UPSTREAM_REFS = [
 
 /**
  * The fast-path skip. Case-INsensitive on purpose, and exported so a test can hold it to
- * that: it used to be `!includes('impeccable') && !includes('IMPECCABLE')`, which skipped
- * any file whose only brand mention is title-case `Impeccable`. Those files were never
- * transformed AND never drift-reported, so `--check` printed "no drift" about 23 files it
+ * that: `!includes('impeccable') && !includes('IMPECCABLE')` would skip any file whose
+ * only brand mention is title-case `Impeccable`. Those files would be neither
+ * transformed NOR drift-reported, so `--check` would print "no drift" about files it
  * had not read, including every extension window title. A skip must never depend on the
  * casing of the thing being searched for.
  */

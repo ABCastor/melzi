@@ -34,7 +34,7 @@
  * a diversification trigger. `stalled` names the CLAIM this module publishes. Only
  * the claim was ever wrong.
  *
- * ADR: pollux-uxui/adr-retire-the-exhaustion-claim.md (D1, accepted 2026-07-16).
+ * ADR: pollux-uxui/adr-retire-the-exhaustion-claim.md (D1).
  */
 export function shouldStop({ coverage, budget }) {
   if (budget.stepsUsed >= budget.stepsMax) return { stop: true, reason: 'budget' };

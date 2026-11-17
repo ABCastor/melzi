@@ -115,9 +115,9 @@ export const PROVIDERS = {
     // (skill/scripts/context.mjs, skill/scripts/lib/staleness-deep.mjs,
     // cli/bin/commands/skills.mjs, plus the hook-build assertions). The fork
     // renamed only this one to `melzi.json` as a hand edit, which no
-    // rebrand rule reproduces and `--check` cannot see; the 2026-07-27 sync
-    // surfaced it as a live desync where hook-status detection and doctor's
-    // drift report both looked for a file the build no longer wrote. Grok's
+    // rebrand rule reproduces and `--check` cannot see; an upstream sync then
+    // turns it into a live desync where hook-status detection and doctor's
+    // drift report both look for a file the build no longer writes. Grok's
     // entry below already keeps the upstream name for the same reason.
     hooksManifestRel: 'hooks/impeccable.json',
   },

@@ -9,17 +9,15 @@
  * --wait/--stop, the answer nonce, the scaled live-screen card) and shares its
  * visual language, so the two pages read as one tool.
  *
- * WHY THIS EXISTS. The owner cannot review a design and has said so plainly. What he
- * CAN do, reliably, is say which of these two, and point at a thing he does not
- * like. The old surface gave him neither: the screens arrived as pictures and the
- * only feedback channel was a single text box at the end of the round. His words for
- * what was wrong: "the feedback system to steer you needs to be more connected to
- * the page itself, so I can click on something and write something for you to steer
- * on there, and maybe give me options. It needs to be a lot more interactive. Not
- * just at the end a little prompt that says what should be different or kept."
+ * WHY THIS EXISTS. The tool serves a decider who cannot review a design. What they
+ * CAN do, reliably, is say which of these two, and point at a thing they do not
+ * like. Screens shown as pictures with one text box at the end of the round allow
+ * neither. Feedback has to live on the page itself: click on something, write a
+ * steer right there, pick from offered options, instead of one closing prompt about
+ * what should change or stay.
  *
  * So the annotation layer is not a side feature, it is the product. Clicking
- * anywhere in either screen drops a numbered pin exactly where he clicked and opens
+ * anywhere in either screen drops a numbered pin exactly where the click landed and opens
  * a popover with six quick chips and a free-text field. The chips exist because
  * typing is friction and most of his feedback fits six buttons. The free text exists
  * because his actual feedback does not: "I don't like the two triangles at the top,

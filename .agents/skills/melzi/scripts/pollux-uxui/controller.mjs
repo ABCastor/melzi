@@ -66,7 +66,7 @@ export function loadGraph(runDir, k = DEFAULT_PLATEAU_K) {
  * step only". Follow the doc and every step after the first silently ran with an
  * INFINITE budget, so `shouldStop`'s budget branch could never fire -- the exact
  * mirror of the bug cc5b4e3b fixed, where the run could only ever stop on budget.
- * Found by the first live real-app run (2026-07-16).
+ * A live real-app run is what exposes it; no in-process test does.
  *
  * A vanished stop condition is the failure this repo keeps re-learning: no error,
  * exit 0, wrong. So the budget is written once and the stored value wins after that.

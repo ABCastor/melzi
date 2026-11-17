@@ -24,7 +24,7 @@ function actionKey(action) {
   return JSON.stringify(canonical(actionShape(action)));
 }
 
-// Structural state key (Sol review 2026-07-15): the key represents the page's exploration TOPOLOGY,
+// Structural state key: the key represents the page's exploration TOPOLOGY,
 // not its rendered content. Two observations are the same state when they share the route, the same
 // regions + interactive controls, and the same action-relevant semantic flags. Transient feedback
 // (toasts / live regions), dynamic text (counters, values, timestamps), and pointer presentation

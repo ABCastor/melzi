@@ -54,7 +54,7 @@ const KEEP_FORMS = new RegExp([
   'data-impeccable',        // DOM markers
   'dataset\\.impeccable',   // the same markers read back
   '__impeccable',           // internal anchor properties
-  'impeccableTriedUrls',    // internal Error property in the injected browser bundle (2026-08-01 sync)
+  'impeccableTriedUrls',    // internal Error property in the injected browser bundle
   '\\.impeccable/',         // the config dir (runtime contract)
   'IMPECCABLE_',            // env vars + the interpolated command constant
   'impeccable\\.style',     // upstream's domain
@@ -64,8 +64,8 @@ const KEEP_FORMS = new RegExp([
   'impeccable:',            // the npm script contract
   'i-impeccable',           // legacy harness install dir we still detect
   'annotate-click',         // the postMessage protocol property `impeccable: 'annotate-click'`
-  'impeccableSketch',       // the sketch frame's postMessage key; page and frame must agree (2026-10-11 sync)
-  'impeccable/\\{\\}',     // the X-Impeccable-Client value upstream's API reads (`impeccable/<version>`); a wire id, kept with the header (2026-11-17 sync)
+  'impeccableSketch',       // the sketch frame's postMessage key; page and frame must agree
+  'impeccable/\\{\\}',     // the X-Impeccable-Client value upstream's API reads (`impeccable/<version>`); a wire id, kept with the header
   'impeccable frontend',    // the English adjective
   'impeccable design',      // the English adjective
 ].join('|'), 'i');

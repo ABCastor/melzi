@@ -25,7 +25,7 @@ import {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = path.join(HERE, 'fixtures', 'library-pack');
-// The context verb lives in the engine binary since the 2026-09-14 Rust adoption; the
+// The context verb lives in the Rust engine binary; the
 // launcher exports IMPECCABLE_SKILL_DIR for it, so the tests do too.
 const ENGINE_BIN = findEngineBinary();
 const SKILL_DIR = path.join(HERE, '..', 'skill');

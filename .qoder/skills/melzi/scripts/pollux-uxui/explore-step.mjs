@@ -78,9 +78,9 @@ function action(args) {
 }
 
 // The step budget is written on the first step and the stored value wins after that,
-// exactly like the graph's K. It used to be re-read from argv every invocation with an
-// Infinity default, so following explore.md ("pass --steps-max on the first step only")
-// silently gave every later step an infinite budget and killed the budget stop outright.
+// exactly like the graph's K. Re-reading it from argv on every invocation with an
+// Infinity default would make following explore.md ("pass --steps-max on the first step
+// only") give every later step an infinite budget and kill the budget stop outright.
 // See loadStopConfig in controller.mjs.
 function stopConfig(runDir, args) {
   const stored = loadStopConfig(runDir);

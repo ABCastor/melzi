@@ -5,20 +5,19 @@
  * FORK-ONLY. Upstream has no notion of a personal mark, so this file carries zero
  * merge burden.
  *
- * WHY THIS EXISTS, AND WHY IT DELIBERATELY DOES NOT DRAW ANYTHING. The owner asked
- * whether the tool can make logos. It cannot, and pretending otherwise would be the
- * worst possible feature for him specifically: inventing a mark from nothing is a
- * taste judgement, he has said plainly he will never be the design reviewer, and a
- * generated mark he cannot assess is a coin flip he would have to keep forever. The
- * half of the job that pays without any taste at all is the mechanical half, and his
- * own identity note proves both sides of it:
+ * WHY THIS EXISTS, AND WHY IT DELIBERATELY DOES NOT DRAW ANYTHING. The tool does
+ * not make logos, and pretending otherwise would be the worst possible feature for a
+ * decider who is not a design reviewer: inventing a mark from nothing is a taste
+ * judgement, and a generated mark they cannot assess is a coin flip they would have
+ * to keep forever. The half of the job that pays without any taste at all is the
+ * mechanical half, and a real identity note shows both sides of it:
  *
- *   1. CHECKING. He killed Direction B (blending Klein blue into the coral mark) on
+ *   1. CHECKING. Direction B (blending Klein blue into the coral mark) fails on
  *      a MECHANICAL finding, not on taste: the Klein lived in the faint outer ring
  *      of the glow, which at 16px is one or two near-transparent pixels, so it
  *      either vanished or, boosted enough to show, turned the icon edge purple and
  *      the mark stopped reading coral-owned. That is arithmetic over the SVG. A tool
- *      can do it every time, before he ever looks.
+ *      can do it every time, before anyone looks.
  *
  *   2. PROPAGATING. The same note records that two real assets, a macOS
  *      notification icon and a GitHub Pages landing page, sat un-rebranded for
@@ -758,7 +757,7 @@ const UNCHECKED_COPY = {
  * Check one mark against a signature. Returns findings, never throws.
  *
  * Every check here is arithmetic over the source. None of them is a taste judgement,
- * which is the entire point: they are the checks that can be run without the owner
+ * which is the entire point: they are the checks that can be run without anyone
  * having to know anything about design.
  */
 export function checkMark(svgSource, { signature = null, path: filePath = null } = {}) {

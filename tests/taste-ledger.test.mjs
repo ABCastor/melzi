@@ -1,8 +1,8 @@
 // The taste ledger. FORK-ONLY (skill/scripts/melzi/taste-ledger.mjs).
 //
 // What these tests are really guarding: the visual-direction round is the only
-// place the owner's own taste enters the tool as data, and it used to be deleted
-// moments after being read. So the assertions are about the SHAPE of the recorded
+// place the decider's own taste enters the tool as data, and upstream deletes it
+// moments after reading it. So the assertions are about the SHAPE of the recorded
 // line, especially that the REFUSED options survive. A pick is one bit about a hand
 // of three; the refusals are the rest, and a re-roll refuses the whole hand.
 import test from 'node:test';

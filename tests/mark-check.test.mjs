@@ -1,11 +1,11 @@
 // The mark check. FORK-ONLY (skill/scripts/melzi/mark-check.mjs).
 //
-// What these tests are really guarding. The owner asked whether the tool can make
-// logos. It cannot, and it should not try: inventing a mark is a taste judgement and
-// he has said plainly he will never be the design reviewer. The half that pays is
-// mechanical, and his own identity note supplies both the standard and the proof:
+// What these tests are really guarding. The tool does not make logos, and it should
+// not try: inventing a mark is a taste judgement, and its decider is not a design
+// reviewer. The half that pays is mechanical, and a real identity note supplies both
+// the standard and the proof:
 //
-//   - He killed Direction B (blending Klein blue into the coral mark) on ARITHMETIC,
+//   - Direction B (blending Klein blue into the coral mark) fails on ARITHMETIC,
 //     not on taste. The Klein lived in the faint outer ring of the glow, which at
 //     16px is one or two near-transparent pixels, so it either vanished or, boosted
 //     enough to show, turned the icon edge purple and the mark stopped reading

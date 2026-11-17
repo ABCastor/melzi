@@ -98,7 +98,7 @@ A deck that moves is a small web app delivered as one offline HTML file and a me
 - Before the event, run the whole deck cold on a fresh browser profile: no console errors, every video ready, and the start delay of delayed videos measured.
 - Deliver speaker notes per slide (clicks, timing, what to say) and a short README on swapping a media file.
 - On the day: copy the whole folder, open it in a Chromium browser, go fullscreen, step through every slide once to warm the cache, then test sound and the clicker.
-- A slide that rewinds through saved screenshots of earlier iterations tells the story of how the work was made better than any text about it.
+- A slide that rewinds through saved screenshots of the work's intermediate states shows how it was made better than any text about it.
 
 ---
 

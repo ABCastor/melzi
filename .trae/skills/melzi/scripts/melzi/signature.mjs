@@ -6,12 +6,12 @@
  *
  * WHY THIS EXISTS. The tool's strength is that it rolls genuinely different visual
  * worlds, and that is also the problem: every roll produces a competent design by
- * a stranger. The owner has one design signature of his own (one bold warm colour
- * leading a near-silent greyscale field, an arty blue as the spark, serif for
- * content and mono for data, held by a ratio rule) and he wants it to survive every
- * world the tool deals him. Without something that states the invariants at
+ * a stranger. A person can hold one design signature of their own (say, one bold
+ * warm colour leading a near-silent greyscale field, a cool accent as the spark,
+ * serif for content and mono for data, held by a ratio rule) and want it to survive
+ * every world the tool deals them. Without something that states the invariants at
  * generation time, each surface starts from zero and the through-line between the
- * things he makes never forms.
+ * things they make never forms.
  *
  * WHY THE FREE LIST IS PART OF THE BLOCK, NOT AN AFTERTHOUGHT. Naming only what is
  * fixed makes a model careful everywhere, and careful is exactly the failure mode:

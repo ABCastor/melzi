@@ -31,8 +31,8 @@ test('stops when any budget dimension is exhausted', () => {
   );
 });
 
-// Precedence is a truth claim, not a formality. The stagnation window used to be
-// checked FIRST, so a run that had simply run out of room reported a
+// Precedence is a truth claim, not a formality. Checking the stagnation window
+// FIRST would let a run that had simply run out of room report a
 // coverage-flavoured reason instead of the hard resource fact, flattering the run
 // at exactly the moment it was weakest.
 test('REGRESSION: budget beats stalled when both fire, never the reverse', () => {
