@@ -312,7 +312,9 @@ export function runCase(c, { impl = 'js', bin = process.env.IMPECCABLE_BIN } = {
     } finally {
       for (const d of daemons) stopDaemon(d);
     }
-    const files = snapshotFiles(ws, c.files);
+    // FORK DELTA (Melzi): the captured paths pass through the rebrand like env and argv,
+    // or a case whose env names a rebranded dir captures nothing.
+    const files = snapshotFiles(ws, c.files && c.files.map(rebrandText));
     const ctx = { ws };
     const N = (text) => applyCaseNormalizers(normalize(text, ctx), c.normalize);
     const norm = (r) => ({
