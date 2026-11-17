@@ -248,7 +248,13 @@ describe('serve-question rendered screens', { skip: !BIN && ENGINE_MISSING_MESSA
       rmSync(image);
       assert.equal((await fetch(new URL('/img/0', url))).status, 404);
       assert.equal((await fetch(new URL('/screen/0', url))).status, 404);
-      assert.equal((await fetch(url)).status, 200, 'vanished assets leave the server alive');
+      // Read the page through: it is past undici's 64 KiB body high-water mark, and an
+      // unread body of that size pauses Node's HTTP parser on the final chunk, so the
+      // server's close (every response ends its connection) trips undici's internal
+      // `assert(!this.paused)` in Parser.finish instead of reaching this assertion.
+      const alive = await fetch(url);
+      await alive.arrayBuffer();
+      assert.equal(alive.status, 200, 'vanished assets leave the server alive');
       assert.equal((await fetch(new URL('/answer', url), {
         method: 'POST', body: JSON.stringify({ optionId: 'built', nonce: nonceOf(html) }),
       })).status, 200);
