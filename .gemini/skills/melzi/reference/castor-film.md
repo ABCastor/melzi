@@ -4,7 +4,7 @@ Load this when the request is a presentation video, launch film or product film 
 
 ## Where the system lives
 
-The launch-film repository (`~/Second Brain/2_Code/launch-film`), folder `reel/`. Its `README.md` opens with the system's table: songs, beat maps, direction, material, film, checks. Read it first, then the first film made this way, `reel/films/borgo/` (its `DIRECTORS.md` records how its direction was chosen and what changed while building). The owner's design decisions are in the design note of the castor-presentation-video project (`Castor Film System`, design).
+The launch-film repository (private; find the checkout named `launch-film` in the workspace), folder `reel/`. Its `README.md` opens with the system's table: songs, beat maps, direction, material, film, checks. Read it first, then the first film made this way, `reel/films/borgo/` (its `DIRECTORS.md` records how its direction was chosen and what changed while building). The owner's design decisions are in the design note of the castor-presentation-video project (`Castor Film System`, design).
 
 ## The order of work
 
