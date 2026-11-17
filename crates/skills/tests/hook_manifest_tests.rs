@@ -341,7 +341,7 @@ fn windows_form_runs_the_shim_in_each_harness_shell() {
 
     // A space in the install root, which the absolute form has to survive.
     let root = std::env::temp_dir().join(format!("imp hook {}", std::process::id()));
-    let scripts = root.join(".grok").join("skills").join("impeccable").join("scripts");
+    let scripts = root.join(".grok").join("skills").join("melzi").join("scripts");
     let seen = scripts.join("seen-hook.txt");
     std::fs::create_dir_all(&root).unwrap();
     let bundle = json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "\".grok/skills/melzi/scripts/impeccable\" hook" }] }] } });
@@ -425,7 +425,7 @@ fn plugin_windows_form_runs_under_vscode_hook_runners() {
                 .collect::<Vec<_>>()
                 .join(" ")
         };
-        let scripts = root.join("skills").join("impeccable").join("scripts");
+        let scripts = root.join("skills").join("melzi").join("scripts");
         let seen = scripts.join("seen-hook.txt");
         std::fs::create_dir_all(&root).unwrap();
         for present in [false, true] {

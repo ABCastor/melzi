@@ -228,10 +228,12 @@ const RULES = [
   // would keep upstream's directory. Only a sentence-final .codex or .agents
   // skills path, so a file name like skills/impeccable.md never matches.
   [/(\.(?:codex|agents)\/skills\/)impeccable\.(?=\s|\\n|"|`|$)/g, '$1melzi.'],
-  // hook_tests.rs's `hooks on` case joins the Claude account's skill path one segment at
-  // a time, so no path rule sees our directory. Exact site: the
-  // hook_manifest_tests.rs chains plant upstream-named fixtures on purpose.
-  [/(account\.join\("skills"\)\.join\(")impeccable("\)\.join\("scripts"\))/g, '$1melzi$2'],
+  // Path::join chains one segment per call, so no path rule sees the skill directory:
+  // hook_tests.rs's `hooks on` case, and hook_manifest_tests.rs's Windows cases,
+  // which plant the stub shim where the rebranded hook command looks for it
+  // (skills\melzi\scripts). Left upstream-named, the command finds no shim and
+  // both Windows cases fail on CI only, since they are #[cfg(windows)].
+  [/(\.join\("skills"\)\.join\(")impeccable("\)\.join\("scripts"\))/g, '$1melzi$2'],
   // The clean-ack steer line names the skill to the user in prose.
   [/impeccable skill guidance/g, 'melzi skill guidance'],
   // pin.mjs interpolates the command through a local `commandPrefix`, so the
