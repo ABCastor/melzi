@@ -319,3 +319,19 @@ describe('rebrand: the transform is honest about what it owns', () => {
     });
   });
 });
+
+describe('rebrand keep markers', () => {
+  it('leaves text between the markers untouched and still rebrands outside them', async () => {
+    const { transform, KEEP_START, KEEP_END } = await import('../scripts/rebrand.mjs');
+    const src = `Run /impeccable here.\n${KEEP_START}\n| | Impeccable | Melzi |\n${KEEP_END}\nRun /impeccable again.\n`;
+    const out = transform(src);
+    assert.ok(out.includes('| | Impeccable | Melzi |'), 'the kept comparison keeps the upstream name');
+    assert.ok(!out.includes('Run /impeccable'), 'text outside the markers is still rebranded');
+    assert.ok(out.includes(KEEP_START) && out.includes(KEEP_END), 'the markers survive');
+  });
+
+  it('refuses an opening marker with no closing marker', async () => {
+    const { transform, KEEP_START } = await import('../scripts/rebrand.mjs');
+    assert.throws(() => transform(`${KEEP_START}\nImpeccable\n`), /without a closing/);
+  });
+});

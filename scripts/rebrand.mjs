@@ -584,16 +584,36 @@ export const UPSTREAM_REFS = [
  */
 export const hasBrand = (text) => /impeccable/i.test(text);
 
+// A fork-written passage whose job is to compare the fork with upstream names upstream in
+// almost every sentence, so phrase masks cannot cover it. The README's comparison sits
+// between these two markers, and the transform leaves everything between them untouched.
+export const KEEP_START = '<!-- rebrand:off -->';
+export const KEEP_END = '<!-- rebrand:on -->';
+const KEEP_SENTINEL = '\0KEEP\0';
+
 export function transform(text) {
+  const kept = [];
+  let out = text;
+  for (let from = out.indexOf(KEEP_START); from !== -1; from = out.indexOf(KEEP_START, from)) {
+    const end = out.indexOf(KEEP_END, from + KEEP_START.length);
+    if (end === -1) throw new Error(`rebrand: ${KEEP_START} without a closing ${KEEP_END}`);
+    const stop = end + KEEP_END.length;
+    const token = `${KEEP_SENTINEL}${kept.length}${KEEP_SENTINEL}`;
+    kept.push(out.slice(from, stop));
+    out = out.slice(0, from) + token + out.slice(stop);
+    from += token.length;
+  }
   // Protect every way of naming upstream before any /impeccable rule can see it.
   // SENTINEL is NUL-delimited, so these placeholders cannot collide with source.
-  let out = text;
   UPSTREAM_REFS.forEach((ref, i) => {
     out = out.split(ref).join(`${SENTINEL}${i}${SENTINEL}`);
   });
   for (const [re, to] of [...RULES, ...IDENTITY_RULES]) out = out.replace(re, to);
   UPSTREAM_REFS.forEach((ref, i) => {
     out = out.split(`${SENTINEL}${i}${SENTINEL}`).join(ref);
+  });
+  kept.forEach((block, i) => {
+    out = out.split(`${KEEP_SENTINEL}${i}${KEEP_SENTINEL}`).join(block);
   });
   return out;
 }

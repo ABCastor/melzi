@@ -2,6 +2,7 @@
 
 [![Checks](https://github.com/ABCastor/melzi/actions/workflows/checks.yml/badge.svg)](https://github.com/ABCastor/melzi/actions/workflows/checks.yml)
 
+<!-- rebrand:off -->
 Melzi is a design skill for coding tools, built on Paul Bakaus's [Impeccable](https://github.com/pbakaus/impeccable) and kept in sync with it. It installs only from a local build: there is no npm package, and the launcher never downloads an engine or a skill bundle.
 
 Your coding tool gets Impeccable's vocabulary for reviewing a frontend (typography, layout, colour, motion, accessibility, and the repeated patterns that make generated interfaces look alike) and its native detector, which checks source files and rendered pages against 62 rules. Melzi then makes the tool check its own rendered screens against a written bar before you see them. The skill has 21 commands, including `/melzi critique`, `/melzi audit`, `/melzi polish`, and `/melzi live`.
@@ -52,6 +53,7 @@ Five of these checks adapt ideas from nutlope's [Hallmark](https://github.com/nu
 
 Eight of Impeccable's commands (`adapt`, `craft`, `delight`, `distill`, `extract`, `onboard`, `optimize`, `overdrive`) are folded into other playbooks, and each name still works. Melzi generates skills for the same coding tools as Impeccable.
 
+<!-- rebrand:on -->
 ## Build and use
 
 This fork requires a local engine build. Prebuilt Melzi engine packages are not published, and the launcher does not automatically install or download Impeccable's engine.
@@ -85,7 +87,9 @@ mkdir -p /path/to/project/.agents/skills
 cp -R dist/agents/.agents/skills/melzi /path/to/project/.agents/skills/
 ```
 
+<!-- rebrand:off -->
 Codex uses `.agents/skills/melzi`, Claude Code uses `.claude/skills/melzi`, and Cursor uses `.cursor/skills/melzi`. Start with `/melzi init` inside the tool. Remote `install`, `update`, and `check` are unavailable. Those verbs fail before prompts or writes unless `IMPECCABLE_BUNDLE_PATH` names an existing locally built bundle. The local copy method above is the simplest installation path.
+<!-- rebrand:on -->
 
 A few starting points:
 
@@ -107,7 +111,9 @@ Keep local review captures and question logs out of Git while retaining shared p
 
 Live mode is for a local checkout only: do not inject it into a deployed site or loosen a production CSP for it. Applying copy edits runs the optional `impeccable:manual-edit-validate` script from your `package.json` with your permissions, so read it first in a repo you do not know. Apply hands staged copy edits to your chat agent when a live session has polled in the last minute; otherwise it starts the `codex` CLI from your PATH (or `claude` when codex is missing) with approvals, permission checks and sandboxing off (`--dangerously-bypass-approvals-and-sandbox` or `--permission-mode bypassPermissions`), inheriting your environment, and with a prompt that carries the staged edits, the edited elements' HTML and nearby text, the page URL and candidate source paths. Set `IMPECCABLE_LIVE_COPY_AGENT=chat` where live mode starts to keep Apply in your chat session, or `off` to turn Apply off; the server reads it once at startup.
 
+<!-- rebrand:off -->
 Melzi keeps Impeccable's direction catalog. When a new design rolls visual directions from it, the request goes to impeccable.style, and while telemetry is on it also sends an anonymous record of which directions were shown and which one you chose. Turn telemetry off with `DO_NOT_TRACK=1`, `IMPECCABLE_NO_TELEMETRY=1`, `telemetry off` through the launcher, or `"telemetry": false` in `.impeccable/config.json`.
+<!-- rebrand:on -->
 
 [Harness installation details](docs/HARNESSES.md) cover the supported layouts. Run `help` or `detect --help` through the launcher for the current command options.
 
@@ -137,6 +143,6 @@ After changing a typed runtime module, run `bun run build:typescript`. After cha
 
 ## License
 
-Apache-2.0. Melzi is a modified fork of [Impeccable](https://github.com/pbakaus/impeccable) by Paul Bakaus. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for retained attribution and third-party notices.
+Apache-2.0. Melzi is built on [Impeccable](https://github.com/pbakaus/impeccable) by Paul Bakaus. It is a modified fork that retains the original copyright and terms. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for retained attribution and third-party notices.
 
 <p><a href="https://abcastor.com"><img src="docs/castor-footer.svg" width="350" alt="Chip, the Castor beaver, Castor, we give a dam"></a></p>
