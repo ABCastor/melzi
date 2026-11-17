@@ -69,7 +69,8 @@ function updateFromState(state) {
 
 function updateDesignLab(enabled) {
   designLabEnabled = enabled;
-  btnDesignLab.setAttribute('aria-pressed', String(enabled));
+  // ARIA reflection sets the aria-pressed attribute popup.css styles.
+  btnDesignLab.ariaPressed = String(enabled);
   btnDesignLab.textContent = enabled ? 'Turn Design Lab off' : 'Turn Design Lab on';
   designLabState.textContent = enabled ? 'On' : 'Off';
   designLabState.classList.toggle('is-active', enabled);

@@ -418,18 +418,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   else if (msg.action === 'get-state' && tabId) {
+    // Answer at once with the scan state, then correct Design Lab from the page:
+    // the popup applies design-lab-state-broadcast, so a slow or absent content
+    // script never holds the scan results back.
     const state = getState(tabId);
-    chrome.tabs.sendMessage(tabId, { action: 'design-lab-get-content-state' })
+    sendResponse(state);
+    const settle = (enabled) => {
+      if (state.designLabEnabled === enabled) return;
+      state.designLabEnabled = enabled;
+      broadcastDesignLabState(tabId, state);
+    };
+    Promise.resolve(chrome.tabs.sendMessage(tabId, { action: 'design-lab-get-content-state' }))
       .then((contentState) => {
         if (contentState?.ok) {
-          state.designLabEnabled = contentState.enabled === true;
           state.designLabInjected = true;
+          settle(contentState.enabled === true);
         }
-        sendResponse(state);
       })
       .catch(async () => {
-        state.designLabEnabled = await recallDesignLabState(tabId);
-        sendResponse(state);
+        settle(await recallDesignLabState(tabId));
       });
   }
 
@@ -610,5 +617,6 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   void cancelTabScans(tabId);
   tabState.delete(tabId);
   panelPorts.delete(tabId);
-  chrome.storage.session.remove(designLabSessionKey(tabId)).catch(() => {});
+  // Design Lab's per-tab memory; optional so a worker without session storage still cleans up.
+  chrome.storage?.session?.remove(designLabSessionKey(tabId))?.catch(() => {});
 });
