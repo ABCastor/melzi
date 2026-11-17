@@ -212,7 +212,7 @@ pub fn value_has_impeccable_hook_marker(v: &serde_json::Value) -> bool {
 pub fn migrate_cursor_gate_in_place(manifest: &serde_json::Value) -> Option<serde_json::Value> {
     use serde_json::Value;
     static GATE_VERB: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r#"(skills[/\\]+impeccable[/\\]+scripts[/\\]+impeccable(?:\.cmd|\.exe)?["']?\s+)hook-before-edit"#).unwrap()
+        Regex::new(r#"(skills[/\\]+melzi[/\\]+scripts[/\\]+impeccable(?:\.cmd|\.exe)?["']?\s+)hook-before-edit"#).unwrap()
     });
     if !cursor_manifest_has_retired_gate(manifest) {
         return None;

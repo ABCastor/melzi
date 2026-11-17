@@ -626,7 +626,7 @@ mod tests {
             &home,
             ".claude",
             "skills",
-            "impeccable",
+            "melzi",
             "scripts",
             "impeccable",
         ]);

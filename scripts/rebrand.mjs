@@ -217,6 +217,23 @@ const RULES = [
   [/restart `impeccable live-poll` to continue/g, 'restart `melzi live-poll` to continue'],
   [/run impeccable live-poll to connect/g, 'run melzi live-poll to connect'],
   [/Run impeccable live-poll, then send it again/g, 'Run melzi live-poll, then send it again'],
+  // hook_markers.rs finds the retired Cursor gate with a regex whose path separators are
+  // character classes, so no path rule sees its skill directory (2026-11-17 sync). The
+  // launcher filename after it keeps upstream's name.
+  [/skills\[\/\\\\\]\+impeccable\[\/\\\\\]\+scripts/g, 'skills[/\\\\]+melzi[/\\\\]+scripts'],
+  // staleness_deep.rs's user-scope hook test joins the launcher path one segment per
+  // line, so no path rule sees the skill directory between "skills" and "scripts"
+  // (2026-11-17 sync); its own write() of the same file is renamed by the path rule.
+  [/("skills",\n\s+)"impeccable"(,\n\s+"scripts",)/g, '$1"melzi"$2'],
+  // The unmanaged-Codex-copy note ends its sentence on the skill path, and the dot after
+  // it reads as a domain to COMMAND_RE, so the expected strings in drift_ports_tests.rs
+  // kept upstream's directory (2026-11-17 sync). Only a sentence-final .codex or .agents
+  // skills path, so a file name like skills/impeccable.md never matches.
+  [/(\.(?:codex|agents)\/skills\/)impeccable\.(?=\s|\\n|"|`|$)/g, '$1melzi.'],
+  // hook_tests.rs's `hooks on` case joins the Claude account's skill path one segment at
+  // a time, so no path rule sees our directory (2026-11-17 sync). Exact site: the
+  // hook_manifest_tests.rs chains plant upstream-named fixtures on purpose.
+  [/(account\.join\("skills"\)\.join\(")impeccable("\)\.join\("scripts"\))/g, '$1melzi$2'],
   // The clean-ack steer line names the skill to the user in prose.
   [/impeccable skill guidance/g, 'melzi skill guidance'],
   // pin.mjs interpolates the command through a local `commandPrefix`, so the
@@ -227,6 +244,9 @@ const RULES = [
   // The pick-card kicker, rendered in caps on the decision page and named as a
   // convention in reference prose. Curly apostrophe: it is what upstream ships.
   [/IMPECCABLE’S PICK/g, 'MELZI’S PICK'],
+  // telemetry.rs recognises the pick card by its kicker after folding the curly
+  // apostrophe to a straight one, so the straight spelling follows (2026-11-17 sync).
+  [/IMPECCABLE'S PICK/g, "MELZI'S PICK"],
   // Cursor's pre-write deny message announces the product to the user.
   [/Impeccable design hook/g, 'Melzi design hook'],
   // pin.mjs decides a harness is installed by looking for the skill DIRECTORY,
@@ -546,6 +566,8 @@ export const UPSTREAM_REFS = [
   'X-Impeccable-',
   'Impeccable-Project',
   '/impeccable:taste',
+  // The taste block's body repeats the account service's own MCP instruction word for word.
+  'Impeccable Taste: before design or UI work',
 ];
 
 /**

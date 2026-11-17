@@ -616,7 +616,7 @@ fn card_text<'a>(card: &'a Value, k: &str) -> Option<&'a str> {
 
 fn is_pick_kicker(kicker: &str) -> bool {
     let k = kicker.to_uppercase().replace('\u{2019}', "'");
-    k == "IMPECCABLE'S PICK"
+    k == "MELZI'S PICK"
 }
 
 /// The single dealt catalog world a challenger card draws from, matched by
@@ -659,7 +659,7 @@ fn matched_world(card: &Value, dealt: &[Value]) -> Option<String> {
 /// - A card with no valid `kind` (a payload from older skill text) falls
 ///   back to the old conventions (`kindSource: inferred`): a `verdict` card
 ///   is a challenger, its `chosenId` the one dealt world its card images
-///   match; kicker `IMPECCABLE'S PICK` is the pick on a plain direction
+///   match; kicker `MELZI'S PICK` is the pick on a plain direction
 ///   round; kicker `THE ROLL`, or the lead card, is the assigned card on a
 ///   plain direction round and the dealt lead on a surface round. Anything
 ///   else sends no kind.

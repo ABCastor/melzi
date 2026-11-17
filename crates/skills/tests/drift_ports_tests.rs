@@ -1490,7 +1490,7 @@ fn update_names_a_codex_skills_copy_it_cannot_find() {
     let r = run_cli(&["update", "-y"], &project, &env);
     assert_eq!(r.code, 1, "{}\n{}", r.stdout, r.stderr);
     let expected = "No impeccable skill folders found in this project or at the user level.\n\
-        Found an Melzi skill at .codex/skills/melzi, which update does not manage: Codex reads repository skills from .agents/skills, so that copy is never loaded. Run `npx melzi install --providers=codex` to install it there, then delete .codex/skills/impeccable.\n\
+        Found an Melzi skill at .codex/skills/melzi, which update does not manage: Codex reads repository skills from .agents/skills, so that copy is never loaded. Run `npx melzi install --providers=codex` to install it there, then delete .codex/skills/melzi.\n\
         Run `npx melzi install` to install first.\n";
     assert_eq!(r.stdout, expected);
     assert!(read(&format!("{project}/.codex/skills/melzi/SKILL.md")).contains("version: 3.9.1"));
@@ -1502,7 +1502,7 @@ fn update_names_a_codex_skills_copy_beside_the_agents_install() {
     let (root, project, env) = codex_dir_project("update-codex-dir-beside", true, false);
     let r = run_cli(&["update", "-y", "--no-hooks"], &project, &env);
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
-    let note = "Found an Melzi skill at .codex/skills/melzi, which update does not manage: Codex reads repository skills from .agents/skills, so that copy is never loaded. Delete .codex/skills/impeccable.\nDone!\n";
+    let note = "Found an Melzi skill at .codex/skills/melzi, which update does not manage: Codex reads repository skills from .agents/skills, so that copy is never loaded. Delete .codex/skills/melzi.\nDone!\n";
     assert!(r.stdout.contains(note), "{}", r.stdout);
     assert!(r.stdout.contains("Updated 1 skill(s)"), "{}", r.stdout);
     assert!(read(&format!("{project}/.codex/skills/melzi/SKILL.md")).contains("version: 3.9.1"));
@@ -1510,7 +1510,7 @@ fn update_names_a_codex_skills_copy_beside_the_agents_install() {
     // The up-to-date path says it too, before its closing line.
     let r = run_cli(&["update", "-y", "--no-hooks"], &project, &env);
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
-    assert!(r.stdout.contains("Delete .codex/skills/impeccable.\nNothing else to do.\n"), "{}", r.stdout);
+    assert!(r.stdout.contains("Delete .codex/skills/melzi.\nNothing else to do.\n"), "{}", r.stdout);
     std::fs::remove_dir_all(&root).ok();
 }
 
@@ -1559,7 +1559,7 @@ fn update_falling_back_to_the_user_install_names_the_project_codex_copy() {
     let r = run_cli(&["update", "-y", "--no-hooks"], &project, &env);
     assert_eq!(r.code, 0, "{}\n{}", r.stdout, r.stderr);
     assert!(r.stdout.contains("Updating the user level install"), "{}", r.stdout);
-    let note = "Found an Melzi skill at .codex/skills/melzi, which update does not manage: Codex reads repository skills from .agents/skills, so that copy is never loaded. Run `npx melzi install --providers=codex` to install it there, then delete .codex/skills/impeccable.\nDone!\n";
+    let note = "Found an Melzi skill at .codex/skills/melzi, which update does not manage: Codex reads repository skills from .agents/skills, so that copy is never loaded. Run `npx melzi install --providers=codex` to install it there, then delete .codex/skills/melzi.\nDone!\n";
     assert!(r.stdout.contains(note), "{}", r.stdout);
     assert!(read(&format!("{project}/.codex/skills/melzi/SKILL.md")).contains("version: 3.9.1"));
     assert!(read(&format!("{home}/.agents/skills/melzi/SKILL.md")).contains("9.9.9-local"));
@@ -1581,7 +1581,7 @@ fn update_user_names_a_codex_skills_copy_under_home() {
     let r = run_cli(&["update", "-y", "--user"], &project, &env);
     assert_eq!(r.code, 1, "{}\n{}", r.stdout, r.stderr);
     assert!(
-        r.stdout.contains("Found an Melzi skill at ~/.codex/skills/melzi, which update does not manage: the user-level install Melzi maintains is ~/.agents/skills/impeccable. Run `npx melzi install --providers=codex --scope=global` to install it there, then delete ~/.codex/skills/melzi so Codex loads one copy.\n"),
+        r.stdout.contains("Found an Melzi skill at ~/.codex/skills/melzi, which update does not manage: the user-level install Melzi maintains is ~/.agents/skills/melzi. Run `npx melzi install --providers=codex --scope=global` to install it there, then delete ~/.codex/skills/melzi so Codex loads one copy.\n"),
         "{}",
         r.stdout
     );

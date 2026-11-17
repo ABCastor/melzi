@@ -1178,6 +1178,7 @@ mod offline_install_tests {
     }
 
     #[test]
+    #[ignore = "Melzi publishes no remote bundle: install refuses before the download these cases force (see tests/local_distribution_tests.rs)"]
     fn offline_over_existing_skills_leaves_them_and_exits_zero() {
         let fx = fixture("offline-existing");
         let Some(skill_md) = install_existing(&fx) else { return };
@@ -1193,6 +1194,7 @@ mod offline_install_tests {
     }
 
     #[test]
+    #[ignore = "Melzi publishes no remote bundle: install refuses before the download these cases force (see tests/local_distribution_tests.rs)"]
     fn failed_verification_over_existing_skills_is_fatal() {
         let fx = fixture("verify-existing");
         let Some(skill_md) = install_existing(&fx) else { return };
@@ -1207,6 +1209,7 @@ mod offline_install_tests {
     }
 
     #[test]
+    #[ignore = "Melzi publishes no remote bundle: install refuses before the download these cases force (see tests/local_distribution_tests.rs)"]
     fn offline_fresh_install_fails_as_a_download() {
         let fx = fixture("offline-fresh");
         test_seam::force(Err(BundleError::Download("Network Error: Dns Failed".into())));
