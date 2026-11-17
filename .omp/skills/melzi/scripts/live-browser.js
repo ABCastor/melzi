@@ -6507,6 +6507,12 @@
     }
   }
 
+  // FORK DELTA (Melzi): the JSX-only guard the restore and recovery paths use
+  // (caee6f1c5); upstream's broader predicate below drives source probing.
+  function isJsxSourceFile(filePath) {
+    return /\.[cm]?[jt]sx$/i.test(String(filePath || ''));
+  }
+
   function isCompiledTemplateSourceFile(filePath) {
     return /\.([cm]?[jt]sx|vue|svelte)$/i.test(String(filePath || ''));
   }
@@ -8059,7 +8065,7 @@
   function handleServerLost() {
     const recoveryState = currentSessionId ? state : 'IDLE';
     if (state === 'GENERATING' || state === 'CYCLING' || state === 'SAVING') {
-      showToast('Live server connection lost. Your session is saved; reopen this page or restart `impeccable live-poll` to continue.', 6000);
+      showToast('Live server connection lost. Your session is saved; reopen this page or restart `melzi live-poll` to continue.', 6000);
     }
     hideBar();
     hideHighlight();
@@ -10671,7 +10677,7 @@ void main() {
   const STEER_AWAIT_TIMEOUT_MS = 120000;
   const AGENT_STATUS_POLL_MS = 5000;
   const AGENT_DISCONNECTED_MARK = 'oklch(62% 0 0 / 0.78)';
-  const AGENT_DISCONNECTED_TIP = 'Agent disconnected - run impeccable live-poll to connect';
+  const AGENT_DISCONNECTED_TIP = 'Agent disconnected - run melzi live-poll to connect';
   // The indicator tracks whether a poll is parked, which is what decides if
   // steering can reach the agent right now. That goes quiet two ways, and they
   // need different copy: nobody is polling at all, or the agent took the work
@@ -11262,7 +11268,7 @@ void main() {
       return head + 'The agent is still busy with the current generation - your message was not lost, but it never got picked up. Send it again once the variants land.';
     }
     if (!agentPollingConnected) {
-      return head + 'No agent is polling right now. Run impeccable live-poll, then send it again.';
+      return head + 'No agent is polling right now. Run melzi live-poll, then send it again.';
     }
     return head + 'The agent picked it up but never replied with steer_done. Check the agent session for a stalled or failed steer.';
   }

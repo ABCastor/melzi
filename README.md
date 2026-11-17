@@ -74,6 +74,8 @@ Keep local review captures and question logs out of Git while retaining shared p
 # impeccable-ignore-end
 ```
 
+Live mode is for a local checkout only: do not inject it into a deployed site or loosen a production CSP for it. Applying copy edits runs the optional `impeccable:manual-edit-validate` script from your `package.json` with your permissions, so read it first in a repo you do not know. Apply hands staged copy edits to your chat agent when a live session has polled in the last minute; otherwise it starts the `codex` CLI from your PATH (or `claude` when codex is missing) with approvals, permission checks and sandboxing off (`--dangerously-bypass-approvals-and-sandbox` or `--permission-mode bypassPermissions`), inheriting your environment, and with a prompt that carries the staged edits, the edited elements' HTML and nearby text, the page URL and candidate source paths. Set `IMPECCABLE_LIVE_COPY_AGENT=chat` where live mode starts to keep Apply in your chat session, or `off` to turn Apply off; the server reads it once at startup.
+
 [Harness installation details](docs/HARNESSES.md) cover the supported layouts. Run `help` or `detect --help` through the launcher for the current command options.
 
 ## What it checks

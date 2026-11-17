@@ -148,6 +148,8 @@ const ENGINE_SOURCE_PATHS = [
   'browser-bundle',
   'scripts/bundle-signing-keys.json', 'scripts/cli-pro-release-keys.json',
   'skill/scripts/live-browser*.js', 'skill/scripts/modern-screenshot.umd.js',
+  // Melzi: the engine's offline help embeds the command list (crates/skills commands.rs).
+  'skill/scripts/command-metadata.json',
   'ui/component-review/theme.css', 'ui/component-review/fonts',
   'ui/component-review/vendor/*.css', 'ui/component-review/vendor/instrument-strip.js',
 ];
