@@ -1288,7 +1288,7 @@ mod tests {
 
     /// A stand-in roll API on loopback: answers `GET /api/roll` with two
     /// dealt worlds and `POST /api/chosen` with 200, and records every
-    /// request as (method, url, X-Melzi-Client, body).
+    /// request as (method, url, X-Impeccable-Client, body).
     type Seen = std::sync::Arc<std::sync::Mutex<Vec<(String, String, String, String, String)>>>;
     fn roll_api() -> (String, Seen) {
         roll_api_with_compositions_only(false)
@@ -1301,10 +1301,10 @@ mod tests {
         let log = seen.clone();
         std::thread::spawn(move || {
             for mut req in server.incoming_requests() {
-                let header = req.headers().iter().find(|h| h.field.equiv("X-Melzi-Client")).map(|h| h.value.as_str().to_string()).unwrap_or_default();
+                let header = req.headers().iter().find(|h| h.field.equiv("X-Impeccable-Client")).map(|h| h.value.as_str().to_string()).unwrap_or_default();
                 let mut body = String::new();
                 let _ = std::io::Read::read_to_string(req.as_reader(), &mut body);
-                let off = req.headers().iter().find(|h| h.field.equiv("X-Melzi-Telemetry")).map(|h| h.value.as_str().to_string()).unwrap_or_default();
+                let off = req.headers().iter().find(|h| h.field.equiv("X-Impeccable-Telemetry")).map(|h| h.value.as_str().to_string()).unwrap_or_default();
                 log.lock().unwrap().push((req.method().as_str().to_string(), req.url().to_string(), header, body, off));
                 let roll = serde_json::json!({
                     "poolRevision": "0123456789ab", "handId": "00112233445566778899aabbccddeeff", "approvedCount": 2, "catalogCount": 3,

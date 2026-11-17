@@ -530,6 +530,16 @@ export const UPSTREAM_REFS = [
   // bundle is built from ui/component-review/, which the rules do not reach, so a rename
   // here makes the built asset disagree with its source (tests/component-review-bundle).
   'Impeccable, so it is also how the site labels things',
+  // Wire names a peer must match, added 2026-11-17. Upstream's hosted service reads
+  // `X-Impeccable-Telemetry: off` on the roll request; renamed, an opted-out user's
+  // roll was recorded, because the server never saw the opt-out. The same holds for
+  // the client header, the Pro signature header and the account service's project
+  // header. The taste block's end marker is a pair with its start marker, which the
+  // command rule leaves alone (`impeccable:` has no slash): renaming only the end
+  // made `loop connect` unable to find the block it wrote.
+  'X-Impeccable-',
+  'Impeccable-Project',
+  '/impeccable:taste',
 ];
 
 /**

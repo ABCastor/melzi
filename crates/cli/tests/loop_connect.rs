@@ -1002,7 +1002,7 @@ fn login_help_never_offers_to_connect_loop() {
 }
 
 const TASTE_START: &str = "<!-- impeccable:taste -->";
-const TASTE_END: &str = "<!-- /melzi:taste -->";
+const TASTE_END: &str = "<!-- /impeccable:taste -->";
 
 fn read(p: &Path) -> String {
     fs::read_to_string(p).unwrap_or_default()

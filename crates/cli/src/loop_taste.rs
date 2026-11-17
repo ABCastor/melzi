@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub(crate) const START: &str = "<!-- impeccable:taste -->";
-pub(crate) const END: &str = "<!-- /melzi:taste -->";
+pub(crate) const END: &str = "<!-- /impeccable:taste -->";
 /// Matches the MCP server's own instruction text.
 pub(crate) const BODY: &str = "Melzi Taste: before design or UI work, call the impeccable MCP's taste.get once per task (pass since: the rev it last returned, only while those rules are still in your context) and follow its rules; say \"Applied your taste: <rule>\" when one shaped a choice. When the person makes or corrects a design call, record it with taste.note and the lasting rule.";
 

@@ -12,7 +12,7 @@ use serde_json::Value;
 
 const PATH: &str = "/cli/v1/setup";
 /// The project this folder is, sent in a header so no log carries it.
-const PROJECT_HEADER: &str = "Melzi-Project";
+const PROJECT_HEADER: &str = "Impeccable-Project";
 /// Set when login's setup lines already named `impeccable loop connect`, so the
 /// CLI's own Loop sentence doesn't print the same command twice.
 static NAMED_LOOP_CONNECT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

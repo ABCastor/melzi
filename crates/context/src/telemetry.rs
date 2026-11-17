@@ -3,7 +3,7 @@
 //!
 //! Three pieces live here:
 //! - the request plumbing: API base, timeout, opt-outs, and the
-//!   `X-Melzi-Client` header every `/api/roll` and `/api/chosen` request
+//!   `X-Impeccable-Client` header every `/api/roll` and `/api/chosen` request
 //!   carries;
 //! - the seed reference and the seed ledger. The reference,
 //!   `seed:<16 hex of sha256("impeccable-seed:" + key)>`, is what committed
@@ -117,13 +117,13 @@ pub fn telemetry_disabled(env: &Env, cwd: &str) -> bool {
 
 /// Sent on the roll request when telemetry is off: the roll still happens
 /// (it is the feature), and the server records nothing for it.
-pub const TELEMETRY_HEADER: &str = "X-Melzi-Telemetry";
+pub const TELEMETRY_HEADER: &str = "X-Impeccable-Telemetry";
 
 pub fn agent(url: &str, timeout: Duration) -> ureq::Agent {
     crate::http::agent_builder(url).timeout_connect(timeout).timeout(timeout).build()
 }
 
-pub const CLIENT_HEADER: &str = "X-Melzi-Client";
+pub const CLIENT_HEADER: &str = "X-Impeccable-Client";
 
 fn version_token(v: &str) -> bool {
     !v.is_empty() && v.len() <= 32 && v.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'+' | b'-'))

@@ -11,7 +11,7 @@ skill's `reference/` and `SKILL.md` live (`../reference`, `../SKILL.md`).
 | `IMPECCABLE_PROVIDER_ID` | The build provider id (`claude-code`, `codex`, `cursor`, ...). Selects the hook manifest paths `context` and `doctor` inspect and the `$`/`/` command prefix (`$` only for `codex`). | Derived from the skill dir's harness folder (`<root>/.codex/skills/melzi` -> `codex`); otherwise `source`, which is what the JS reads in a source checkout. |
 | `IMPECCABLE_SELF` | How to spell this binary in printed commands where the JS printed `node <scripts>/<script>.mjs` (`context`'s MANUAL_DETECTOR_REQUIRED, IMAGE_GEN_AVAILABLE, SURFACE_CONTEXT_AVAILABLE, MONOREPO_TARGET_REQUIRED, `serve-question --start`'s follow-up line). Printed as `<self> <verb>`; a Windows `.cmd` path that has to be quoted (one containing spaces, or any quoted hook spelling) is printed as `& '<path>' <verb>` (a PowerShell literal, `'` doubled) so PowerShell runs it (`impeccable_common::launcher`, #744). | The executable path. |
 | `IMPECCABLE_SEED_SALT` | Pins the salt seed references are computed under (`impeccable_common::seed`), so tests and the oracle print stable references. Never set it in normal use: the per-user salt is what keeps a committed reference from being computed out of a key. | The contents of `~/.impeccable/seed-salt`, 128 random bits created on first use. |
-| `IMPECCABLE_TELEMETRY_CHANNEL` | A lowercase word appended to `X-Melzi-Client` (`test` in this repo's tests and CI) so test traffic is tagged. | None. |
+| `IMPECCABLE_TELEMETRY_CHANNEL` | A lowercase word appended to `X-Impeccable-Client` (`test` in this repo's tests and CI) so test traffic is tagged. | None. |
 
 Everything else is the JS contract's own environment (`IMPECCABLE_CONTEXT_DIR`,
 `IMPECCABLE_UPDATE_*`, `IMPECCABLE_STALENESS_CACHE`, `IMPECCABLE_CATALOG_DIR`,
@@ -149,7 +149,7 @@ except the artifact download, which has ten minutes.
 
 1. `GET /cli/v1/manifest?engine=<this version>&target=<os-arch>`
    (`darwin-arm64`, `linux-x64`, `windows-x64`, ...). The body's exact bytes
-   must verify against `X-Melzi-Signature` (base64url Ed25519) under a
+   must verify against `X-Impeccable-Signature` (base64url Ed25519) under a
    **pinned release key**, then parse as the manifest below with this
    engine and target. A revision below the **revision floor** is refused.
 2. The artifact is cached by digest at

@@ -4235,7 +4235,7 @@ mod tests {
         let log = seen.clone();
         std::thread::spawn(move || {
             for mut req in server.incoming_requests() {
-                let header = req.headers().iter().find(|h| h.field.equiv("X-Melzi-Client")).map(|h| h.value.as_str().to_string()).unwrap_or_default();
+                let header = req.headers().iter().find(|h| h.field.equiv("X-Impeccable-Client")).map(|h| h.value.as_str().to_string()).unwrap_or_default();
                 let mut body = String::new();
                 let _ = std::io::Read::read_to_string(req.as_reader(), &mut body);
                 log.lock().unwrap().push((header, body));

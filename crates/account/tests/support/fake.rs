@@ -77,7 +77,7 @@ pub struct Record {
     pub refused: Vec<(String, serde_json::Value)>,
     pub forgets: usize,
     pub setups: Vec<serde_json::Value>,
-    /// The `Melzi-Project` header of each setup read (`GET /cli/v1/setup`).
+    /// The `Impeccable-Project` header of each setup read (`GET /cli/v1/setup`).
     pub setup_projects: Vec<Option<String>>,
     pub designs: Vec<serde_json::Value>,
     codes: HashMap<String, (String, String, String)>,
