@@ -57,7 +57,7 @@ Two ideas in `skill/reference/taste-bar.md` were prompted by reading other publi
 Base work: **Impeccable** by Paul Bakaus, https://github.com/pbakaus/impeccable
 Original license: Apache License 2.0 (retained; see LICENSE).
 Forked at upstream commit: 8259c28209b92792005cec14dad573df39f68eaf
-Reference prose last aligned with upstream: `skill-v4.5.2` (d631a8827, 8 October 2026) as the synced base, plus the engine-independent prose changes up to upstream commit ec229b48 (10 November 2026, after `skill-v4.8.2`), ported by hand on 10 November 2026. The launcher and engine stay at 0.1.14; upstream prose that depends on newer engine verbs (seed references and `--check-seed`, `audit-storage`, the live `removeElement` op, the native-app CDP path) was not taken.
+Synced with upstream at `cli-v4.9.2` (commit d41d9860b); engine and launcher version 0.1.25.
 
 This distribution modifies and extends the original with provider adapters, design-review workflows, reference and taste handling, live feedback, and a typed launcher and provider-build boundary. Impeccable's original copyright and Apache-2.0 terms are retained. Melzi's additions and modifications are distributed under Apache-2.0. Source files identify modifications where practical; distribution JavaScript is generated from the corresponding TypeScript source.
 
