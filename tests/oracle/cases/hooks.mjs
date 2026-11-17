@@ -7,6 +7,10 @@
  */
 
 import fs from 'node:fs';
+// FORK DELTA (Melzi): the harness rebrands the staged tree before a setup runs, so a
+// setup that removes or plants a skill folder names the rebranded one.
+import { transform as rebrandText } from '../../../scripts/rebrand.mjs';
+const SKILL = rebrandText('skills/impeccable');
 
 const WS = '<WS>';
 const CACHE_FILES = ['.impeccable/**', '.claude/settings.local.json', '.codex/hooks.json', '.cursor/hooks.json', '.github/hooks/impeccable.json'];
@@ -287,17 +291,17 @@ export default [
     files: [...CACHE_FILES, 'claude-account/installed-settings.json'],
     setup(ws) {
       for (const provider of ['.claude', '.cursor']) {
-        fs.rmSync(`${ws}/${provider}/skills/impeccable`, { recursive: true, force: true });
+        fs.rmSync(`${ws}/${provider}/${SKILL}`, { recursive: true, force: true });
       }
-      fs.mkdirSync(`${ws}/claude-account/skills/impeccable/scripts`, { recursive: true });
-      fs.writeFileSync(`${ws}/claude-account/skills/impeccable/scripts/impeccable`, '#!/bin/sh\n');
+      fs.mkdirSync(`${ws}/claude-account/${SKILL}/scripts`, { recursive: true });
+      fs.writeFileSync(`${ws}/claude-account/${SKILL}/scripts/impeccable`, '#!/bin/sh\n');
     },
     steps: [
       { args: ['on'] },
       { args: ['status'] },
       { args: ['on'], setup(ws) {
         fs.copyFileSync(`${ws}/claude-account/settings.json`, `${ws}/claude-account/installed-settings.json`);
-        fs.rmSync(`${ws}/claude-account/skills/impeccable`, { recursive: true, force: true });
+        fs.rmSync(`${ws}/claude-account/${SKILL}`, { recursive: true, force: true });
         fs.rmSync(`${ws}/claude-account/settings.json`);
       } },
     ],

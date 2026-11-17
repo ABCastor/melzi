@@ -7444,3 +7444,14 @@ New cases, recorded from the binary and reviewed by hand. `SEEDED_WORLD` used to
 ## Recorded 2026-11-14: two cases from main take the `detect --changed` detector line
 
 `context-taste-ready` and `context-seeded-world-starter-css-with-product` arrived from main after this branch changed the `MANUAL_DETECTOR_REQUIRED` line to name `detect --json --changed`. Both were re-recorded from the branch binary and reviewed by hand: only that one stdout line changes in each; exit, stderr and files are unchanged.
+
+## Reviewed 2026-11-17: two upstream install/update cases meet the local-only refusal
+
+Upstream's 2026-11 sync brought two cases that reach `install`/`update` without an
+existing explicit `IMPECCABLE_BUNDLE_PATH`. Melzi publishes no remote bundle, so both
+verbs refuse first (the 2026-10-05 boundary above). Reviewed against the goldens:
+exit 1 in both, the files snapshot is the same, stdout is empty and stderr is the
+refusal with the local build instructions. Frozen goldens are retained.
+
+- `skills-update-codex-skills-dir`: upstream names the unmanaged `.codex/skills` copy after "No impeccable skill folders found"; Melzi refuses remote `update` before scanning. `drift_ports_tests.rs` still covers the note on a local-bundle update.
+- `skills-install-replit-project`: upstream prints the detection table, then fails on the missing bundle; Melzi refuses because the named bundle does not exist.
