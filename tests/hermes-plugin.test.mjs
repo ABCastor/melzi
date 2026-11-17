@@ -104,7 +104,7 @@ function sentEvent() {
 }
 
 function installLauncher(root) {
-  const scripts = path.join(root, 'skills/impeccable/scripts');
+  const scripts = path.join(root, 'skills/melzi/scripts');
   fs.mkdirSync(scripts, { recursive: true });
   fs.writeFileSync(path.join(scripts, 'impeccable'), FAKE_LAUNCHER, { mode: 0o755 });
 }
@@ -247,11 +247,11 @@ describe('hermes design-hook plugin', { skip: SKIP }, () => {
     stdout(POST);
     const args = { tool_name: 'write_file', args: { path: 'src/App.tsx' }, result: '{}' };
     call('transform_tool_result', args);
-    assert.equal(launcherRan(), path.join(project, '.hermes/skills/impeccable/scripts/impeccable'), 'trusted');
+    assert.equal(launcherRan(), path.join(project, '.hermes/skills/melzi/scripts/impeccable'), 'trusted');
     const home = path.join(tmp, 'hermes-home');
     installLauncher(home);
     call('transform_tool_result', args, { env: { FAKE_TRUSTED: '', HERMES_HOME: home } });
-    assert.equal(launcherRan(), path.join(home, 'skills/impeccable/scripts/impeccable'), 'untrusted falls back to the home launcher');
+    assert.equal(launcherRan(), path.join(home, 'skills/melzi/scripts/impeccable'), 'untrusted falls back to the home launcher');
     assert.equal(call('transform_tool_result', args, { env: { FAKE_TRUSTED: '' } }), null, 'untrusted, no home launcher');
     assert.equal(spawned(), false);
   });
@@ -261,7 +261,7 @@ describe('hermes design-hook plugin', { skip: SKIP }, () => {
     const edit = ['transform_tool_result', { tool_name: 'write_file', args: { path: path.join(project, 'src/App.tsx') }, result: '{}', session_id: 's7' }];
     const out = call('pre_verify', { session_id: 's7', attempt: 0, changed_paths: [] }, { cwd: tmp, before: [edit] });
     assert.deepEqual(out, { decision: 'block', reason: 'Deep pass: 1 finding' });
-    assert.equal(launcherRan(), path.join(project, '.hermes/skills/impeccable/scripts/impeccable'));
+    assert.equal(launcherRan(), path.join(project, '.hermes/skills/melzi/scripts/impeccable'));
     assert.equal(sentEvent().cwd, tmp);
   });
 });

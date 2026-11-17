@@ -65,6 +65,7 @@ const KEEP_FORMS = new RegExp([
   'i-impeccable',           // legacy harness install dir we still detect
   'annotate-click',         // the postMessage protocol property `impeccable: 'annotate-click'`
   'impeccableSketch',       // the sketch frame's postMessage key; page and frame must agree (2026-10-11 sync)
+  'impeccable/\\{\\}',     // the X-Impeccable-Client value upstream's API reads (`impeccable/<version>`); a wire id, kept with the header (2026-11-17 sync)
   'impeccable frontend',    // the English adjective
   'impeccable design',      // the English adjective
 ].join('|'), 'i');

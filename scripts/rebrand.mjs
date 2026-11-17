@@ -211,6 +211,12 @@ const RULES = [
   // unique to the envelope, and the guard missed every envelope after the first in
   // JSON-escaped hook output, where the tag follows a literal `\n`.
   [/\[impeccable@(\d+)\]/g, '[melzi@$1]'],
+  // The live chrome's three connection tips name the CLI verb to run (upstream #1408,
+  // 2026-11-17 sync). Prose, so no command rule reaches them; exact sites only, since
+  // `scripts/impeccable live-poll` is the launcher and keeps its name.
+  [/restart `impeccable live-poll` to continue/g, 'restart `melzi live-poll` to continue'],
+  [/run impeccable live-poll to connect/g, 'run melzi live-poll to connect'],
+  [/Run impeccable live-poll, then send it again/g, 'Run melzi live-poll, then send it again'],
   // The clean-ack steer line names the skill to the user in prose.
   [/impeccable skill guidance/g, 'melzi skill guidance'],
   // pin.mjs interpolates the command through a local `commandPrefix`, so the
