@@ -1243,6 +1243,7 @@ fn schema_json() -> Value {
         { "id": "assigned", "kind": "assigned", "label": "Fillmore Handbill", "kicker": "THE ROLL", "lineage": "1966-71 Fillmore psychedelic handbills", "thesis": "The gig poster that treats every release like a one-night stand.", "palette": ["#e8452c", "#f5d64c", "#1b2a52", "#f3ead8"], "materials": ["letterpress", "split-fountain ink"], "viewport": "A full-bleed dated bill with the product name in warped display type.", "risk": "Reads nostalgic when the type is set timidly.", "raised": [{ "from": "challenger-microfiche", "raise": "The bill now owns its whole viewport as one continuous printed sheet." }], "comp": ".impeccable/mocks/decision/assigned.webp", "hero": "https://impeccable.style/worlds/cards/posters-covers-sleeves-fillmore-handbill-hero.webp", "board": "https://impeccable.style/worlds/cards/posters-covers-sleeves-fillmore-handbill.webp" },
         { "id": "model-pick", "kind": "pick", "label": "The Broadside Ballad", "kicker": "MELZI’S PICK", "lineage": "street-sold ballad sheets", "thesis": "Every release printed as the day’s ballad sheet.", "palette": ["#1f1c18", "#efe5d0", "#a33327"], "materials": ["woodcut", "rag paper"], "viewport": "One tall sheet, the newest release as today’s ballad.", "risk": "Also the direction most runs in this category land on.", "comp": ".impeccable/mocks/decision/model-pick.webp" },
         { "id": "challenger-teletext", "kind": "challenger", "catalogId": "broadcast-programming-teletext-service", "label": "Teletext Service", "verdict": "competitive", "lineage": "broadcast teletext magazines", "thesis": "The catalog as a broadcast index: pages, not sections.", "palette": ["#0000c0", "#ffff00", "#00c000", "#ffffff"], "materials": ["block mosaic", "phosphor glow"], "viewport": "P100 index page, releases as numbered rows.", "case": "Fuses cleanly: releases map to numbered pages; loses narrowly on clarity.", "risk": "Reads retro-novelty when the grid is not strict.", "comp": ".impeccable/mocks/decision/challenger-teletext.webp", "hero": "https://impeccable.style/worlds/cards/broadcast-programming-teletext-service-hero.webp" },
+        { "id": "challenger-built", "kind": "challenger", "label": "Swiss Timetable", "verdict": "competitive", "lineage": "SBB departure boards", "thesis": "Built, not drawn: the real first viewport.", "screen": "/abs/path/swiss-timetable.html" },
         { "id": "challenger-microfiche", "kind": "challenger", "catalogId": "archives-microfiche-reader", "label": "Microfiche Reader", "verdict": "declined", "lineage": "library microfiche stations", "palette": ["#101418", "#9fb4c0"], "materials": ["film grain", "backlit glass"], "case": "Fuses poorly: listeners do not identify with archival retrieval.", "kept": "Total environmental commitment.", "hero": "https://impeccable.style/worlds/cards/archives-microfiche-reader-hero.webp" }
       ],
       "reroll": { "registers": ["safer", "bolder"] },
@@ -1917,6 +1918,11 @@ pub fn run(argv: &[String], io: &mut Io) -> i32 {
                     ans.insert("buildPath".into(), Value::String(lbp.clone()));
                     ans.insert("buildPathFlipped".into(), Value::Bool(Some(lbp.as_str()) != st.build_path_default.as_ref().map(|b| b.0.as_str())));
                 }
+            }
+            // FORK DELTA (Melzi): the approved live screen rides the answer as its
+            // original path, so print_answer names it as this build's reference.
+            if let Some(screen) = chosen.as_ref().and_then(|c| c.get("screen")).filter(|v| crate::staleness::js_truthy(v)) {
+                ans.insert("screen".into(), screen.clone());
             }
             let answer = json_compact(&Value::Object(ans.clone()));
             // The choice ping, sent by the page itself when the hand took an
