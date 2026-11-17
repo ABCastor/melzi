@@ -568,6 +568,13 @@ export const UPSTREAM_REFS = [
   '/impeccable:taste',
   // The taste block's body repeats the account service's own MCP instruction word for word.
   'Impeccable Taste: before design or UI work',
+  // Upstream's hosted service names, added 2026-11-17. `loop install` and `loop connect`
+  // name upstream's own Mac app and its support folder (`~/Applications/Impeccable
+  // Loop.app`, `Application Support/Impeccable Reviews`). They name upstream's service,
+  // not this skill: renamed, the messages credited Melzi with upstream's product and the
+  // paths pointed at an app that does not exist.
+  'Impeccable Loop',
+  'Impeccable Reviews',
 ];
 
 /**

@@ -12,7 +12,7 @@ fn connect_answer_requires_input_but_defaults_enter_to_yes() {
 fn platform_refuses_non_macos() {
     assert_eq!(
         check_platform("linux").unwrap_err(),
-        "Melzi Loop is only available on macOS."
+        "Impeccable Loop is only available on macOS."
     );
     assert!(check_platform("macos").is_ok());
     // Arguments are read before the platform check: usage is the same everywhere, and only real work is macOS-only.
@@ -25,7 +25,7 @@ fn platform_refuses_non_macos() {
         .starts_with("Usage: impeccable loop"));
     assert_eq!(
         run_inner(&["install".into()], &io, "", "linux").unwrap_err(),
-        "Melzi Loop is only available on macOS."
+        "Impeccable Loop is only available on macOS."
     );
 }
 
@@ -103,8 +103,8 @@ mod mac {
     fn fixture(version: &str, root: &Path) -> Vec<u8> {
         let app = root.join(APP);
         fs::create_dir_all(app.join("Contents/MacOS")).unwrap();
-        fs::copy("/bin/sleep", app.join("Contents/MacOS/Melzi Loop")).unwrap();
-        fs::write(app.join("Contents/Info.plist"), format!(r#"<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>Melzi Loop</string><key>CFBundleShortVersionString</key><string>{version}</string></dict></plist>"#)).unwrap();
+        fs::copy("/bin/sleep", app.join("Contents/MacOS/Impeccable Loop")).unwrap();
+        fs::write(app.join("Contents/Info.plist"), format!(r#"<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>Impeccable Loop</string><key>CFBundleShortVersionString</key><string>{version}</string></dict></plist>"#)).unwrap();
         // The Info.plist invalidates the copied binary's Apple signature, so macOS kills the
         // launched bundle and shows a "damaged" dialog. Re-sign it ad hoc.
         assert!(Command::new("/usr/bin/codesign")
@@ -313,7 +313,7 @@ mod mac {
     /// Start the installed bundle's executable (the fixture's is /bin/sleep) and wait until the
     /// process listing the installer reads shows it.
     fn run_bundle(apps: &Path) -> std::process::Child {
-        let process = Command::new(apps.join(APP).join("Contents/MacOS/Melzi Loop"))
+        let process = Command::new(apps.join(APP).join("Contents/MacOS/Impeccable Loop"))
             .arg("60")
             .spawn()
             .unwrap();
@@ -361,7 +361,7 @@ mod mac {
         assert!(process.try_wait().unwrap().is_none(), "the Loop that didn't quit is left running");
         process.kill().unwrap();
         process.wait().unwrap();
-        assert_eq!(error, "Melzi Loop didn't quit. Quit it yourself, then run impeccable loop update again.");
+        assert_eq!(error, "Impeccable Loop didn't quit. Quit it yourself, then run impeccable loop update again.");
         assert_eq!(plist(&apps.join(APP), "CFBundleShortVersionString").unwrap(), "1.0.0");
     }
 

@@ -164,7 +164,7 @@ fi
 if [ "$LOOP" = 1 ]; then
   imp loop install --no-open > "$H/loop.out" 2>&1; rc=$?
   check "loop install: exits 0" '[ $rc = 0 ]'
-  check "loop install: the app is in ~/Applications" '[ -x "$HOME/Applications/Melzi Loop.app/Contents/MacOS/loop-hook" ]'
+  check "loop install: the app is in ~/Applications" '[ -x "$HOME/Applications/Impeccable Loop.app/Contents/MacOS/loop-hook" ]'
   claude=$(PATH=$REAL_PATH command -v claude || true)
   if [ -n "$claude" ]; then
     # Only Claude Code: Codex's MCP add starts its own browser sign-in.

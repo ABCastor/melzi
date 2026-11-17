@@ -107,11 +107,11 @@ const OWNER: &str = "impeccable-loop";
 /// ~/.codex/AGENTS.md) as an engine-managed block, so agents bring questions to Loop
 /// instead of waiting in a terminal. Disconnect removes the block with the hooks.
 const INSTRUCTION: &str = "When you need a person's decision or input, use needs_you.post (Melzi) instead of asking in chat or a built-in question tool. If needs_you says Loop isn't connected, ask normally.";
-const APP: &str = "Applications/Melzi Loop.app";
+const APP: &str = "Applications/Impeccable Loop.app";
 const HELPER: &str = "Contents/MacOS/loop-hook";
 /// Where Loop's helper keeps its state (the old name stays until Loop migrates it).
 const SUPPORT_PARENT: &str = "Library/Application Support";
-const SUPPORT: [&str; 2] = ["Melzi Reviews", "Loop"];
+const SUPPORT: [&str; 2] = ["Impeccable Reviews", "Loop"];
 /// This command's own note, per connected agent and config folder, of where its MCP
 /// server lives, so disconnect can print the exact command to remove it.
 const TARGETS: &str = "connect.json";
@@ -711,7 +711,7 @@ fn missing_loop(helper: &Path) -> String {
             helper.display()
         )
     } else {
-        "Melzi Loop isn't installed in ~/Applications, or is too old to connect agents. Run impeccable loop install first.".into()
+        "Impeccable Loop isn't installed in ~/Applications, or is too old to connect agents. Run impeccable loop install first.".into()
     }
 }
 

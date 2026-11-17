@@ -72,7 +72,7 @@ exit 0
     fn install_loop(&self) {
         let macos = self
             .home()
-            .join("Applications/Melzi Loop.app/Contents/MacOS");
+            .join("Applications/Impeccable Loop.app/Contents/MacOS");
         fs::create_dir_all(&macos).unwrap();
         script(&macos.join("loop-hook"), "#!/bin/sh\nexit 0\n");
     }
@@ -80,7 +80,7 @@ exit 0
     fn install_loop_version(&self, version: &str) {
         self.install_loop();
         fs::write(
-            self.home().join("Applications/Melzi Loop.app/Contents/Info.plist"),
+            self.home().join("Applications/Impeccable Loop.app/Contents/Info.plist"),
             format!(
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\"><dict><key>CFBundleShortVersionString</key><string>{version}</string></dict></plist>\n"
             ),
@@ -98,7 +98,7 @@ exit 0
     }
     fn support(&self) -> PathBuf {
         self.home()
-            .join("Library/Application Support/Melzi Reviews/Loop")
+            .join("Library/Application Support/Impeccable Reviews/Loop")
     }
 }
 
@@ -221,7 +221,7 @@ fn connect_adds_the_mcp_server_and_hooks_and_disconnect_removes_exactly_them() {
             .unwrap();
     let helper = b
         .home()
-        .join("Applications/Melzi Loop.app/Contents/MacOS/loop-hook");
+        .join("Applications/Impeccable Loop.app/Contents/MacOS/loop-hook");
     let quoted = format!("'{}'", helper.display());
     let command = |event: &str, i: usize| settings["hooks"][event][i]["hooks"][0].clone();
     assert_eq!(
@@ -445,7 +445,7 @@ fn a_symlinked_support_folder_is_refused_before_anything_is_written() {
     fs::create_dir_all(&elsewhere).unwrap();
     fs::create_dir_all(
         b.home()
-            .join("Library/Application Support/Melzi Reviews"),
+            .join("Library/Application Support/Impeccable Reviews"),
     )
     .unwrap();
     std::os::unix::fs::symlink(&elsewhere, b.support()).unwrap();
@@ -685,13 +685,13 @@ fn connect_says_when_the_hooks_point_at_a_loop_that_moved() {
     let b = Box::new("loop-moved");
     b.install_loop();
     assert!(b.run(&["loop", "connect"]).status.success());
-    fs::remove_dir_all(b.home().join("Applications/Melzi Loop.app")).unwrap();
+    fs::remove_dir_all(b.home().join("Applications/Impeccable Loop.app")).unwrap();
     let out = b.run(&["loop", "connect"]);
     let said = text(&out);
     assert!(!out.status.success(), "{said}");
     assert!(
         said.contains("Loop's hooks point at a Loop that isn't there")
-            && said.contains("Melzi Loop.app/Contents/MacOS/loop-hook")
+            && said.contains("Impeccable Loop.app/Contents/MacOS/loop-hook")
             && said.contains("~/Applications"),
         "{said}"
     );

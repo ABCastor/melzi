@@ -243,7 +243,7 @@ fn login_offers_loop_connect_only_when_loop_is_installed_and_an_agent_is_not_con
     assert!(!err.contains("Loop"), "no Loop, no offer: {err}");
     assert_eq!(out, "", "stdout carries the link alone");
 
-    let macos = home.join("Applications/Melzi Loop.app/Contents/MacOS");
+    let macos = home.join("Applications/Impeccable Loop.app/Contents/MacOS");
     std::fs::create_dir_all(&macos).unwrap();
     std::fs::write(macos.join("loop-hook"), "#!/bin/sh\nexit 0\n").unwrap();
     let (out, err) = login_output(&env, &home);
