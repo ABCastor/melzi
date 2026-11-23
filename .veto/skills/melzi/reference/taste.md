@@ -1,6 +1,6 @@
-# Taste: learn what he picks, apply it to what he has not seen
+# Taste: learn what the user picks, apply it to what they have not seen
 
-The user can say which of two screens he prefers, and he can point at a thing he dislikes. He cannot say what is good, and asking him to produces a made-up answer that then steers everything downstream. This flow takes the two judgements he makes reliably and turns them into a model that scores a design he has never looked at. That last part is the point of the whole loop: a ranking of the candidates in front of him is worth nothing on the next surface, and only a model over attributes carries across.
+The user can say which of two screens they prefer, and they can point at a thing they dislike. They cannot say what is good, and asking them to produces a made-up answer that then steers everything downstream. This flow takes the two judgements they make reliably and turns them into a model that scores a design they have never looked at. That last part is the point of the whole loop: a ranking of the candidates in front of them is worth nothing on the next surface, and only a model over attributes carries across.
 
 The store is `~/.impeccable/taste/`, beside the genesis ledger, because taste is a property of the person and not of a repo.
 
@@ -8,7 +8,7 @@ The store is `~/.impeccable/taste/`, beside the genesis ledger, because taste is
 
 Only when the user asks for it by name: a taste session, a calibration, a comparison round. This file is never part of the default flow, and no other reference may route here or offer it on its own; a design task that finishes without it is complete. The default quality gate is the model's own, in [taste-bar.md](taste-bar.md), which reads the profile this loop produced when one exists and never collects more.
 
-Once he has asked, it fits after a genesis hand exists, or any time two or more candidate screens are worth comparing: two directions in a redesign, two renditions of one world, a child screen against the parent it came from.
+Once the user has asked, it fits after a genesis hand exists, or any time two or more candidate screens are worth comparing: two directions in a redesign, two renditions of one world, a child screen against the parent it came from.
 
 Never as the first step in a fresh project. There is nothing to compare, and a profile fitted on nothing still prints a confident-looking answer with no evidence under it. Build first, through [genesis.md](genesis.md) or [new-work.md](new-work.md), then come back here with screens in hand.
 
@@ -20,7 +20,7 @@ One pass is: ask for a pair, show it, collect the verdict, confirm it was record
 
 1. `node .veto/skills/melzi/scripts/melzi/taste-store.mjs --next` prints the next valid pair as JSON, chosen because its outcome is the least predictable one available. It never deals two different known subjects. Take the pair it deals. Substituting your own defeats the selection and buys fewer bits per click.
 2. `node .veto/skills/melzi/scripts/melzi/serve-compare.mjs --schema` for the exact input shape, then `--start` with the two candidates. It daemonizes and prints a URL and a key: open that URL for the user, in-app browser first, then the system opener, then showing the URL.
-3. `--wait --key <key>` collects the verdict, repeating while it exits 3. The answer carries `outcome` (`a`, `b`, or `tie`), every annotation he dropped on either screen, and any steer he typed.
+3. `--wait --key <key>` collects the verdict, repeating while it exits 3. The answer carries `outcome` (`a`, `b`, or `tie`), every annotation the user dropped on either screen, and any steer they typed.
 4. The server records the click as part of accepting it and prints whether the store write succeeded. Never append the same click again. Use `--no-record` only for a throwaway comparison or a test. A store failure never blocks the answer file or the `COMPARISON:` output, so keep the answer and state the recording failure plainly.
 
 Every candidate is registered before it can appear: `appendCandidate` with its id, label, `subject`, and the absolute path of its screen. `subject` says what the screen is of, such as `ema-persona-site` or `melzi-studio-site`. It is a stable identifier, not the world or visual treatment. Leave a legacy candidate unknown rather than guessing. A candidate produced by recombination also carries `parents`, so lineage stays inspectable.
@@ -29,7 +29,7 @@ Author a candidate at `<project>/.impeccable/screens/<id>.html`. Registration co
 
 ### Intuition mode
 
-The ordinary comparison flow has no timer. Turn intuition mode on only when the point is his first reaction:
+The ordinary comparison flow has no timer. Turn intuition mode on only when the point is the user's first reaction:
 
 ```bash
 node .veto/skills/melzi/scripts/melzi/taste-session.mjs --deal --intuition --intuition-session <session-id> --intuition-seconds 3 --intuition-cap 8
@@ -49,13 +49,13 @@ Use this only for a bounded choice session. It extends one intuition session, in
 node .veto/skills/melzi/scripts/melzi/taste-session.mjs --deal --intuition --intuition-session <session-id> --intuition-seconds 0 --intuition-cap 8 --stopping-candidate-cap 9
 ```
 
-The candidate cap is a commitment fixed when the session starts. A candidate consumes it on its first display, never on a later recall. The first third calibrates the scale. A pair needs two screens, so the calibration target is rounded up to one whole pair. During calibration he still picks left, right, or tie and every verdict enters the ledger. What is withheld is the terminal choice and every ranking, profile ordering, or current-leader display. Show only the named calibration phase and the number of calibration comparisons left before the bar is set.
+The candidate cap is a commitment fixed when the session starts. A candidate consumes it on its first display, never on a later recall. The first third calibrates the scale. A pair needs two screens, so the calibration target is rounded up to one whole pair. During calibration the user still picks left, right, or tie and every verdict enters the ledger. What is withheld is the terminal choice and every ranking, profile ordering, or current-leader display. Show only the named calibration phase and the number of calibration comparisons left before the bar is set.
 
-After calibration, show the bar, its spread, and the evidence sentence before asking him to fix it. The default is the strongest calibration candidate's one-standard-error lower bound on the attribute score. This is more cautious than its highest point score, which is exactly where a few early comparisons are most likely to exaggerate a lead. The spread names each calibration candidate's score, uncertainty, and cautious bound. If shared recorded attributes cannot separate the calibration candidates, say that plainly and do not print a number that looks precise.
+After calibration, show the bar, its spread, and the evidence sentence before asking the user to fix it. The default is the strongest calibration candidate's one-standard-error lower bound on the attribute score. This is more cautious than its highest point score, which is exactly where a few early comparisons are most likely to exaggerate a lead. The spread names each calibration candidate's score, uncertainty, and cautious bound. If shared recorded attributes cannot separate the calibration candidates, say that plainly and do not print a number that looks precise.
 
-He may adjust the displayed bar once. The session stores both the derived value and the fixed value. To change the candidate cap after starting, use `--set-stopping-candidate-cap <n>` with the same session id. That is an explicit recorded act: the session keeps the old value, new value, and time. A plain re-run with a different `--stopping-candidate-cap` is refused.
+The user may adjust the displayed bar once. The session stores both the derived value and the fixed value. To change the candidate cap after starting, use `--set-stopping-candidate-cap <n>` with the same session id. That is an explicit recorded act: the session keeps the old value, new value, and time. A plain re-run with a different `--stopping-candidate-cap` is refused.
 
-**Raising the cap after the bar is set does not re-open calibration, and that has a consequence worth saying out loud rather than leaving him to work out.** The phase is stored state, not a fraction recomputed from the current cap, so a bar he has already reviewed and fixed is never silently discarded by a later raise. The trade is that the calibration set then stops being a third of the budget: three calibration candidates under a cap raised from nine to thirty is a tenth of it, not a third, and the scale he is judging against was bought from that smaller sample. Say so when reporting a raise. Re-deriving the bar instead would throw away a judgement he already made, which is the worse of the two, so the honest move is to keep the bar and name what it now rests on.
+**Raising the cap after the bar is set does not re-open calibration, and that has a consequence worth saying out loud rather than leaving the user to work it out.** The phase is stored state, not a fraction recomputed from the current cap, so a bar the user has already reviewed and fixed is never silently discarded by a later raise. The trade is that the calibration set then stops being a third of the budget: three calibration candidates under a cap raised from nine to thirty is a tenth of it, not a third, and the scale they are judging against was bought from that smaller sample. Say so when reporting a raise. Re-deriving the bar instead would throw away a judgement they already made, which is the worse of the two, so the honest move is to keep the bar and name what it now rests on.
 
 Once the bar is fixed, inspect candidates in registry order and stop at the first whose cautious score clears it. The server says which candidate cleared the bar and that the session is over. It does not offer another pair. If no candidate clears before the candidate cap, select the best candidate seen as the designed fallback. Nothing from calibration is discarded; all early candidates remain selectable.
 
@@ -67,33 +67,33 @@ This is the step a model has to actually perform, and the reason any of this gen
 
 Look at the two screens and name the concrete properties on which they genuinely DIFFER: whitespace, type scale, column count, contrast, border treatment, density, ornament, motion, image weight, corner radius, alignment, whatever is in front of you. Score each candidate 0 to 1 on each attribute you named, where 0 is not at all and 1 is maximally. Continuous, never booleans, because the weighted sum needs magnitude.
 
-- **Propose from what you see, never from a fixed list.** A checklist can only ever learn the axes someone guessed in advance, and the axis separating his two favourites is usually not on it. Three to six attributes per comparison is a working range: name the ones that differ, not the ones you can think of.
-- **Attributes are observable properties of the artifact, not judgements.** "Three-column layout", not "feels cluttered". "8px corner radius", not "friendly". A judgement is the thing the model is supposed to be learning; feeding one in as an input teaches it your opinion instead of his.
-- **Merge, then write.** `mergeAttributes` collapses synonyms by normalized label, so "generous whitespace" proposed today and "whitespace generosity" proposed two rounds later stay one attribute rather than splitting his evidence in half. `setVector` then writes each candidate's scores.
+- **Propose from what you see, never from a fixed list.** A checklist can only ever learn the axes someone guessed in advance, and the axis separating the user's two favourites is usually not on it. Three to six attributes per comparison is a working range: name the ones that differ, not the ones you can think of.
+- **Attributes are observable properties of the artifact, not judgements.** "Three-column layout", not "feels cluttered". "8px corner radius", not "friendly". A judgement is the thing the model is supposed to be learning; feeding one in as an input teaches it your opinion instead of theirs.
+- **Merge, then write.** `mergeAttributes` collapses synonyms by normalized label, so "generous whitespace" proposed today and "whitespace generosity" proposed two rounds later stay one attribute rather than splitting their evidence in half. `setVector` then writes each candidate's scores.
 - **Score both candidates on the merged vocabulary, not only on today's proposals.** An attribute named three rounds ago still applies to the screen in front of you, and a missing value is a hole in the fit.
 
 ## 4. Confounds: when the pair was not a fair test
 
-A confound is a difference between the two screens that nobody chose. He hit one himself: he compared a screen in light mode against a screen in dark mode, and the second was dark only because the first had no mode control at all. Whatever he picked, the fit would read it as a verdict on dark grounds, and he never gave one. That is worse than weak evidence. It is a confident claim about an axis that was never tested, on a system whose whole point is that he cannot check its claims.
+A confound is a difference between the two screens that nobody chose. The user hit one themselves: they compared a screen in light mode against a screen in dark mode, and the second was dark only because the first had no mode control at all. Whatever they picked, the fit would read it as a verdict on dark grounds, and they never gave one. That is worse than weak evidence. It is a confident claim about an axis that was never tested, on a system whose whole point is that the user cannot check its claims.
 
 **Before the pair goes up.** Run `flagLikelyConfound(vectorA, vectorB, { attributes, candidateA, candidateB })` from `taste-model.mjs`. Two different known subjects set `refused: true` and name both subjects. Stop there. Pairwise taste compares renditions of one thing, and a preference between unrelated things is not evidence. An unknown subject is not a conflict, so do not guess subjects onto older candidates.
 
 After the subject check, the same function keeps the existing uncontrolled-variable check. It flags one attribute miles apart while everything else nearly matches. It cannot tell an accident from a deliberate one-axis test, and it does not try. It names the axis and hands you the question. You built both screens, so you are the one who knows whether that difference was a decision.
 
 - If it was a decision, deal the pair. A pair built to isolate one axis is the best evidence about that axis there is.
-- If it was not, fix the pair before he sees it. Make the two screens match on everything except what is genuinely being compared, then ask. A rebuilt pair is always worth more than a marked one.
+- If it was not, fix the pair before the user sees it. Make the two screens match on everything except what is genuinely being compared, then ask. A rebuilt pair is always worth more than a marked one.
 
-**After the answer is in.** Do not delete the comparison. His preference between those two screens was real and it still ranks them; only the accidental axis has to lose its claim on it. `markConfounded({ a, b, at }, ['attribute-id'], { home })` in `taste-store.mjs` adds the mark to a row already written, and `fitAttributeWeights` then drops that attribute's evidence from that row and nothing else. The comparison still trains every other attribute and still counts in the ranking.
+**After the answer is in.** Do not delete the comparison. The user's preference between those two screens was real and it still ranks them; only the accidental axis has to lose its claim on it. `markConfounded({ a, b, at }, ['attribute-id'], { home })` in `taste-store.mjs` adds the mark to a row already written, and `fitAttributeWeights` then drops that attribute's evidence from that row and nothing else. The comparison still trains every other attribute and still counts in the ranking.
 
 Marking is damage control, not a repair. The remaining attributes now have to explain an outcome the accidental axis may in fact have caused, so a little of it leaks into them. That is the reason the pre-flight check exists and the reason to prefer rebuilding the pair.
 
-**Never ask him whether a difference was intentional.** It is your bookkeeping about screens you built, not a design judgement he can make. The floor in section 8 holds here too.
+**Never ask the user whether a difference was intentional.** It is your bookkeeping about screens you built, not a design judgement they can make. The floor in section 8 holds here too.
 
-## 5. Show him the profile
+## 5. Show the user the profile
 
-Print `--profile` after every few comparisons so he watches it form, and state the comparison count beside it, plainly, every time. "Prefers generous whitespace, dislikes three-column layouts, neutral on serif against sans, from 6 comparisons" is honest. The same three lines with the count taken off is a claim the evidence does not support.
+Print `--profile` after every few comparisons so they watch it form, and state the comparison count beside it, plainly, every time. "Prefers generous whitespace, dislikes three-column layouts, neutral on serif against sans, from 6 comparisons" is honest. The same three lines with the count taken off is a claim the evidence does not support.
 
-An attribute whose interval crosses zero prints as neutral and stays neutral. Do not promote one because it would make the profile look decided, and do not quietly drop it either: a real "no opinion yet" is a finding about him, not a gap to fill.
+An attribute whose interval crosses zero prints as neutral and stays neutral. Do not promote one because it would make the profile look decided, and do not quietly drop it either: a real "no opinion yet" is a finding about the user, not a gap to fill.
 
 When intuition mode has enough timed evidence, the profile adds a plain response-time readout beside the ranking: which attributes appeared in quick choices and which repeatedly took longer. It refuses that claim until an attribute appears in at least three timed comparisons. Read the refusal as information, not as a blank report.
 
@@ -101,22 +101,22 @@ A line that says comparisons were set aside is standing on less evidence than th
 
 ## 6. Cycles
 
-`detectCycles` returns a cycle when he preferred A over B, B over C, and C over A. Surface it. Do not re-fit until it goes away, and do not average it into a number that hides it.
+`detectCycles` returns a cycle when the user preferred A over B, B over C, and C over A. Surface it. Do not re-fit until it goes away, and do not average it into a number that hides it.
 
-A cycle is not a mistake he made. It means he judged those pairs on two criteria at once, so `cycleTensions` names the attributes whose difference flips sign around the loop. Put those to him as a question about this surface: on these three you took the roomier screen, and you also took the denser grid, so which one matters here? Keep his answer in the surface brief and carry on with the cycle still on record. Exposing the tension is the job; resolving it on his behalf is not.
+A cycle is not a mistake the user made. It means they judged those pairs on two criteria at once, so `cycleTensions` names the attributes whose difference flips sign around the loop. Put those to them as a question about this surface: on these three you took the roomier screen, and you also took the denser grid, so which one matters here? Keep their answer in the surface brief and carry on with the cycle still on record. Exposing the tension is the job; resolving it on their behalf is not.
 
 ## 7. Recombination
 
 When the population stops separating, every remaining pair reads as a coin flip, or the profile stalls, breed rather than compare.
 
 - `selectParents` returns the strongest candidates with a diversity guard, so you are not crossing a screen with its own near-twin.
-- `keptRegions` gathers every `keep` annotation for a parent, including annotations from comparisons that parent LOST. Nothing he liked is thrown away because the screen around it lost.
-- `buildRecombinationBrief` assembles the brief for the child: what each parent contributes, the exact regions to preserve with their selector, their text, and his own words, what to avoid, and the learned profile as a constraint.
+- `keptRegions` gathers every `keep` annotation for a parent, including annotations from comparisons that parent LOST. Nothing the user liked is thrown away because the screen around it lost.
+- `buildRecombinationBrief` assembles the brief for the child: what each parent contributes, the exact regions to preserve with their selector, their text, and the user's own words, what to avoid, and the learned profile as a constraint.
 - Author the child at `<project>/.impeccable/screens/<id>.html` from that brief at the standard [genesis.md](genesis.md) section 3 sets: one self-contained HTML page, one viewport, real content out of PRODUCT.md, the signature's invariants held exactly, any named technique built rather than pictured. A sketch is not a candidate, and a finished screen next to a sketch measures effort instead of taste.
 - `registerChild` appends it with `parents:[a,b]`, and it enters the loop at step 1 like any other candidate.
 
 ## 8. The floor
 
-He clicks which of two, or he clicks tie. That is the entire ask, here and in anything that loads this file.
+The user clicks which of two, or clicks tie. That is the entire ask, here and in anything that loads this file.
 
-Never ask him to score a design, rate it out of ten, rank a set, weight an attribute, or say why he prefers what he prefers. He has stated plainly that he cannot review design, and a forced explanation comes back as a plausible sentence that then steers the whole system wrong. Working out the why from the what is what the attribute layer and the weight fit exist to do. Ask him only for the what.
+Never ask the user to score a design, rate it out of ten, rank a set, weight an attribute, or say why they prefer what they prefer. They have stated plainly that they cannot review design, and a forced explanation comes back as a plausible sentence that then steers the whole system wrong. Working out the why from the what is what the attribute layer and the weight fit exist to do. Ask them only for the what.

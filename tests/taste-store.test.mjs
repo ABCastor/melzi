@@ -8,7 +8,7 @@
 //     turns to mush. So the merge tests assert the collapse AND assert the two
 //     documented limits, because a limit nobody wrote down is a limit somebody will
 //     assume away later.
-//  2. Pair selection. Every pair he is shown costs a click, and a candidate with
+//  2. Pair selection. Every pair the user is shown costs a click, and a candidate with
 //     zero comparisons carries no information at all. A freshly recombined child is
 //     always in that state, so the tests prove it can never be starved out, whatever
 //     the model thinks of it.
@@ -217,7 +217,7 @@ test('a truncated line costs its own line and nothing else', () => withHome((hom
 
 // ------------------------------------------------------------- confounds
 //
-// The pair he caught himself: one screen light, the other dark, and only because
+// The pair the user caught themselves: one screen light, the other dark, and only because
 // the first had no mode control. The verdict was real, the ground difference was
 // an accident, and a fit that reads a preference off it is confidently wrong on
 // an axis nobody tested. The row stays; the axis loses its claim on it.
@@ -257,10 +257,10 @@ test('a comparison already taken is marked rather than deleted', () => withHome(
   appendComparison(comparison('light', 'dark', 'b'), { home, now: AT });
   appendComparison(comparison('light', 'teletext', 'a'), { home, now: AT });
 
-  // Either order matches: he does not know or care which side was dealt as `a`.
+  // Either order matches: the user does not know or care which side was dealt as `a`.
   assert.equal(markConfounded({ a: 'dark', b: 'light' }, ['ground'], { home }), 1);
   const rows = readComparisons({ home });
-  assert.equal(rows.length, 2, 'nothing is removed; his judgement is still on file');
+  assert.equal(rows.length, 2, 'nothing is removed; the judgement is still on file');
   assert.deepEqual(rows[0].confounded, ['ground']);
   assert.equal(rows[0].outcome, 'b', 'and the verdict itself is untouched');
   assert.equal('confounded' in rows[1], false, 'the other comparison is left alone');
@@ -549,8 +549,8 @@ test('--migrate-screens reports copied candidates and is idempotent', () => with
 
 test('--profile exits 3 with a plain message before anyone has been asked anything', () => withHome((home) => {
   const result = cli(['--profile'], home);
-  // Not an empty profile: printed from nothing it reads as "he has no preferences",
-  // when the truth is that nobody has asked him yet.
+  // Not an empty profile: printed from nothing it reads as "the user has no preferences",
+  // when the truth is that nobody has asked them yet.
   assert.equal(result.status, 3);
   assert.match(result.stderr, /not enough taste yet/);
   assert.equal(result.stdout, '');

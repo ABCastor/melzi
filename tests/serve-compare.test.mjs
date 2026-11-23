@@ -185,7 +185,7 @@ describe('serve-compare', () => {
     }
   });
 
-  it('records a pinned annotation, carries it into the verdict, and reports it in his words', async () => {
+  it('records a pinned annotation, carries it into the verdict, and reports it in the words the user typed', async () => {
     const { dir, payloadPath } = workspace({ profile: 'prefers generous whitespace\ndislikes three-column layouts', comparisons: 4, steer: true });
     const before = comparisons().length;
     const url = await start(dir, payloadPath, 'ann');
@@ -195,7 +195,7 @@ describe('serve-compare', () => {
       assert.ok(nonce, 'the page embeds its write nonce');
 
       // The six chips exist because typing is friction, and the free-text field
-      // exists because his real feedback does not fit six buttons.
+      // exists because the user's real feedback does not fit six buttons.
       for (const label of ['Keep this', 'Too loud', 'Too big', 'Too small', 'Remove this', 'Confusing']) {
         assert.ok(html.includes(label), `${label} chip is offered`);
       }
@@ -209,7 +209,7 @@ describe('serve-compare', () => {
       });
       assert.equal(chipped.status, 200);
       const first = (await chipped.json()).pin;
-      assert.equal(first.n, 1, 'pins are numbered so he can refer to one');
+      assert.equal(first.n, 1, 'pins are numbered so the user can refer to one');
       assert.equal(first.kind, 'dislike');
 
       // The free-text pin: the feedback that no button covers.
@@ -222,7 +222,7 @@ describe('serve-compare', () => {
       const second = (await typed.json()).pin;
       assert.equal(second.n, 2);
 
-      // A third pin, then deleted: he must be able to take back a pin.
+      // A third pin, then deleted: the user must be able to take back a pin.
       const spare = (await (await post(url, '/annotate', {
         nonce, candidate: 'swiss-timetable', frame: 1, kind: 'keep', text: 'keep this', point: { x: 0.7, y: 0.7 },
         target: { selector: 'main', text: 'ARRIVALS', rect: { x: 0, y: 0, w: 1, h: 1 } },
@@ -233,7 +233,7 @@ describe('serve-compare', () => {
 
       const remaining = (await (await fetch(new URL('/annotations', url))).json()).annotations;
       assert.deepEqual(remaining.map((x) => x.text), ['too loud', second.text]);
-      // Deleting pin 3 must not renumber the survivors under him.
+      // Deleting pin 3 must not renumber the survivors under the user.
       const fourth = (await (await post(url, '/annotate', {
         nonce, candidate: 'wpa-park-poster', frame: 0, kind: 'keep', text: 'keep this', point: { x: 0.2, y: 0.9 },
         target: { selector: 'main > section:nth-of-type(1)', text: 'Layers', rect: { x: 0, y: 0.8, w: 1, h: 0.2 } },
@@ -269,7 +269,7 @@ describe('serve-compare', () => {
 
       // A model reading this stdout should not have to parse a blob to find the one
       // sentence that decides the next build.
-      assert.match(collected.out, /HIS WORDS: #2 swiss-timetable \(note\) @ main > section:nth-of-type\(2\) > h2 "Triangles" :: I don't like the two triangles/);
+      assert.match(collected.out, /USER'S WORDS: #2 swiss-timetable \(note\) @ main > section:nth-of-type\(2\) > h2 "Triangles" :: I don't like the two triangles/);
       assert.match(collected.out, /outrank any general taste profile/);
       assert.match(collected.out, /^serve-compare: verdict recorded in the taste store$/m);
 
@@ -285,7 +285,7 @@ describe('serve-compare', () => {
     }
   });
 
-  it('refuses an unsigned write, so a framed screen cannot forge his feedback or his verdict', async () => {
+  it('refuses an unsigned write, so a framed screen cannot forge feedback or a verdict from the user', async () => {
     const { dir, payloadPath } = workspace();
     const url = await start(dir, payloadPath, 'gate');
     try {
@@ -327,12 +327,12 @@ describe('serve-compare', () => {
       assert.match(html, /<button id="tie">Tie<\/button>/);
       assert.match(html, /<button id="prefer-b">Prefer right<\/button>/);
       // The rule that must never soften: asked to score, a non-designer produces
-      // noise dressed as data; asked to choose, he produces a real bit.
+      // noise dressed as data; asked to choose, the user produces a real bit.
       assert.doesNotMatch(html, /type="range"/);
       assert.doesNotMatch(html, /<input[^>]*type="number"/);
       assert.doesNotMatch(html, /Intuition session/, 'a plain serve-compare invocation stays untimed');
 
-      // He watches his own taste form as he clicks, and the count next to it is the
+      // The user watches their own taste form as they click, and the count next to it is the
       // honest one, so a profile built on one comparison cannot read as settled.
       assert.match(html, /prefers generous whitespace\nneutral on serif vs sans/);
       assert.match(html, /class="profile-count">1 comparison</);
@@ -400,7 +400,7 @@ describe('serve-compare', () => {
   // Found by driving the real page in Chromium, not by any assertion here: a
   // free-text annotation's kind is literally "note", so an unprefixed class made the
   // pin dot a `.note`, and the note-list box styling below it in the sheet won on
-  // equal specificity. His own words are the annotation that matters most and their
+  // equal specificity. The user's own words are the annotation that matters most and their
   // pin was the one that rendered wrong. This is implementation-coupled on purpose:
   // it guards one collision that already happened, in the one place it can happen.
   it('pin kind classes are namespaced, so a "note" pin cannot inherit the note-list box', async () => {
@@ -449,12 +449,12 @@ describe('serve-compare', () => {
     }
   });
 
-  // The detached path is the one he actually uses: a table left running under a key,
+  // The detached path is the one the user actually uses: a table left running under a key,
   // collected later with --wait. Blocking mode being covered is not coverage of this,
   // and the failure and --no-record cases below both assert an ABSENCE, which a broken
   // recorder would satisfy just as well as a working one. This is the only test that
   // fails if detached recording silently stops working.
-  it('records in detached mode, which is the flow he uses', async () => {
+  it('records in detached mode, which is the flow the user uses', async () => {
     const { dir, payloadPath } = workspace();
     const before = comparisons().length;
     const url = await start(dir, payloadPath, 'detached-record');

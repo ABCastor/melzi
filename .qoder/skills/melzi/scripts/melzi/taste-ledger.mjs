@@ -1,5 +1,5 @@
 /**
- * The taste ledger: keep what he picked, and what he refused.
+ * The taste ledger: keep what the user picked, and what they refused.
  *
  * FORK-ONLY. Upstream has no equivalent, so this file carries zero merge burden.
  * The only patch it needs in an upstream file is two lines in serve-question.mjs
@@ -15,11 +15,11 @@
  * needs the taste kept as data.
  *
  * WHAT IT RECORDS, AND WHY THE REFUSALS MATTER MORE THAN THE PICK. A pick is one
- * bit of information about a hand of two or three. The options he did NOT take,
+ * bit of information about a hand of two or three. The options the user did NOT take,
  * named, are the rest of it, and a re-roll is a refusal of the entire hand, which
  * is the strongest signal the table can produce. "Not that" is also the judgement a
- * non-designer makes most reliably: he has said plainly he will never be able to
- * say what is good, and he does not need to be in order to say that is not it. So
+ * non-designer makes most reliably: the user has said plainly they will never be able to
+ * say what is good, and they do not need to be in order to say that is not it. So
  * every line carries the refused labels and lineages, not just the chosen one.
  *
  * WHAT IT DELIBERATELY DOES NOT DO. It does not act on the data. Nothing reads
@@ -35,7 +35,7 @@
  * carries `project` so a single project can still be filtered out.
  *
  * FAILURE POLICY. Never break the question flow. Every entry point swallows its
- * own errors: a full disk or a read-only home must not cost him his answer.
+ * own errors: a full disk or a read-only home must not cost the user their answer.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -55,7 +55,7 @@ function slim(option) {
   if (!option) return null;
   const out = { id: option.id ?? null, label: option.label ?? null };
   if (option.lineage) out.lineage = option.lineage;
-  // A genesis option's screen is the artifact he actually judged, so its path is
+  // A genesis option's screen is the artifact the user actually judged, so its path is
   // identity, not noise, even after the file itself is gone.
   if (option.screen) out.screen = option.screen;
   return out;
@@ -87,7 +87,7 @@ export function buildEntry({ optionId, steer, options, title, project, at }) {
     chosen,
     refused,
   };
-  // Only record a steer when he actually typed one. An empty string is not a signal.
+  // Only record a steer when the user actually typed one. An empty string is not a signal.
   const trimmed = typeof steer === 'string' ? steer.trim() : '';
   if (trimmed) entry.steer = trimmed;
   return entry;

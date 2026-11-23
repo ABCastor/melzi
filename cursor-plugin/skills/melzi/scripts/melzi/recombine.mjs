@@ -15,15 +15,15 @@
  *
  * THE PART THAT CARRIES THE WHOLE FEATURE. `keptRegions` gathers keep-annotations
  * from comparisons the candidate LOST. That is not an edge case, it is the normal
- * case and the entire reason he asked for it: he rejects a screen as a whole and
+ * case and the entire reason the feature exists: the user rejects a screen as a whole and
  * salvages one part of it. If the loss discarded the salvage, the annotation would be
  * an expensive way of doing nothing. Everything else in this file exists to carry
- * those regions, in his exact words, into the brief.
+ * those regions, in the user's exact words, into the brief.
  *
  * WHY THE DIVERSITY GUARD IS NOT OPTIONAL. The two highest-strength candidates are
  * usually near-twins, because a candidate wins by being close to what already won.
  * Crossing twins produces a third twin, the population's variety collapses, and the
- * tool goes back to dealing him one world with three names. So parent selection
+ * tool goes back to dealing the user one world with three names. So parent selection
  * measures the distance between attribute vectors and refuses a parent that sits on
  * top of one already chosen. When there are no vectors to measure, the guard
  * ABSTAINS rather than blocks: absence of a vector is not evidence of similarity, and
@@ -37,8 +37,8 @@
  * avoid, and the invariants that hold whatever happens.
  *
  * FAILURE POLICY. Every entry point swallows its own errors and answers null or an
- * empty string, so a broken or unreadable taste store costs him a recorded child and
- * never costs him the run. The sibling modules are imported outright rather than
+ * empty string, so a broken or unreadable taste store costs the user a recorded child and
+ * never costs them the run. The sibling modules are imported outright rather than
  * resolved defensively: they ship in this same directory, so a missing one is a
  * packaging bug that should fail loudly at load, not a runtime condition that turns
  * `registerChild` into a silent no-op and quietly stops recording lineage.
@@ -156,7 +156,7 @@ export function selectParents({
   }
 
   // Better a near-twin than no second parent: a recombination needs two, and a run
-  // that produces nothing teaches him nothing. If the guard starved the selection,
+  // that produces nothing teaches the user nothing. If the guard starved the selection,
   // refill in strength order and say so in `relaxed` so the collapse is visible.
   const relaxed = [];
   if (parents.length < wanted) {
@@ -194,8 +194,8 @@ function targetKey(target) {
  * Repeats are folded into one region with a `times` count, because saying the same
  * thing about the same element three times is a stronger instruction than saying it
  * once, and three identical paragraphs in the brief are just noise to the author. A
- * region he asked to keep on a screen he lost is reported as `outcome:'lost'` even if
- * he also kept it on a screen that won: the salvage framing is the one the author
+ * region marked keep on a screen that lost is reported as `outcome:'lost'` even if
+ * it was also kept on a screen that won: the salvage framing is the one the author
  * needs to read.
  */
 function regionsOfKind(comparisons, kind, candidate) {
@@ -236,7 +236,7 @@ function regionsOfKind(comparisons, kind, candidate) {
 }
 
 /**
- * Every `kind:'keep'` annotation for a candidate, INCLUDING the ones he made while
+ * Every `kind:'keep'` annotation for a candidate, INCLUDING the ones the user made while
  * rejecting it. This is the function the requirement is about.
  */
 export function keptRegions(comparisons, { candidate } = {}) {
@@ -275,8 +275,8 @@ function weightMap(weights) {
  * both parents share is not reported as a contribution: it would arrive in the child
  * either way, and naming it wastes the author's attention.
  *
- * Where the learned weights exist, an attribute he is known to prefer outranks an
- * equally distinctive one he is neutral about. Where they do not, distinctiveness is
+ * Where the learned weights exist, an attribute the user is known to prefer outranks an
+ * equally distinctive one they are neutral about. Where they do not, distinctiveness is
  * all there is and the line says so.
  */
 function contributionsFor(id, others, vectors, attrLabels, weights, limit = 4) {
@@ -305,7 +305,7 @@ function renderRegion(index, region, labels, parentIds) {
   const lines = [];
   const source = labelFor(region.candidate, labels);
   const salvage = region.outcome === 'lost'
-    ? ' He rejected this screen in comparison and still wanted this part.'
+    ? ' The user rejected this screen in comparison and still wanted this part.'
     : '';
   const stray = parentIds.has(region.candidate) ? '' : ' This candidate is not a parent; carry the region across anyway.';
   lines.push(`[${index}] from ${source}.${salvage}${stray}`);
@@ -317,13 +317,13 @@ function renderRegion(index, region, labels, parentIds) {
   if (text) lines.push(`    element text: "${text}"`);
   if (!selector && !text && rect && Number.isFinite(rect.x)) {
     // No selector survived the click, so the only handle left is where on the screen
-    // he pointed. Normalized to the viewport, so it reads the same at any width.
+    // the user pointed. Normalized to the viewport, so it reads the same at any width.
     lines.push(`    position: x ${Number(rect.x).toFixed(2)}, y ${Number(rect.y).toFixed(2)} of the viewport`);
   }
-  // His exact words, never paraphrased: they are the only part of this brief that is
-  // literally his, and a summary of them is a summary of the taste we are learning.
-  if (region.text) lines.push(`    he said: "${region.text}"`);
-  if (region.times > 1) lines.push(`    he said this ${region.times} times, on different comparisons`);
+  // The user's exact words, never paraphrased: they are the only part of this brief that is
+  // literally theirs, and a summary of them is a summary of the taste we are learning.
+  if (region.text) lines.push(`    the user said: "${region.text}"`);
+  if (region.times > 1) lines.push(`    the user said this ${region.times} times, on different comparisons`);
   return lines;
 }
 
@@ -363,8 +363,8 @@ export function buildRecombinationBrief({
   out.push('RECOMBINATION BRIEF', '');
   out.push(
     'Author ONE new screen by crossing the parents below. This is a population step:',
-    'the parents scored highest under his own pairwise choices, and the regions quoted',
-    'further down are parts he asked to keep, including parts of screens he otherwise',
+    'the parents scored highest under the user\'s own pairwise choices, and the regions quoted',
+    'further down are parts they asked to keep, including parts of screens they otherwise',
     'rejected. Do not average the parents into a compromise, and do not soften either',
     'one. Take the named strength from each and make them live on one screen.',
   );
@@ -382,7 +382,7 @@ export function buildRecombinationBrief({
     out.push(`${i + 1}. ${labelFor(entry.id, labels)}${facts.length ? `  ${facts.join(', ')}` : ''}`);
 
     // What the learned profile predicts for this parent, so the author can see which
-    // one the model expects him to like and by how little.
+    // one the model expects the user to like and by how little.
     if (vectors?.[entry.id] && weightsById.size) {
       const score = scoreDesign(vectors[entry.id], weights);
       if (Number.isFinite(score)) out.push(`   predicted taste score ${score.toFixed(2)}`);
@@ -394,25 +394,25 @@ export function buildRecombinationBrief({
       out.push(`   contributes: ${contributions.join('; ')}`);
     } else {
       // Honest about the gap. A model told nothing about a parent invents a reason
-      // to prefer one, and the invented reason is not his taste.
+      // to prefer one, and the invented reason is not the user's taste.
       out.push('   contributes: no attribute vector on file for this parent. Read the screen');
       out.push('   itself and take what is strongest in it rather than guessing from the label.');
     }
   });
 
   const keptRows = Array.isArray(kept) ? kept.filter(Boolean) : [];
-  out.push('', 'PRESERVE THESE REGIONS, IN HIS WORDS');
+  out.push('', 'PRESERVE THESE REGIONS, IN THE USER\'S WORDS');
   if (!keptRows.length) {
-    out.push('He has not marked anything to keep yet. Nothing is pinned, so the whole screen is yours.');
+    out.push('The user has not marked anything to keep yet. Nothing is pinned, so the whole screen is yours.');
   } else {
-    out.push('These are quoted exactly. Find each element, keep what he named about it, and let');
+    out.push('These are quoted exactly. Find each element, keep what the user named about it, and let');
     out.push('the rest of the screen change around it.', '');
     keptRows.forEach((region, i) => out.push(...renderRegion(i + 1, region, labels, parentIds)));
   }
 
   const dislikedRows = Array.isArray(disliked) ? disliked.filter(Boolean) : [];
   if (dislikedRows.length) {
-    out.push('', 'AVOID THESE, HE POINTED AT THEM');
+    out.push('', 'AVOID THESE, THE USER POINTED AT THEM');
     out.push('Do not reproduce these in the child, and do not reproduce a near variant of them.', '');
     dislikedRows.forEach((region, i) => out.push(...renderRegion(i + 1, region, labels, parentIds)));
   }
@@ -426,7 +426,7 @@ export function buildRecombinationBrief({
     // is the honest version, and it tells the author what to lean on instead.
     out.push('No profile has formed yet: there are too few comparisons. Lean on the quoted');
     out.push('regions and the invariants below, and make the child clearly different from');
-    out.push('its parents so the next comparison is worth him answering.');
+    out.push('its parents so the next comparison is worth the user answering.');
   }
 
   const block = renderSignature(signature);
@@ -491,7 +491,7 @@ export function buildChildCandidate({ parents, id, label, screen, world, project
 /**
  * Append the child to the candidate registry so its lineage is inspectable later:
  * without `parents` on the record there is no way to ask whether recombination ever
- * produced anything he preferred, which is the only question that decides whether
+ * produced anything the user preferred, which is the only question that decides whether
  * this whole step is worth keeping.
  *
  * Returns the written record, or null when it was refused or the store is absent.

@@ -10,7 +10,7 @@
  * local catalog dir, then the roll API at impeccable.style, then a degraded
  * assignment-only seed with no challengers at all. We do not have the private
  * catalog, so on this machine the middle branch is the only one that ever fires:
- * every single pick round is one HTTPS request away from serving him a seed with
+ * every single pick round is one HTTPS request away from serving the user a seed with
  * no worlds in it. A sandboxed shell, a flight, a service outage, or the day
  * that endpoint changes shape all produce the same outcome, and the failure is
  * silent in the sense that matters: the run still completes, just without the
@@ -46,10 +46,10 @@
  * describes an IDENTITY: palette, material, type, texture, atmosphere. Not one of
  * them names the page's SHAPE. So when a hand is dealt, the three cards routinely
  * differ in colour and mood and sit on the same underlying layout, which is the
- * opposite of what dealHand exists to do. It costs more than a dull hand. His
- * clicks are the scarcest input in this whole system: he has said he will never
+ * opposite of what dealHand exists to do. It costs more than a dull hand. The user's
+ * clicks are the scarcest input in this whole system: they have said they will never
  * be the design reviewer, so a preference has to be inferred from which of two
- * screens he takes, and the pairwise loop deliberately deals the pair whose
+ * screens they take, and the pairwise loop deliberately deals the pair whose
  * outcome is least predictable in order to buy the most per click. A pool that
  * varies on one axis caps that ceiling no matter how cleverly the pair is chosen,
  * because two options that differ only in mood can only ever teach mood.
@@ -58,8 +58,8 @@
  * Same coral and same serif, one screen a bento grid and the other a long
  * document, and now a single click separates two things at once. The structures
  * are a small curated list rather than anything generated, because the value is
- * that the axis is legible: a shape he keeps refusing is a fact anyone can read
- * off the ledger, where "he dislikes world 7" is not.
+ * that the axis is legible: a shape the user keeps refusing is a fact anyone can read
+ * off the ledger, where "the user dislikes world 7" is not.
  *
  * HOME, NOT PROJECT. `~/.impeccable/worlds/pool.jsonl`, beside the taste ledger,
  * because a world dealt in one project is just as good in the next one.
@@ -397,7 +397,7 @@ function magnitude(bag) {
  * flat 0.20 when both carry the same macrostructure.
  *
  * WHY 0.20, ABOVE THE TIER BONUS. The well tier is a fact about where a world
- * came from in the catalog. The macrostructure is a fact about what he actually
+ * came from in the catalog. The macrostructure is a fact about what the user actually
  * sees, and shape is what registers first, before palette, texture, or type: two
  * bento grids in one hand read as one option shown twice however far apart their
  * moods are. The number also has to do real work inside dealHand's greedy loop,

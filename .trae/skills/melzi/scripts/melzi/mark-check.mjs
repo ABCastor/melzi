@@ -52,7 +52,7 @@
  * WHY THE SEVERITY WORDS DIFFER FROM lib/staleness.mjs. That module's `auto` /
  * `mention` / `route` name what the doctor pass should DO about an artifact, and
  * `auto` means "rewrite it silently on the next write". None of that fits here: the
- * roadmap rules out anything that rewrites his surfaces without showing him, and
+ * roadmap rules out anything that rewrites the user's surfaces without showing them, and
  * "this line disappears at icon size" is not a thing to fix silently. So the words
  * are `fail` (the mark is broken at the size it will be used), `warn` (worth knowing
  * before it becomes a habit), and `unchecked` (I could not tell you, here is why).
@@ -66,7 +66,7 @@
  * moves.
  *
  * READ-ONLY BY DESIGN. `propagationTargets` reports and never rewrites: the assets
- * it finds are his, in projects this tool was not asked to edit.
+ * it finds are the user's, in projects this tool was not asked to edit.
  *
  * FAILURE POLICY. Nothing here throws into a caller's flow. Unparseable input,
  * a missing signature, an unreadable directory: each becomes a finding.
@@ -81,7 +81,7 @@ import { loadSignature } from './signature.mjs';
 export const MARK_SEVERITIES = ['fail', 'warn', 'unchecked'];
 
 /**
- * The icon size the whole check is written against. His note judged Direction B at
+ * The icon size the whole check is written against. The user's note judged Direction B at
  * 16px because that is where a mark stops being a picture and becomes a handful of
  * pixels: the favicon, the macOS notification icon, the menu bar.
  */
@@ -95,8 +95,8 @@ export const ICON_PX = 16;
 export const MIN_STROKE_DEVICE_PX = 1;
 
 /**
- * A stroke fainter than this is decoration, not structure. The number comes from his
- * own approved icon, which carries a 6%-opacity rim highlight that is invisible at
+ * A stroke fainter than this is decoration, not structure. The number comes from the
+ * user's own approved icon, which carries a 6%-opacity rim highlight that is invisible at
  * 16px on purpose.
  */
 const FAINT_STROKE_ALPHA = 0.2;
@@ -213,7 +213,7 @@ const INK_KEY_RE = /^(text|ink|fg|foreground)/i;
  * `primary` marker in the schema, so it is resolved in this order, and the
  * resolution is REPORTED in the finding rather than assumed silently:
  *   1. an invariant literally named primary / brand / mark,
- *   2. the invariant whose prose role says it leads (his coral's role reads
+ *   2. the invariant whose prose role says it leads (the user's coral's role reads
  *      "leads: the identity and pay-attention colour"),
  *   3. the first saturated colour in the file.
  */
@@ -818,7 +818,7 @@ export function checkMark(svgSource, { signature = null, path: filePath = null }
       .filter((s) => Number.isFinite(s.devicePx) && s.devicePx > 0 && s.devicePx < MIN_STROKE_DEVICE_PX)
       .sort((a, b) => a.devicePx - b.devicePx);
     // A stroke this faint is a large-format detail, not a line that carries the
-    // drawing. His own approved icon has one: a 2-unit rim on a 1024 frame at 6%
+    // drawing. The user's own approved icon has one: a 2-unit rim on a 1024 frame at 6%
     // opacity. Reporting that as a broken mark would be a false alarm, and a check
     // that cries wolf on the reference mark is a check nobody keeps running.
     const structural = thin.filter((s) => s.alpha >= FAINT_STROKE_ALPHA);
@@ -887,8 +887,8 @@ export function checkMark(svgSource, { signature = null, path: filePath = null }
   // 3. Brand-hue dominance among the CHROMATIC ink, and the vanishing-colour case.
   //
   // WHY CHROMATIC AND NOT ALL NON-BACKGROUND INK, which is the obvious reading and
-  // the wrong one. His signature is one bold colour LEADING A NEAR-SILENT GREYSCALE
-  // FIELD, and his own approved mark is a neutral grey arch carrying a single coral
+  // the wrong one. The user's signature is one bold colour LEADING A NEAR-SILENT GREYSCALE
+  // FIELD, and the user's own approved mark is a neutral grey arch carrying a single coral
   // node: the grey is most of the ink on purpose. A check that counted the field as
   // a rival would fail the very mark it was written from, which is precision inside
   // the wrong frame. The greys are the stage. The question that actually decides
@@ -1072,7 +1072,7 @@ function thickenStrokes(source, scale16) {
  *
  * These are the four an asset set is always missing, and each one is a mechanical
  * transformation of the original rather than a redraw. Nothing here invents a shape.
- * The four exist because his own note names the places the mark has to survive: the
+ * The four exist because the user's own note names the places the mark has to survive: the
  * app icon, the notification icon, the site, a dark ground, and 16px.
  */
 export function markVariants(svgSource, { signature = null } = {}) {
@@ -1110,7 +1110,7 @@ export function markVariants(svgSource, { signature = null } = {}) {
   //    which is exactly right for a signature whose lead colour is the same in both
   //    modes and whose neutrals are not.
   //
-  //    One hex can mean two things: in his own signature #1A1A1A is BOTH the dark
+  //    One hex can mean two things: in the user's own signature #1A1A1A is BOTH the dark
   //    background and the light-mode text. A last-one-wins map would silently pick
   //    the wrong reading and turn the ground into body text. Background pairs go
   //    first and first-wins, because a reversal is a statement about the ground, and
@@ -1252,8 +1252,8 @@ function walk(rootDir) {
 
 /**
  * Framework and language logos that ship with a scaffold. A guess, and named as one
- * in the finding rather than silently suppressed: telling him to retokenise the
- * JavaScript logo to his coral is worse than useless, and pretending the file was
+ * in the finding rather than silently suppressed: telling the user to retokenise the
+ * JavaScript logo to their coral is worse than useless, and pretending the file was
  * never there is the silent pass this module exists to refuse.
  */
 const THIRD_PARTY_LOGO_RE = /^(tauri|vite|vitejs|react|vue|svelte|angular|next|nuxt|astro|solid|javascript|typescript|node|npm|bun|deno|electron|flutter|rust|python|github|google|apple|figma)([-_.].*)?\.svg$/i;
@@ -1294,7 +1294,7 @@ function carriesMark(text) {
  * Find every file in a project that plausibly carries the mark or the brand colour,
  * and report the ones that do not match the current signature.
  *
- * This is the half of the job with the highest proven value, because his own note
+ * This is the half of the job with the highest proven value, because the user's own note
  * records the failure it prevents: a notification icon and a landing page carrying a
  * REJECTED colour and a DROPPED mark for months, while the app beside them was fully
  * on-brand. Nobody forgot; nothing was looking.

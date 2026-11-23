@@ -1,10 +1,10 @@
 // Real rendered screens on the decision page. FORK-ONLY delta inside
 // skill/scripts/serve-question.mjs.
 //
-// What these tests are really guarding: the decision round asks him to choose a
+// What these tests are really guarding: the decision round asks the user to choose a
 // direction, and a card is a picture of one. When the run has actually built the
 // first viewport, the card should show that page, live, and the answer should hand
-// the file back so the build matches what he approved instead of reinterpreting
+// the file back so the build matches what the user approved instead of reinterpreting
 // art. So the assertions are about the whole path of one screen: registered at
 // load, framed on the card, servable as html and only from the registry, and named
 // in the ANSWER with the directive that it outranks the card.
@@ -127,7 +127,7 @@ describe('serve-question rendered screens', { skip: !BIN && ENGINE_MISSING_MESSA
       assert.equal((await fetch(new URL('/screen/1', url))).status, 404);
 
       // A screen round refuses an answer without the page's nonce: a framed
-      // screen firing a bare POST cannot forge his choice. The key rides along
+      // screen firing a bare POST cannot forge the user's choice. The key rides along
       // so this reaches OUR nonce gate rather than stopping at upstream's
       // session-key check (401), which only guards the detached mode; without
       // --key the nonce is the whole defence.

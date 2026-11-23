@@ -23,8 +23,8 @@
  * HOME, NOT PROJECT, AND DELIBERATELY OUTSIDE THIS REPO. The store is
  * `~/.impeccable/signature.json` for the same reason the taste ledger lives there:
  * a signature is a property of the person, not of a checkout, and it should hold
- * across every project he starts. The second reason is specific to this repo, which
- * is a public fork of someone else's product: his personal brand constants must
+ * across every project the user starts. The second reason is specific to this repo, which
+ * is a public fork of someone else's product: the user's personal brand constants must
  * never be committed into it, not even as a fixture. The tests use a tmp home.
  *
  * NO VALUES IN THIS FILE. The module knows the SHAPE, never the hexes. Someone

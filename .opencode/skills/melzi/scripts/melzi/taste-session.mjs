@@ -6,7 +6,7 @@
  *
  * WHY THIS EXISTS. The taste system arrived as four correct modules with a hole
  * between them. `taste-store.mjs` knows which pair to deal and how to record an
- * outcome, `serve-compare.mjs` knows how to put two screens in front of him and
+ * outcome, `serve-compare.mjs` knows how to put two screens in front of the user and
  * collect a verdict, and neither knows about the other on purpose: coupling the
  * server to the store would have made the server untestable without a home
  * directory. So the glue was left unowned, and unowned glue is where a loop
@@ -15,12 +15,12 @@
  * WHAT IT DOES. Three verbs, each one step of the loop in [taste.md]:
  *
  *   --deal     pick the next pair, render the current profile, and print the
- *              payload serve-compare wants. The profile goes in so he watches
- *              his own taste form while he clicks, which is the thing that makes
+ *              payload serve-compare wants. The profile goes in so the user watches
+ *              their own taste form while they click, which is the thing that makes
  *              the loop feel like it is going somewhere rather than like a quiz.
  *   --record   take a serve-compare ANSWER line (stdin or --answer) and append
  *              the comparison, annotations and all.
- *   --profile  print the readable profile plus any cycles, for showing him.
+ *   --profile  print the readable profile plus any cycles, for showing the user.
  *
  * WHAT IT DELIBERATELY DOES NOT DO. It does not name attributes. That step is a
  * model looking at two screens and saying how they differ, and no script can do
@@ -30,7 +30,7 @@
  *
  * FAILURE POLICY. Nothing here throws into a caller's flow. A missing store, an
  * unparsable answer, or a pool too small to deal from prints one plain line and
- * exits non-zero; it never takes his verdict down with it.
+ * exits non-zero; it never takes the user's verdict down with it.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -76,7 +76,7 @@ export function currentProfile({ home = os.homedir() } = {}) {
     const timing = renderResponseTimeProfile(comparisons, { attributes, vectors });
     const text = `${ranking}\n\n${timing}`;
 
-    // Cycles are surfaced, never smoothed. A cycle means he judged on two
+    // Cycles are surfaced, never smoothed. A cycle means the user judged on two
     // criteria at once, and the tension is the finding.
     const candidates = readCandidates({ home });
     const cycles = detectCycles(comparisons, { candidates }).map((cycle) => ({
@@ -89,7 +89,7 @@ export function currentProfile({ home = os.homedir() } = {}) {
   }
 }
 
-/** Build the serve-compare payload for the next pair worth showing him. */
+/** Build the serve-compare payload for the next pair worth showing the user. */
 function option(candidate) {
   return { id: candidate.id, label: candidate.label ?? candidate.id, screen: candidate.screen ?? null };
 }
@@ -201,7 +201,7 @@ export function dealPayload({ home = os.homedir(), project = null, intuition = n
 
 /**
  * Record one verdict. `answer` is serve-compare's parsed answer object; the
- * annotations come through untouched because his own words are the most
+ * annotations come through untouched because the user's own words are the most
  * specific thing the system ever gets and paraphrasing them loses the value.
  */
 export function recordVerdict(answer, { home = os.homedir(), project = null, now } = {}) {
@@ -327,11 +327,11 @@ if (invokedAsScript()) {
     process.stdout.write(`${profile.text}\n`);
     for (const cycle of profile.cycles) {
       process.stdout.write(`\nCYCLE: ${cycle.cycle.join(' > ')} > ${cycle.cycle[0]}\n`);
-      process.stdout.write('He judged these on two criteria at once. Attributes in tension:\n');
+      process.stdout.write('The user judged these on two criteria at once. Attributes in tension:\n');
       for (const t of cycle.tensions) {
         process.stdout.write(`  - ${t.label ?? t.attribute}\n`);
       }
-      process.stdout.write('Ask which one matters on this surface. Do not resolve it for him.\n');
+      process.stdout.write('Ask which one matters on this surface. Do not resolve it for them.\n');
     }
     process.exit(profile.comparisons > 0 ? 0 : 3);
   }

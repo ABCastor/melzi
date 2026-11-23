@@ -4,7 +4,7 @@
 // the decider that they cannot check. They cannot review a design, which is the
 // whole reason the tool learns from binary choices, and it is also
 // the reason a wrong answer here is expensive: "you prefer generous whitespace"
-// arrives as a readable, confident claim with nothing behind it that he could
+// arrives as a readable, confident claim with nothing behind it that the user could
 // audit. So the assertions below are about correctness under conditions we know
 // the truth for (synthetic data from known strengths and known weights), about
 // the two failure modes that produce confident nonsense (an unregularized fit
@@ -167,7 +167,7 @@ test('a registered candidate nobody compared still appears, at the average', () 
 const ATTRIBUTES = [
   { id: 'airy', label: 'generous whitespace', description: 'more room around everything', firstSeen: '2026-07-28T09:00:00.000Z', comparisons: 0 },
   { id: 'dense', label: 'three-column layouts', description: 'more packed into the fold', firstSeen: '2026-07-28T09:00:00.000Z', comparisons: 0 },
-  { id: 'noise', label: 'serif vs sans', description: 'an axis he has no view on', firstSeen: '2026-07-28T09:00:00.000Z', comparisons: 0 },
+  { id: 'noise', label: 'serif vs sans', description: 'an axis the user has no view on', firstSeen: '2026-07-28T09:00:00.000Z', comparisons: 0 },
 ];
 
 const TRUE_WEIGHTS = { airy: 2.5, dense: -2.5, noise: 0 };
@@ -289,12 +289,12 @@ test('with no comparisons every attribute is neutral and nothing pretends otherw
 /* ---------------------------------------------------------------- *
  * Confounded comparisons
  *
- * He caught this one himself: he compared two screens where one was light and
+ * The user caught this one themselves: they compared two screens where one was light and
  * the other dark, not because either was designed that way but because one had
- * no mode control at all. The fit would have read "he prefers dark grounds" off
+ * no mode control at all. The fit would have read "the user prefers dark grounds" off
  * a difference nobody chose. That is worse than thin evidence, it is confident
  * evidence about an axis that was never tested, and it is exactly the failure a
- * person who cannot review design has no way to catch. He caught this one. The
+ * person who cannot review design has no way to catch. The user caught this one. The
  * next one has to be caught here.
  * ---------------------------------------------------------------- */
 
@@ -316,7 +316,7 @@ test('a confounded attribute learns nothing from that comparison while the rest 
   const marked = rows.map((r) => ({ ...r, confounded: ['ground'] }));
   const options = { vectors: MODE_VECTORS, attributes: MODE_ATTRIBUTES };
 
-  // Without the mark the fit does what he was afraid of: it states a preference
+  // Without the mark the fit does what the user was afraid of: it states a preference
   // about the one axis nobody chose.
   const naive = fitAttributeWeights(rows, options);
   assert.ok(weightOf(naive, 'ground').weight > 0, `the uncontrolled axis picks up a weight: ${weightOf(naive, 'ground').weight}`);
@@ -333,7 +333,7 @@ test('a confounded attribute learns nothing from that comparison while the rest 
   assert.equal(weightOf(fit, 'airy').confounded, 0, 'only the named axis is set aside');
   assert.equal(fit.comparisons, 8, 'the comparison is not thrown away, it is only disqualified on one axis');
 
-  // And the ranking of the two screens is untouched: he really did prefer that
+  // And the ranking of the two screens is untouched: the user really did prefer that
   // screen, whatever the reason.
   const strengths = fitBradleyTerry(marked, { candidates: ['light', 'dark'] });
   assert.deepEqual(strengths, fitBradleyTerry(rows, { candidates: ['light', 'dark'] }), 'the strength fit never reads the mark');
@@ -397,7 +397,7 @@ test('marking an axis the two screens already matched on is not reported as lost
  * The pre-flight check
  * ---------------------------------------------------------------- */
 
-test('a pair that differs on one axis and matches on the rest is flagged before he clicks', () => {
+test('a pair that differs on one axis and matches on the rest is flagged before the user clicks', () => {
   const flag = flagLikelyConfound(
     { ground: 0, airy: 0.5, dense: 0.4 },
     { ground: 1, airy: 0.55, dense: 0.45 },
@@ -413,7 +413,7 @@ test('a pair that differs on one axis and matches on the rest is flagged before 
 });
 
 test('the missing reading is the real case: one screen simply has no such thing', () => {
-  // His own example. The light screen has no mode control, so it carries no
+  // The user's own example. The light screen has no mode control, so it carries no
   // reading on that axis at all, which is a gap of a full unit.
   const flag = flagLikelyConfound(
     { airy: 0.5, dense: 0.4 },
@@ -500,7 +500,7 @@ test('the profile reads as plain sentences, strongest first and neutrals last', 
   assert.ok(at('generous whitespace') < at('large type'), 'the strongest signal leads');
   assert.ok(at('large type') < at('serif vs sans'), 'weak claims sit above no claim at all');
   assert.ok(text.split('\n').length > 4, 'it is a multi-line report, not one line');
-  // No statistics vocabulary leaks into the part he reads.
+  // No statistics vocabulary leaks into the part the user reads.
   for (const jargon of ['logit', 'coefficient', 'p-value', 'standard error', 'log-likelihood']) {
     assert.equal(text.toLowerCase().includes(jargon), false, `"${jargon}" must not appear`);
   }
@@ -522,7 +522,7 @@ test('the profile says out loud how thin the evidence is', () => {
 
 // An attribute can rest on fewer comparisons than the headline count, and the
 // headline count is the only number anyone reads. Silence there makes a profile
-// look more settled than it is, which is the one thing he cannot check.
+// look more settled than it is, which is the one thing the user cannot check.
 test('the profile says which lines lost evidence to a confound', () => {
   const text = renderProfile({
     weights: [
@@ -572,7 +572,7 @@ test('the limit trims the tail and says how much it trimmed', () => {
 // signal is real, because the penalty holds weights near zero until there is
 // evidence. Meanwhile `scoreDesign` is already ranking designs off those same
 // estimates. If the profile does not say that, an all-neutral report reads as a
-// broken feature and he stops using it before it can learn anything.
+// broken feature and the user stops using it before it can learn anything.
 test('an all-neutral profile explains itself instead of looking broken', () => {
   const quiet = {
     weights: [
@@ -611,7 +611,7 @@ test('a planted three-way loop is detected rather than averaged into a ranking',
   assert.deepEqual(found[0].cycle.slice().sort(), ['a', 'b', 'c']);
   assert.equal(found[0].edges.length, 3);
   for (const edge of found[0].edges) {
-    assert.ok(edge.wins > edge.losses, `every edge points the way he actually chose: ${JSON.stringify(edge)}`);
+    assert.ok(edge.wins > edge.losses, `every edge points the way the user actually chose: ${JSON.stringify(edge)}`);
   }
 });
 
@@ -652,7 +652,7 @@ test('a loop longer than three is still reported, once, as one witness', () => {
   assert.deepEqual(found[0].cycle.slice().sort(), ['a', 'b', 'c', 'd']);
 });
 
-test('cycleTensions names the attribute he was trading off and ignores the constant one', () => {
+test('cycleTensions names the attribute the user was trading off and ignores the constant one', () => {
   const vectors = {
     a: { density: 0.9, warmth: 0.50, serif: 0.5 },
     b: { density: 0.5, warmth: 0.40, serif: 0.5 },
@@ -714,12 +714,12 @@ test('empty and malformed input produces empty results instead of throwing', () 
 
 test('a comparison naming an unregistered candidate still counts', () => {
   // Module 2 appends the comparison and the candidate separately, so a
-  // half-written registry must not silently drop his answer.
+  // half-written registry must not silently drop the user's answer.
   const fit = fitBradleyTerry([cmp('ghost', 'b', 'a')], { candidates: ['b'] });
   assert.deepEqual(fit.strengths.map((s) => s.id), ['ghost', 'b']);
 });
 
-test('a click faster than a person can choose is his weakest evidence, not his strongest', () => {
+test('a click faster than a person can choose is the weakest evidence, not the strongest', () => {
   // Simple visual reaction time alone is 200-250ms, and this is a two-alternative
   // choice over two full page renders, which is slower still. So a sub-150ms answer
   // cannot be ABOUT the screens: it is a double-click, a held key, or a click landing
@@ -734,6 +734,6 @@ test('a click faster than a person can choose is his weakest evidence, not his s
   // considered choice in the ledger.
   assert.ok(
     weightForResponseMs(40) <= weightForResponseMs(20000),
-    'a misfire must never outweigh a choice he actually thought about',
+    'a misfire must never outweigh a choice the user actually thought about',
   );
 });

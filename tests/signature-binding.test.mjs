@@ -94,7 +94,7 @@ function bareHome() {
  * os.tmpdir() so the walk-up finds nothing above it.
  *
  * It carries a PRODUCT.md, because the fallback is deliberately scoped to
- * projects impeccable was actually run in. Without that marker his signature
+ * projects impeccable was actually run in. Without that marker the user's signature
  * would start measuring every colour in every unrelated folder on the machine,
  * including vendored code and other people's repos, and report the difference
  * as drift. Pass `{ initialized: false }` for the un-run case.
@@ -172,7 +172,7 @@ Body prose.
 `;
 
 suite('signature fallback: a project that declares nothing', () => {
-  it('does not flag his coral, in any spelling', () => {
+  it('does not flag the signature coral, in any spelling', () => {
     const home = homeWithSignature();
     // Same colour, four ways. The oklch is the accurate conversion of #FD4E5A
     // (verified against the reference sRGB->OKLab matrices); the engine
@@ -190,7 +190,7 @@ suite('signature fallback: a project that declares nothing', () => {
     assert.deepEqual(ids(findings), []);
   });
 
-  it('does not flag the rest of his locked palette', () => {
+  it('does not flag the rest of the locked palette', () => {
     const home = homeWithSignature();
     const findings = scan(
       `
@@ -382,14 +382,14 @@ suite('failure is silence, never a change of behaviour', () => {
 
 });
 
-suite('signature scope: his projects, not every folder on the machine', () => {
+suite('signature scope: projects the tool ran in, not every folder on the machine', () => {
   const FOREIGN = '.weird { color: #7CFC00; font-family: "Comic Sans MS", cursive; }';
 
   it('stays out of a folder impeccable was never run in', () => {
     const home = homeWithSignature();
     // No PRODUCT.md and no .impeccable: a vendored dependency, a stranger's
     // checkout, a scratch directory. Silence here is the whole point. Without
-    // it every colour in every unrelated repo reads as drift from his palette,
+    // it every colour in every unrelated repo reads as drift from the user's palette,
     // which is noise dressed as enforcement.
     const stranger = scratchProject({}, { initialized: false });
     assert.deepEqual(ids(scan(FOREIGN, { home, project: stranger })), []);

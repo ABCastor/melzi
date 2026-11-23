@@ -299,7 +299,7 @@ test('a duplicated pool line cannot put one world in a hand twice', () => {
 //
 // What these guard: a dealt world describes an identity and never a page shape,
 // so a hand can differ in colour and mood while every card sits on the same
-// layout. His click is the scarce resource in this system, and two options that
+// layout. The user's click is the scarce resource in this system, and two options that
 // differ on one axis can only teach one axis. So the assertions are that the
 // shape is assigned without a coin toss (same world, same shape, always), that
 // it counts in the spread rather than being a label stuck on afterwards, and

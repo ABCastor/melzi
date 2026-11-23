@@ -17,11 +17,11 @@
 //     failure, caught.
 //
 // So the assertions are about findings a person with no design knowledge can act on,
-// and about the checks that must NOT fire: his real mark draws a NEUTRAL arch with a
+// and about the checks that must NOT fire: the user's real mark draws a NEUTRAL arch with a
 // single coral node, so a dominance check that counted grey as a rival colour would
 // fail the very mark it was written from. That case has its own test.
 //
-// Every fixture is authored here and written into a tmp dir. Nothing reads his real
+// Every fixture is authored here and written into a tmp dir. Nothing reads the user's real
 // home, and no brand asset is committed into this public fork.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -42,7 +42,7 @@ import {
   MIN_STROKE_DEVICE_PX,
 } from '../skill/scripts/melzi/mark-check.mjs';
 
-// Mirrors the real ~/.impeccable/signature.json shape. The values are his, the file
+// Mirrors the real ~/.impeccable/signature.json shape. The values are the user's, the file
 // is not: this object never touches disk outside a tmp dir.
 const SIGNATURE = {
   invariants: {
@@ -88,7 +88,7 @@ function fails(findings) {
 }
 
 // ---------------------------------------------------------------------------
-// Fixtures. Each one is a real, renderable SVG in the shape of his actual mark:
+// Fixtures. Each one is a real, renderable SVG in the shape of the user's actual mark:
 // a charcoal ground, a clean arch, and a single glowing node at the crossing.
 // ---------------------------------------------------------------------------
 
@@ -111,7 +111,7 @@ const PASSING = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
 const HAIRLINE = PASSING.replace('stroke-width="4"', 'stroke-width="0.5"');
 
 /**
- * Direction B, as his note describes it: the coral core blended out through a
+ * Direction B, as the user's note describes it: the coral core blended out through a
  * magenta midpoint into Klein blue. The radial bands make the outer colours own most
  * of the coloured ink, which is exactly why the mark stopped reading coral-owned.
  */
@@ -144,10 +144,10 @@ test('a sound mark produces no failures at all', () => {
   assert.deepEqual(fails(findings), [], `unexpected failures: ${JSON.stringify(findings, null, 2)}`);
 });
 
-// The frame question, and the one most likely to be got wrong. His real mark is a
+// The frame question, and the one most likely to be got wrong. The user's real mark is a
 // NEUTRAL arch carrying a single coral node, so grey is most of the ink by design.
 // A dominance check that treated the greyscale field as a rival colour would fail
-// his own approved logo, which is precision inside the wrong frame.
+// the user's own approved logo, which is precision inside the wrong frame.
 test('a neutral field is the stage, not a rival: grey never costs the mark its dominance', () => {
   const findings = checkMark(PASSING, opts);
   assert.equal(ids(findings).includes('mark-brand-hue-minority'), false);
@@ -174,7 +174,7 @@ test('a hairline that disappears at 16px is caught, with the number that proves 
   assert.equal(ids(checkMark(PASSING, opts)).includes('mark-hairline-stroke'), false);
 });
 
-// Calibration, found by running this against his REAL app icon rather than only
+// Calibration, found by running this against the user's REAL app icon rather than only
 // against fixtures written to agree with it. That icon carries a 2-unit rim
 // highlight on a 1024 frame at 6% opacity: invisible at 16px, and deliberately so.
 // Reporting it as a broken mark would be a false alarm on the reference mark, and a
@@ -200,7 +200,7 @@ test('a near-transparent large-format detail is noted, not failed', () => {
   assert.ok(fails(checkMark(opaque, opts)).includes('mark-hairline-stroke'));
 });
 
-// This is the Direction B finding, reproduced mechanically. He rejected it because
+// This is the Direction B finding, reproduced mechanically. The user rejected it because
 // blending Klein into the mark meant coral no longer owned it.
 test('Direction B fails: the brand hue is a minority of the coloured ink', () => {
   const findings = checkMark(DIRECTION_B, opts);
@@ -213,7 +213,7 @@ test('Direction B fails: the brand hue is a minority of the coloured ink', () =>
   assert.match(minority.summary, /Greys are excluded/i);
 
   // The magenta the palette does not even contain is reported too, by a different
-  // check. Both of his objections to Direction B fire, separately.
+  // check. Both of the user's objections to Direction B fire, separately.
   assert.ok(failed.includes('mark-off-signature-colour'));
   assert.match(findings.find((f) => f.id === 'mark-off-signature-colour').summary, /#913a9d/i);
 });
@@ -313,7 +313,7 @@ test('missing, malformed, and hostile input become findings, never exceptions', 
 test('with no signature the geometry still runs, and the colour checks say they did not', () => {
   const findings = checkMark(HAIRLINE, { signature: null });
   assert.ok(ids(findings).includes('mark-no-signature'));
-  assert.ok(fails(findings).includes('mark-hairline-stroke'), 'geometry does not need his palette');
+  assert.ok(fails(findings).includes('mark-hairline-stroke'), 'geometry does not need the signature palette');
   assert.equal(ids(findings).includes('mark-off-signature-colour'), false, 'and nothing is judged against a palette that is not there');
 });
 
@@ -361,7 +361,7 @@ test('the monochrome variant keeps one ink and drops the brand colour on purpose
   assert.ok(inks.length <= 2, `mono should carry one ink over one ground, got ${inks.join(', ')}`);
 });
 
-// #1A1A1A is BOTH the dark background and the light-mode text in his signature, so a
+// #1A1A1A is BOTH the dark background and the light-mode text in the user's signature, so a
 // last-one-wins swap map would turn the ground into body text.
 test('the reversed variant swaps light and dark twins, and resolves the hex that means two things', () => {
   const reversed = markVariants(PASSING, opts).find((v) => v.id === 'reversed');
@@ -402,7 +402,7 @@ test('variants never throw on input that is not a mark', () => {
 // ---------------------------------------------------------------------------
 
 /**
- * A project tree in the exact shape his note records: the app is on-brand, and two
+ * A project tree in the exact shape the user's note records: the app is on-brand, and two
  * assets beside it were never rebranded. One of them is a PNG, which cannot be read
  * without rasterizing and must therefore be reported as unverifiable rather than
  * quietly passed.
@@ -426,11 +426,11 @@ function seedProject(dir) {
   // The app stylesheet. Colour drift here belongs to the design-system enforcer,
   // which already exists; this pass must not bury the mark findings under it.
   write('app/styles.css', ':root { --a: #6f6f6f; --b: #212121; --c: #8f1220 } .logo { width: 2rem }');
-  // A framework logo from the scaffold, which is not his to retokenise.
+  // A framework logo from the scaffold, which is not the user's to retokenise.
   write('app/assets/tauri.svg', '<svg viewBox="0 0 8 8"><circle cx="4" cy="4" r="3" fill="#24C8DB"/></svg>');
 }
 
-// The failure his note actually records: an asset carrying NONE of the identity,
+// The failure the user's note actually records: an asset carrying NONE of the identity,
 // sitting there for months while the app beside it was fully on-brand.
 test('an asset with none of the identity in it is the failure, and it fails', () => withDir((dir) => {
   seedProject(dir);
@@ -446,7 +446,7 @@ test('an asset with none of the identity in it is the failure, and it fails', ()
 }));
 
 // Severity follows the evidence. A stray colour ALONGSIDE the real palette is drift
-// worth one line; his own approved icon draws the arch in #E6E6E6, which is in
+// worth one line; the user's own approved icon draws the arch in #E6E6E6, which is in
 // neither the palette table nor the neutrals.
 test('an asset on the palette that also carries a stray is drift, not a failure', () => withDir((dir) => {
   fs.writeFileSync(join(dir, 'mark.svg'), PASSING.replace('#D4D4D4', '#E6E6E6'));
@@ -470,10 +470,10 @@ test('unrelated source and app stylesheets are never candidates', () => withDir(
   assert.ok(candidates.some((p) => p.endsWith('index.html')));
 }));
 
-// Found by running this against his real repo, where it asked for the JavaScript
+// Found by running this against the user's real repo, where it asked for the JavaScript
 // logo to be retokenised to coral. Dropping the file silently would be the same
 // failure this module refuses, so the guess is stated instead.
-test('a framework logo is named as someone elses and not judged against his palette', () => withDir((dir) => {
+test('a framework logo is named as someone elses and not judged against the signature palette', () => withDir((dir) => {
   seedProject(dir);
   const findings = propagationTargets(dir, opts).findings;
   const third = findings.find((f) => f.path && f.path.endsWith('tauri.svg'));
@@ -520,7 +520,7 @@ test('propagation reports and never rewrites', () => withDir((dir) => {
   assert.equal(fs.readFileSync(join(dir, 'docs/index.html'), 'utf8'), before);
 }));
 
-test('generated and vendored output is skipped, so the report stays about his own assets', () => withDir((dir) => {
+test('generated and vendored output is skipped, so the report stays about assets the user owns', () => withDir((dir) => {
   fs.mkdirSync(join(dir, 'node_modules/pkg'), { recursive: true });
   fs.writeFileSync(join(dir, 'node_modules/pkg/logo.svg'), '<svg viewBox="0 0 8 8"><rect width="8" height="8" fill="#c2a878"/></svg>');
   fs.mkdirSync(join(dir, 'src'), { recursive: true });
@@ -551,7 +551,7 @@ test('a missing root, a file for a root, and a missing signature are findings, n
   assert.equal(noSig.scanned, 0, 'and it does not walk a tree it cannot judge');
 }));
 
-test('the module never reaches for his real home unless asked', () => withDir((dir) => {
+test('the module never reaches for the real home of the user unless asked', () => withDir((dir) => {
   // Passing a signature explicitly must not consult ~/.impeccable at all: point home
   // at an empty tmp dir and the answer is unchanged.
   fs.writeFileSync(join(dir, 'mark.svg'), OFF_SIGNATURE);

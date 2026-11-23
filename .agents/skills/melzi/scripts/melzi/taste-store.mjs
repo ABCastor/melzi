@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * The taste store: keep every comparison, grow the vocabulary it is judged in, and
- * decide which two screens to show him next.
+ * decide which two screens to show the user next.
  *
  * FORK-ONLY. Upstream has no equivalent, so this file carries zero merge burden.
  *
@@ -24,8 +24,8 @@
  * turns to mush. `mergeAttributes` is where that is paid for; its comment states
  * exactly which collisions it catches and which it knowingly does not.
  *
- * WHY THE PAIR SELECTION MATTERS AS MUCH AS THE MATH. Every pair he is shown costs
- * a click and a chunk of attention, and his attention is the scarcest input in the
+ * WHY THE PAIR SELECTION MATTERS AS MUCH AS THE MATH. Every pair the user is shown costs
+ * a click and a chunk of attention, and their attention is the scarcest input in the
  * whole system. A pair whose outcome is already obvious teaches nothing and spends
  * that budget anyway. So `nextPair` is a fatigue budget, not a scheduler.
  *
@@ -48,7 +48,7 @@
  *
  * FAILURE POLICY. Nothing here throws into a caller's flow. A read that fails is an
  * empty store, a write that fails is a false, and a selection that cannot be made is
- * a null. Losing a comparison is smaller than losing his session.
+ * a null. Losing a comparison is smaller than losing the user's session.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -57,13 +57,13 @@ import { fileURLToPath } from 'node:url';
 
 export const STORE_VERSION = 1;
 
-/** The only three verdicts he ever gives. No sliders, no 1-10, ever. */
+/** The only three verdicts the user ever gives. No sliders, no 1-10, ever. */
 const OUTCOMES = new Set(['a', 'b', 'tie']);
 
 /** Review-island judgements are unary, so they keep their own honest vocabulary. */
 const REVIEW_OUTCOMES = new Set(['love', 'like', 'no']);
 
-/** Annotation kinds: what he kept, what he disliked, and everything else he typed. */
+/** Annotation kinds: what the user kept, what they disliked, and everything else they typed. */
 const ANNOTATION_KINDS = new Set(['keep', 'dislike', 'note']);
 
 export function tastePaths(home = os.homedir()) {
@@ -477,7 +477,7 @@ export function migrateScreens({ home = os.homedir() } = {}) {
 }
 
 /**
- * Keep the fields that say what he pointed at and what he said about it. An
+ * Keep the fields that say what the user pointed at and what they said about it. An
  * annotation with no candidate is dropped rather than guessed at: it belongs to one
  * side of the pair or it is not evidence about anything.
  */
@@ -827,7 +827,7 @@ export function mergeAttributes(proposed, { home = os.homedir(), now } = {}) {
     writeAttributes({ attributes, vectors: state.vectors }, { home });
   } catch {
     // Keep whatever was assembled. A vocabulary the caller can still use in memory
-    // beats throwing in the middle of his comparison round.
+    // beats throwing in the middle of the user's comparison round.
   }
   return { added, merged, attributes };
 }
@@ -888,7 +888,7 @@ const UNSEEN_PAIR_BONUS = 1;
 const COLD_CANDIDATE_BONUS = 2;
 
 /**
- * Choose the two screens to put in front of him next.
+ * Choose the two screens to put in front of the user next.
  *
  * THE RULE, PLAINLY: prefer the pair whose outcome is least predictable under the
  * current Bradley-Terry fit, weighted by how unsure we are of the gap between them.
@@ -1047,8 +1047,8 @@ if (invokedAsScript()) {
   if (args.includes('--profile')) {
     const comparisons = readComparisons();
     if (comparisons.length < 1) {
-      // Exit 3, not an empty profile: a profile printed from nothing reads as "he
-      // has no preferences" when the truth is that nobody has asked him yet.
+      // Exit 3, not an empty profile: a profile printed from nothing reads as "the
+      // user has no preferences" when the truth is that nobody has asked them yet.
       process.stderr.write(`not enough taste yet: 0 comparisons recorded (${paths.comparisons}); run a compare round first\n`);
       process.exit(3);
     }
@@ -1064,7 +1064,7 @@ if (invokedAsScript()) {
 
     const cycles = model.detectCycles(comparisons, { candidates: ids });
     if (cycles.length) {
-      // A cycle is not noise to be averaged away: it means he judged on two criteria
+      // A cycle is not noise to be averaged away: it means the user judged on two criteria
       // at once, and the tension is the finding.
       process.stdout.write('\nCYCLES\n');
       for (const cycle of cycles) {

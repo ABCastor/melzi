@@ -83,7 +83,7 @@ test('parent selection takes the two strongest when they are far enough apart', 
 });
 
 // The reason the guard exists. Without it the answer here is [teletext, teletext2],
-// their child is a third teletext, and the next hand he is shown is one world.
+// their child is a third teletext, and the next hand the user is shown is one world.
 test('the diversity guard refuses a near-twin and reaches down for a different parent', () => {
   const { parents, skipped, relaxed, guard } = selectParents({
     strengths: STRENGTHS,
@@ -100,7 +100,7 @@ test('the diversity guard refuses a near-twin and reaches down for a different p
   assert.ok(skipped[0].distance < MIN_PARENT_DISTANCE, 'and it says how close it was');
 });
 
-// A guard that starves the run is worse than a twin: he gets nothing to compare.
+// A guard that starves the run is worse than a twin: the user gets nothing to compare.
 test('with only twins to choose from, the guard relaxes rather than returning one parent', () => {
   const twins = STRENGTHS.filter((s) => s.id !== 'wpa');
   const { parents, relaxed } = selectParents({
@@ -176,17 +176,17 @@ const LOST_BUT_KEPT = [
   },
 ];
 
-test('a keep-annotation on a candidate he REJECTED survives the loss', () => {
+test('a keep-annotation on a candidate the user REJECTED survives the loss', () => {
   const kept = keptRegions(LOST_BUT_KEPT, { candidate: 'wpa' });
 
   assert.equal(kept.length, 1, 'the loss did not bin it');
-  assert.equal(kept[0].outcome, 'lost', 'and the record remembers he was rejecting it at the time');
+  assert.equal(kept[0].outcome, 'lost', 'and the record remembers the user was rejecting it at the time');
   assert.equal(kept[0].text, 'the two triangles at the top');
   assert.equal(kept[0].target.selector, 'main > header .marks');
   assert.equal(kept[0].candidate, 'wpa');
 });
 
-test('the salvage reaches the brief, in his words, with the selector and the element text', () => {
+test('the salvage reaches the brief, in the words the user typed, with the selector and the element text', () => {
   const kept = keptRegions(LOST_BUT_KEPT, { candidate: 'wpa' });
   const brief = buildRecombinationBrief({
     parents: [{ id: 'teletext', theta: 0.9, comparisons: 4 }, { id: 'wpa', theta: 0.4, comparisons: 3 }],
@@ -194,9 +194,9 @@ test('the salvage reaches the brief, in his words, with the selector and the ele
     candidates: [{ id: 'wpa', label: 'WPA Park Poster' }, { id: 'teletext', label: 'Teletext Service' }],
   });
 
-  // His exact words, quoted, not summarised.
-  assert.match(brief, /he said: "the two triangles at the top"/);
-  // And the two handles that let the author find the thing he pointed at.
+  // The user's exact words, quoted, not summarised.
+  assert.match(brief, /the user said: "the two triangles at the top"/);
+  // And the two handles that let the author find the thing the user pointed at.
   assert.match(brief, /selector: main > header \.marks/);
   assert.match(brief, /element text: "DEPARTURES"/);
   // And the framing that explains why a rejected screen is contributing anything.
@@ -210,8 +210,8 @@ test('keep and dislike are gathered separately, and dislikes become avoid instru
   assert.equal(disliked[0].kind, 'dislike');
 
   const brief = buildRecombinationBrief({ parents: ['wpa'], kept: [], disliked });
-  assert.match(brief, /AVOID THESE, HE POINTED AT THEM/);
-  assert.match(brief, /he said: "this button is shouting at me"/);
+  assert.match(brief, /AVOID THESE, THE USER POINTED AT THEM/);
+  assert.match(brief, /the user said: "this button is shouting at me"/);
   assert.match(brief, /selector: \.hero \.cta/);
   assert.match(brief, /do not reproduce a near variant/i);
 });
@@ -244,7 +244,7 @@ test('the same region marked across two comparisons folds into one, counted, and
   assert.equal(kept.length, 1, 'one region, not two identical paragraphs in the brief');
   assert.equal(kept[0].times, 2);
   assert.equal(kept[0].outcome, 'lost', 'the salvage framing wins: it is the one the author needs');
-  assert.match(buildRecombinationBrief({ parents: ['wpa'], kept }), /he said this 2 times/);
+  assert.match(buildRecombinationBrief({ parents: ['wpa'], kept }), /the user said this 2 times/);
 });
 
 test('omitting the candidate gathers every keep in the population, so nothing is thrown away', () => {
@@ -269,18 +269,18 @@ test('an annotation naming a candidate that was not in the pair is dropped, not 
 test('a salvaged region from a candidate that is not a parent is still carried, and flagged', () => {
   const kept = keptRegions(LOST_BUT_KEPT, { candidate: 'wpa' });
   const brief = buildRecombinationBrief({ parents: ['teletext'], kept });
-  assert.match(brief, /he said: "the two triangles at the top"/);
+  assert.match(brief, /the user said: "the two triangles at the top"/);
   assert.match(brief, /not a parent; carry the region across anyway/);
 });
 
-test('a region with no selector falls back to where on the screen he pointed', () => {
+test('a region with no selector falls back to where on the screen the user pointed', () => {
   const pinOnly = [{
     v: 1, at: AT, a: 'wpa', b: 'teletext', outcome: 'b', source: 'click',
     annotations: [{ candidate: 'wpa', kind: 'keep', target: { selector: null, text: null, rect: { x: 0.24, y: 0.71, w: 0.1, h: 0.1 } }, text: 'that block' }],
   }];
   const brief = buildRecombinationBrief({ parents: ['wpa'], kept: keptRegions(pinOnly, { candidate: 'wpa' }) });
   assert.match(brief, /position: x 0\.24, y 0\.71 of the viewport/);
-  assert.match(brief, /he said: "that block"/);
+  assert.match(brief, /the user said: "that block"/);
 });
 
 // ---------------------------------------------------------------------------
@@ -350,7 +350,7 @@ test('an empty population still produces a usable brief rather than an empty str
   const brief = buildRecombinationBrief({ parents: [], kept: [] });
   assert.match(brief, /^RECOMBINATION BRIEF/);
   assert.match(brief, /There is no population to cross yet/);
-  assert.match(brief, /He has not marked anything to keep yet/);
+  assert.match(brief, /The user has not marked anything to keep yet/);
   assert.doesNotMatch(brief, /AVOID THESE/, 'no dislikes means no avoid section, not an empty one');
 });
 

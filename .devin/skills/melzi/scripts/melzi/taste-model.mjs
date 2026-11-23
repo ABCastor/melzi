@@ -1,6 +1,6 @@
 /**
  * The taste model: turn "I prefer this one" into something that can judge a
- * design he has never seen.
+ * design the user has never seen.
  *
  * FORK-ONLY. Upstream has no equivalent, so this file carries zero merge burden.
  * Pure math, zero IO, zero imports. Everything here is a function of its inputs,
@@ -19,9 +19,9 @@
  * rather than a nicety.
  *
  * WHY THE UNCERTAINTY IS TREATED AS SERIOUSLY AS THE ESTIMATE. The failure mode
- * that costs him most is not a missing answer, it is a confident wrong one. He
+ * that costs the user most is not a missing answer, it is a confident wrong one. They
  * cannot check the statement "you prefer generous whitespace" against anything;
- * he has to take it. So every number here ships with a standard error, the
+ * they have to take it. So every number here ships with a standard error, the
  * verdict `neutral` comes from a confidence interval crossing zero rather than
  * from a magnitude threshold, and `renderProfile` says out loud how thin the
  * evidence is. "Neutral on serif vs sans" has to be an honest statement about
@@ -39,7 +39,7 @@
  * 2. The logistic fit has NO intercept, and its features are antisymmetric by
  *    construction (`x_a - x_b`). Add an intercept and the model happily learns
  *    "the left panel is better", which is a fact about the comparison UI and not
- *    about his taste. The absence of that term is a correctness property, and
+ *    about the user's taste. The absence of that term is a correctness property, and
  *    the test suite proves it by mirroring a dataset and demanding identical
  *    weights.
  *
@@ -47,8 +47,8 @@
  * naming the attributes whose difference between the two screens was an ACCIDENT
  * rather than the thing being compared. The case that bought this: two screens
  * put side by side where one was light and the other dark, not because either was
- * designed that way but because one simply had no mode control. His preference
- * between those two screens was real and belongs in the record. His preference
+ * designed that way but because one simply had no mode control. The user's preference
+ * between those two screens was real and belongs in the record. Their preference
  * for dark grounds was never expressed, and a fit that reads one off that
  * comparison is not weakly wrong, it is confidently wrong on an axis nobody
  * tested.
@@ -65,7 +65,7 @@
  * attributes now have to explain an outcome that the accidental axis may in fact
  * have caused, so their weights absorb a little of it. A mark is damage control
  * on a comparison already taken, never as good as a pair that was matched
- * properly. That is why `flagLikelyConfound` exists, to catch the shape before he
+ * properly. That is why `flagLikelyConfound` exists, to catch the shape before the user
  * ever clicks.
  *
  * TIES. A tie counts as half a win to each side, in both fits. Davidson (1970)
@@ -194,7 +194,7 @@ export function weightForResponseMs(responseMs, { timedOut = false } = {}) {
   //
   // It gets the FLOOR rather than the ceiling. Treating it as the strongest
   // evidence in the ledger, which is what a plain "faster is better" curve does,
-  // would let a misfire outvote every considered choice he ever made. We cannot
+  // would let a misfire outvote every considered choice the user ever made. We cannot
   // tell a genuine reflex from a slip, so we decline to reward it either way.
   if (ms < SUSPECT_RESPONSE_MS) return RESPONSE_WEIGHT_MIN;
   if (ms <= 250) return RESPONSE_WEIGHT_MAX;
@@ -613,7 +613,7 @@ export function flagLikelyConfound(vectorA, vectorB, {
     label: top.label,
     gap: top.gap,
     runnerUp: next.gap,
-    message: `These two screens are near twins except for ${top.label}. Whatever he picks will be read as a verdict on ${top.label}, so make sure that difference is the thing you meant to ask about. If one screen simply cannot do it, fix the pair and ask again rather than recording the answer; if the answer is already taken, mark it confounded on ${top.attribute} instead of deleting it.`,
+    message: `These two screens are near twins except for ${top.label}. Whatever the user picks will be read as a verdict on ${top.label}, so make sure that difference is the thing you meant to ask about. If one screen simply cannot do it, fix the pair and ask again rather than recording the answer; if the answer is already taken, mark it confounded on ${top.attribute} instead of deleting it.`,
   };
 }
 
@@ -786,7 +786,7 @@ function weightErrors(design, beta, penalty, k) {
 /**
  * Score a design that has never been compared with anything. This is the whole
  * point of the attribute layer: the input is a vector, not an id, so a screen
- * generated one second ago can be judged by everything he has said so far.
+ * generated one second ago can be judged by everything the user has said so far.
  *
  * The score is the weighted sum of the point estimates, neutral attributes
  * included. Dropping the neutrals would look tidier and be worse: an attribute
@@ -1078,7 +1078,7 @@ export function renderResponseTimeProfile(comparisons, { vectors = {}, attribute
  * ------------------------------------------------------------------ */
 
 /**
- * Find loops in his stated preferences: a beat b, b beat c, and c beat a.
+ * Find loops in the user's stated preferences: a beat b, b beat c, and c beat a.
  *
  * A cycle is not an error and it is not noise to be smoothed. It is the
  * signature of judging on two criteria at once, which is what a person actually
@@ -1221,7 +1221,7 @@ function findCycleWithin(adj, comp) {
 /**
  * Name the attributes a cycle was fought over.
  *
- * Walk the loop in the direction he preferred, and for each attribute take the
+ * Walk the loop in the direction the user preferred, and for each attribute take the
  * winner-minus-loser difference on every edge. Some edges support the attribute
  * (the winner had more of it) and some contradict it. Around a closed loop those
  * two totals are ALWAYS equal, because differences around a cycle sum to zero.
@@ -1231,8 +1231,8 @@ function findCycleWithin(adj, comp) {
  *
  * `disagreement` is that shared total: how much of the loop the attribute both
  * explains and contradicts. An attribute held constant across the cycle scores
- * zero and is dropped, because it cannot be what he was trading off. Strongest
- * disagreement first, so the top of the list is the axis to ask him about.
+ * zero and is dropped, because it cannot be what the user was trading off. Strongest
+ * disagreement first, so the top of the list is the axis to ask the user about.
  *
  * Never average a cycle away. The right response to one is to ask which of the
  * two named attributes matters more in the case at hand.

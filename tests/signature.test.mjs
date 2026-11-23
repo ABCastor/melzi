@@ -21,7 +21,7 @@ import { loadSignature, renderSignatureBlock, signaturePath } from '../skill/scr
 
 const MODULE = join(dirname(fileURLToPath(import.meta.url)), '..', 'skill', 'scripts', 'melzi', 'signature.mjs');
 
-// Mirrors the real file's shape. The values are his, the file is not: this fixture
+// Mirrors the real file's shape. The values are the user's, the file is not: this fixture
 // is written into a tmp home and destroyed with it.
 const SIGNATURE = {
   invariants: {

@@ -55,7 +55,7 @@ test('a genesis screen path is identity, not noise, and survives into the record
   assert.equal('screen' in entry.refused[0], false, 'options without one gain nothing');
 });
 
-// A re-roll is the strongest signal the table can produce: he looked at the whole
+// A re-roll is the strongest signal the table can produce: the user looked at the whole
 // hand and rejected all of it. Recording it as a pick of nothing would lose that.
 test('a re-roll refuses the ENTIRE hand and chooses nothing', () => {
   const entry = buildEntry({ optionId: 'reroll', options: HAND, at: AT });
@@ -104,7 +104,7 @@ test('a truncated final line is tolerated, not fatal', () => withHome((home) => 
   assert.equal(readLedger({ home }).length, 1, 'the intact line still reads');
 }));
 
-// Never cost him his answer. The question flow must survive a broken ledger.
+// Never cost the user their answer. The question flow must survive a broken ledger.
 test('recordChoice never throws, and reports false instead', () => withHome((home) => {
   assert.equal(recordChoice(null, { home }), false);
   assert.equal(recordChoice({ steer: 'x', options: HAND }, { home }), false, 'no optionId means no answer');

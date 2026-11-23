@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The comparison table: two live screens side by side, and a page he can point at.
+ * The comparison table: two live screens side by side, and a page the user can point at.
  *
  * FORK-ONLY. This is its own server, not an extension of serve-question.mjs.
  * serve-question is upstream's file and already carries a fork delta; adding a
@@ -19,8 +19,8 @@
  * So the annotation layer is not a side feature, it is the product. Clicking
  * anywhere in either screen drops a numbered pin exactly where the click landed and opens
  * a popover with six quick chips and a free-text field. The chips exist because
- * typing is friction and most of his feedback fits six buttons. The free text exists
- * because his actual feedback does not: "I don't like the two triangles at the top,
+ * typing is friction and most of the user's feedback fits six buttons. The free text exists
+ * because their actual feedback does not: "I don't like the two triangles at the top,
  * but I really like how the layers move between each other" is not a button.
  *
  * ONE CLICK IS ONE STATEMENT. A chip commits its pin immediately and the popover
@@ -30,13 +30,13 @@
  *
  * THE VERDICT IS BINARY, FOREVER. Prefer left, Tie, Prefer right. No slider, no
  * 1-10. A non-designer asked to score gives you noise dressed as data; asked to
- * choose, he gives you a real bit. The pairwise fit downstream needs exactly that.
+ * choose, they give you a real bit. The pairwise fit downstream needs exactly that.
  *
  * INJECTION, AND WHY THE FILE ON DISK IS NEVER TOUCHED. The annotation script goes
  * into the /screen/N RESPONSE only. The candidate screen is a build artifact that
  * later steps read, diff and ship; rewriting it to make this page work would make
  * the tool's own instrumentation part of the deliverable. /screen/N/raw serves the
- * pristine bytes, and it is what the "Full screen" chip opens, so the thing he can
+ * pristine bytes, and it is what the "Full screen" chip opens, so the thing the user can
  * inspect at full size is the real file.
  *
  * THE ORIGIN CHECK THAT IS NOT A CHECK. The frames are sandbox="allow-scripts" with
@@ -47,7 +47,7 @@
  * rather than a label. The POST routes are nonce-gated for the same reason
  * serve-question gates its answer: a framed screen runs real JS by design.
  *
- * FAILURE POLICY. Losing a pin must never cost him the comparison. Every write is
+ * FAILURE POLICY. Losing a pin must never cost the user the comparison. Every write is
  * defensive and the verdict path never depends on the annotation path having worked.
  */
 import http from 'node:http';
@@ -144,7 +144,7 @@ const KINDS = new Set(['keep', 'dislike', 'note']);
 
 // Both answer channels (blocking stdout and --wait collection) print through this.
 // The annotations are printed in plain language as well as JSON: they are the
-// steer, they are in his own words, and a model reading this stdout should not have
+// steer, they are in the user's own words, and a model reading this stdout should not have
 // to parse a blob to find the one sentence that decides the next build.
 function printComparison(raw) {
   console.log(`COMPARISON: ${raw}`);
@@ -154,13 +154,13 @@ function printComparison(raw) {
     annotations.forEach((a, i) => {
       const where = a.target?.selector ? ` @ ${a.target.selector}` : '';
       const what = a.target?.text ? ` "${a.target.text}"` : '';
-      console.log(`HIS WORDS: #${i + 1} ${a.candidate} (${a.kind})${where}${what} :: ${a.text}`);
+      console.log(`USER'S WORDS: #${i + 1} ${a.candidate} (${a.kind})${where}${what} :: ${a.text}`);
     });
     if (annotations.length) {
-      console.log('Those are regions he pointed at on the actual screen, in his own words. Treat a keep as a region to carry into the next candidate verbatim, and a dislike as a constraint. They outrank any general taste profile, because they are about this page.');
+      console.log('Those are regions the user pointed at on the actual screen, in their own words. Treat a keep as a region to carry into the next candidate verbatim, and a dislike as a constraint. They outrank any general taste profile, because they are about this page.');
     }
     if (parsed.outcome === 'tie') {
-      console.log('TIE: he could not separate them, so nothing about the pair is settled. Do not read a tie as approval of either; the annotations are the whole signal from this round.');
+      console.log('TIE: the user could not separate them, so nothing about the pair is settled. Do not read a tie as approval of either; the annotations are the whole signal from this round.');
     }
   } catch { /* raw answer */ }
 }
@@ -311,13 +311,13 @@ const detachedKey = hasFlag('detached-serve') ? arg('key') : null;
 
 /**
  * Pins live here for the life of the server. `n` is a monotonic counter, never an
- * array index, so deleting pin 2 does not renumber pin 3 under him mid-session.
+ * array index, so deleting pin 2 does not renumber pin 3 under the user mid-session.
  *
  * The stored `annotation` is exactly the contract shape and nothing else: the pin
  * bookkeeping (id, n, frame, point) is this page's business and stays out of the
  * record the model and the store read. They are held in memory only; a server that
  * dies before the verdict loses them, which is the same bargain the question page
- * already makes and is honest for a surface he is looking at while he uses it.
+ * already makes and is honest for a surface the user is looking at while they use it.
  */
 let pins = [];
 let pinCounter = 0;
@@ -382,14 +382,14 @@ function annotateScript(index) {
     hot = el;
     if (hot && hot.classList) hot.classList.add('__imp-hl');
   }, true);
-  // Without these the outline is stranded on whatever he last passed over, which
-  // reads as a selection he did not make.
+  // Without these the outline is stranded on whatever the user last passed over, which
+  // reads as a selection they did not make.
   document.documentElement.addEventListener('mouseleave', clearHot);
   window.addEventListener('blur', clearHot);
 
   // Capture phase, and cancelled: a click here means "I want to say something about
   // this", never "navigate". A link that took the frame somewhere else would lose
-  // the thing he was pointing at.
+  // the thing the user was pointing at.
   document.addEventListener('click', function (e) {
     e.preventDefault();
     e.stopPropagation();
@@ -716,7 +716,7 @@ ${candidates.map(panel).join('\n')}
     pop.style.left = px + 'px';
     pop.style.top = py + 'px';
 
-    // The pin appears the instant he clicks, before he has said anything, because
+    // The pin appears the instant the user clicks, before they have said anything, because
     // seeing the mark land is what makes the surface feel like pointing.
     pins.push({ id: 'provisional', n: '', frame, point: hit.point, kind: 'ghost', text: '', target: null, provisional: true });
     renderPins();
